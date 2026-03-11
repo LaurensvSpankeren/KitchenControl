@@ -1,45 +1,127 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 import { apiClient } from '../api/client'
 
 const requiredLabels = {
   name: 'Naam',
-  productCode: 'Artikelnummer / intern nummer',
-  supplierName: 'Leverancier',
-  supplierPriceExVat: 'Netto prijs',
-  supplierVatRate: 'BTW',
-  supplierUnit: 'Verkoopeenheid',
-  supplierNetContent: 'Netto inhoud / gewicht',
-  baseUnit: 'Base unit',
-  conversionFactorToBase: 'Conversiefactor naar base unit'
+  articleNumber: 'Artikelnummer',
+  supplier: 'Leverancier',
+  pricePerPackage: 'Prijs per verpakking',
+  vat: 'BTW',
+  packageUnit: 'Verpakking',
+  packageContent: 'Inhoud verpakking',
+  baseUnit: 'Rekeneenheid',
+  amountPerPackage: 'Aantal per verpakking'
 }
 
 const initialForm = {
   name: '',
-  productCode: '',
-  supplierName: '',
+  articleNumber: '',
+  supplier: '',
   brand: '',
-  hoofdproductgroep: '',
-  supplierPriceExVat: '',
-  supplierVatRate: '',
-  supplierUnit: '',
-  supplierNetContent: '',
+  productGroup: '',
+  pricePerPackage: '',
+  vat: '',
+  packageUnit: '',
+  packageContent: '',
   baseUnit: '',
-  conversionFactorToBase: '',
+  amountPerPackage: '',
   yieldPercent: '',
   wastePercent: '',
   internalCategory: '',
-  internalNotes: '',
-  extraAllergensCrossContamination: ''
+  notes: '',
+  allergensCross: ''
+}
+
+function formatPrice(value) {
+  if (value === null || value === undefined || value === '') {
+    return '-'
+  }
+  const number = Number(value)
+  if (Number.isNaN(number)) {
+    return '-'
+  }
+  return `€ ${number.toFixed(2).replace('.', ',')}`
+}
+
+function splitInternalNotes(value) {
+  if (!value) {
+    return { internalCategory: '', notes: '' }
+  }
+
+  const lines = String(value).split('\n')
+  const firstLine = lines[0] || ''
+  const prefix = 'Eigen categorie:'
+  if (firstLine.trim().startsWith(prefix)) {
+    return {
+      internalCategory: firstLine.replace(prefix, '').trim(),
+      notes: lines.slice(1).join('\n').trim()
+    }
+  }
+
+  return { internalCategory: '', notes: String(value) }
+}
+
+function mapIngredientToForm(ingredient) {
+  const parsedNotes = splitInternalNotes(ingredient.internal_notes)
+  return {
+    name: ingredient.supplier_product_name || '',
+    articleNumber: ingredient.supplier_product_code || '',
+    supplier: ingredient.supplier_name || '',
+    brand: ingredient.supplier_brand || '',
+    productGroup: ingredient.category || '',
+    pricePerPackage: ingredient.supplier_price_ex_vat ?? '',
+    vat: ingredient.supplier_vat_rate ?? '',
+    packageUnit: ingredient.supplier_unit || '',
+    packageContent: ingredient.supplier_net_content ?? '',
+    baseUnit: ingredient.base_unit || '',
+    amountPerPackage: ingredient.conversion_factor_to_base ?? '',
+    yieldPercent: ingredient.yield_percent ?? '',
+    wastePercent: ingredient.waste_percent ?? '',
+    internalCategory: parsedNotes.internalCategory,
+    notes: parsedNotes.notes,
+    allergensCross:
+      ingredient.cross_contamination_notes || ingredient.internal_allergens_extra || ''
+  }
+}
+
+function mapFormToPayload(formData) {
+  const internalCategory = formData.internalCategory.trim()
+  const noteText = formData.notes.trim()
+  const notesWithCategory = internalCategory
+    ? noteText
+      ? `Eigen categorie: ${internalCategory}\n${noteText}`
+      : `Eigen categorie: ${internalCategory}`
+    : noteText || null
+
+  return {
+    supplier_name: formData.supplier.trim(),
+    supplier_product_code: formData.articleNumber.trim(),
+    supplier_product_name: formData.name.trim(),
+    supplier_brand: formData.brand.trim() || null,
+    supplier_unit: formData.packageUnit.trim(),
+    supplier_net_content: Number(formData.packageContent),
+    supplier_price_ex_vat: Number(formData.pricePerPackage),
+    supplier_vat_rate: Number(formData.vat),
+    base_unit: formData.baseUnit.trim(),
+    conversion_factor_to_base: Number(formData.amountPerPackage),
+    yield_percent: formData.yieldPercent ? Number(formData.yieldPercent) : null,
+    waste_percent: formData.wastePercent ? Number(formData.wastePercent) : null,
+    category: formData.productGroup.trim() || internalCategory || null,
+    internal_notes: notesWithCategory,
+    internal_allergens_extra: formData.allergensCross.trim() || null,
+    cross_contamination_notes: formData.allergensCross.trim() || null
+  }
 }
 
 export default function Ingredientenbeheer() {
   const [ingredients, setIngredients] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingIngredientId, setEditingIngredientId] = useState(null)
   const [formData, setFormData] = useState(initialForm)
-  const [formMessage, setFormMessage] = useState('')
   const [validationMessage, setValidationMessage] = useState('')
+  const [saveMessage, setSaveMessage] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
   async function loadIngredients() {
@@ -55,32 +137,40 @@ export default function Ingredientenbeheer() {
     loadIngredients()
   }, [])
 
-  function formatPrice(value) {
-    if (value === null || value === undefined || value === '') {
-      return '-'
-    }
-    const number = Number(value)
-    if (Number.isNaN(number)) {
-      return '-'
-    }
-    return `€ ${number.toFixed(2).replace('.', ',')}`
-  }
+  const sortedIngredients = useMemo(
+    () =>
+      [...ingredients].sort((a, b) =>
+        String(a.supplier_product_name || '').localeCompare(
+          String(b.supplier_product_name || ''),
+          'nl'
+        )
+      ),
+    [ingredients]
+  )
 
-  function formatVat(value) {
-    if (value === null || value === undefined || value === '') {
-      return '-'
+  const visibleIngredients = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+    if (!term) {
+      return sortedIngredients.slice(0, 50)
     }
-    const number = Number(value)
-    if (Number.isNaN(number)) {
-      return '-'
-    }
-    return `${number}%`
-  }
+    return sortedIngredients.filter((ingredient) =>
+      String(ingredient.supplier_product_name || '').toLowerCase().includes(term)
+    )
+  }, [searchTerm, sortedIngredients])
 
-  function openModal() {
+  function openCreateModal() {
+    setEditingIngredientId(null)
     setFormData(initialForm)
     setValidationMessage('')
-    setFormMessage('')
+    setSaveMessage('')
+    setIsModalOpen(true)
+  }
+
+  function openEditModal(ingredient) {
+    setEditingIngredientId(ingredient.id)
+    setFormData(mapIngredientToForm(ingredient))
+    setValidationMessage('')
+    setSaveMessage('')
     setIsModalOpen(true)
   }
 
@@ -96,22 +186,23 @@ export default function Ingredientenbeheer() {
   }
 
   function validateForm() {
-    const requiredKeys = [
+    const requiredFields = [
       'name',
-      'productCode',
-      'supplierName',
-      'supplierPriceExVat',
-      'supplierVatRate',
-      'supplierUnit',
-      'supplierNetContent',
+      'articleNumber',
+      'supplier',
+      'pricePerPackage',
+      'vat',
+      'packageUnit',
+      'packageContent',
       'baseUnit',
-      'conversionFactorToBase'
+      'amountPerPackage'
     ]
 
-    const missing = requiredKeys.filter((key) => !String(formData[key]).trim())
+    const missing = requiredFields.filter((field) => !String(formData[field]).trim())
     if (missing.length > 0) {
-      const labels = missing.map((key) => requiredLabels[key]).join(', ')
-      setValidationMessage(`Vul verplichte velden in: ${labels}`)
+      setValidationMessage(
+        `Vul verplichte velden in: ${missing.map((field) => requiredLabels[field]).join(', ')}`
+      )
       return false
     }
 
@@ -119,60 +210,43 @@ export default function Ingredientenbeheer() {
     return true
   }
 
-  async function handleSaveIngredient() {
+  async function handleSave() {
     if (!validateForm()) {
       return
     }
 
     setIsSaving(true)
-    setFormMessage('')
+    setSaveMessage('')
 
     try {
-      await apiClient.createIngredient({
-        supplier_name: formData.supplierName.trim(),
-        supplier_product_code: formData.productCode.trim(),
-        supplier_product_name: formData.name.trim(),
-        supplier_brand: formData.brand.trim() || null,
-        supplier_unit: formData.supplierUnit.trim(),
-        supplier_net_content: Number(formData.supplierNetContent),
-        supplier_price_ex_vat: Number(formData.supplierPriceExVat),
-        supplier_vat_rate: Number(formData.supplierVatRate),
-        base_unit: formData.baseUnit.trim(),
-        conversion_factor_to_base: Number(formData.conversionFactorToBase),
-        yield_percent: formData.yieldPercent ? Number(formData.yieldPercent) : null,
-        waste_percent: formData.wastePercent ? Number(formData.wastePercent) : null,
-        category: formData.internalCategory.trim() || formData.hoofdproductgroep.trim() || null,
-        internal_notes: formData.internalNotes.trim() || null,
-        internal_allergens_extra: formData.extraAllergensCrossContamination.trim() || null,
-        cross_contamination_notes: formData.extraAllergensCrossContamination.trim() || null
-      })
-      setFormMessage('Ingrediënt opgeslagen')
+      const payload = mapFormToPayload(formData)
+      if (editingIngredientId) {
+        await apiClient.updateIngredient(editingIngredientId, payload)
+      } else {
+        await apiClient.createIngredient(payload)
+      }
+
       await loadIngredients()
-      setFormData(initialForm)
+      setIsModalOpen(false)
+      setSaveMessage(editingIngredientId ? 'Ingrediënt bijgewerkt' : 'Ingrediënt opgeslagen')
     } catch {
-      setFormMessage('Backend voor handmatige ingrediënten volgt nog')
+      setSaveMessage('Opslaan mislukt')
     } finally {
       setIsSaving(false)
     }
   }
 
-  const filteredIngredients = ingredients.filter((ingredient) =>
-    (ingredient.supplier_product_name || '')
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase())
-  )
-
   return (
     <div>
       <header className="page-header">
         <h2>Ingrediëntenbeheer</h2>
-        <p>Beheer inkoopproducten en voeg handmatig ingrediënten toe.</p>
+        <p>Zoek, bekijk en beheer handmatig ingevoerde ingrediënten.</p>
       </header>
 
       <section className="card">
         <div className="ingredient-header-row">
           <h3>Ingrediëntenoverzicht</h3>
-          <button type="button" className="open-modal-btn" onClick={openModal}>
+          <button type="button" className="open-modal-btn" onClick={openCreateModal}>
             Handmatig ingrediënt toevoegen
           </button>
         </div>
@@ -185,49 +259,69 @@ export default function Ingredientenbeheer() {
           onChange={(event) => setSearchTerm(event.target.value)}
         />
 
-        {!searchTerm.trim() ? (
-          <p>Typ om ingrediënten te zoeken</p>
-        ) : filteredIngredients.length === 0 ? (
+        {saveMessage ? <p className="form-info inline-message">{saveMessage}</p> : null}
+
+        {visibleIngredients.length === 0 ? (
           <p>Geen ingrediënten gevonden</p>
         ) : (
-          <table className="ingredients-table">
-            <thead>
-              <tr>
-                <th>Naam</th>
-                <th>Leverancier</th>
-                <th>Prijs</th>
-                <th>BTW</th>
-                <th>Eenheid</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredIngredients.map((ingredient) => (
-                <tr key={ingredient.id}>
-                  <td>{ingredient.supplier_product_name || '-'}</td>
-                  <td>{ingredient.supplier_name || '-'}</td>
-                  <td>{formatPrice(ingredient.supplier_price_ex_vat)}</td>
-                  <td>{formatVat(ingredient.supplier_vat_rate)}</td>
-                  <td>{ingredient.supplier_unit || '-'}</td>
+          <div className="table-scroll">
+            <table className="ingredients-table">
+              <thead>
+                <tr>
+                  <th>Artikelnummer</th>
+                  <th>Naam</th>
+                  <th>Merk</th>
+                  <th>Netto prijs</th>
+                  <th>Verpakking</th>
+                  <th>Inhoud verpakking</th>
+                  <th>Hoofdproductgroep</th>
+                  <th>Actie</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visibleIngredients.map((ingredient) => (
+                  <tr key={ingredient.id}>
+                    <td>{ingredient.supplier_product_code || '-'}</td>
+                    <td>{ingredient.supplier_product_name || '-'}</td>
+                    <td>{ingredient.supplier_brand || '-'}</td>
+                    <td>{formatPrice(ingredient.supplier_price_ex_vat)}</td>
+                    <td>{ingredient.supplier_unit || '-'}</td>
+                    <td>{ingredient.supplier_net_content ?? '-'}</td>
+                    <td>{ingredient.category || '-'}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="table-action-btn"
+                        onClick={() => openEditModal(ingredient)}
+                      >
+                        Bewerken
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
       {isModalOpen ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal-card">
+          <div className="modal-card modal-wide">
             <div className="modal-header">
-              <h3>Handmatig ingrediënt toevoegen</h3>
+              <h3>
+                {editingIngredientId
+                  ? 'Ingrediënt bewerken'
+                  : 'Handmatig ingrediënt toevoegen'}
+              </h3>
             </div>
 
             <div className="modal-body">
               <section className="modal-section">
                 <h4>Product</h4>
-                <div className="modal-grid two-col">
+                <div className="modal-grid two-col calm-grid">
                   <label>
-                    Naam (verplicht)
+                    Naam
                     <input
                       type="text"
                       value={formData.name}
@@ -235,19 +329,19 @@ export default function Ingredientenbeheer() {
                     />
                   </label>
                   <label>
-                    Artikelnummer / intern nummer (verplicht)
+                    Artikelnummer
                     <input
                       type="text"
-                      value={formData.productCode}
-                      onChange={(event) => handleFieldChange('productCode', event.target.value)}
+                      value={formData.articleNumber}
+                      onChange={(event) => handleFieldChange('articleNumber', event.target.value)}
                     />
                   </label>
                   <label>
-                    Leverancier (verplicht)
+                    Leverancier
                     <input
                       type="text"
-                      value={formData.supplierName}
-                      onChange={(event) => handleFieldChange('supplierName', event.target.value)}
+                      value={formData.supplier}
+                      onChange={(event) => handleFieldChange('supplier', event.target.value)}
                     />
                   </label>
                   <label>
@@ -259,11 +353,11 @@ export default function Ingredientenbeheer() {
                     />
                   </label>
                   <label className="full-width">
-                    Hoofdproductgroep
+                    Productgroep
                     <input
                       type="text"
-                      value={formData.hoofdproductgroep}
-                      onChange={(event) => handleFieldChange('hoofdproductgroep', event.target.value)}
+                      value={formData.productGroup}
+                      onChange={(event) => handleFieldChange('productGroup', event.target.value)}
                     />
                   </label>
                 </div>
@@ -271,40 +365,40 @@ export default function Ingredientenbeheer() {
 
               <section className="modal-section">
                 <h4>Inkoop en verpakking</h4>
-                <div className="modal-grid two-col">
+                <div className="modal-grid two-col calm-grid">
                   <label>
-                    Netto prijs (verplicht)
+                    Prijs per verpakking
                     <input
                       type="number"
                       step="any"
-                      value={formData.supplierPriceExVat}
-                      onChange={(event) => handleFieldChange('supplierPriceExVat', event.target.value)}
+                      value={formData.pricePerPackage}
+                      onChange={(event) => handleFieldChange('pricePerPackage', event.target.value)}
                     />
                   </label>
                   <label>
-                    BTW (verplicht)
+                    BTW
                     <input
                       type="number"
                       step="any"
-                      value={formData.supplierVatRate}
-                      onChange={(event) => handleFieldChange('supplierVatRate', event.target.value)}
+                      value={formData.vat}
+                      onChange={(event) => handleFieldChange('vat', event.target.value)}
                     />
                   </label>
                   <label>
-                    Verkoopeenheid (verplicht)
+                    Verpakking
                     <input
                       type="text"
-                      value={formData.supplierUnit}
-                      onChange={(event) => handleFieldChange('supplierUnit', event.target.value)}
+                      value={formData.packageUnit}
+                      onChange={(event) => handleFieldChange('packageUnit', event.target.value)}
                     />
                   </label>
                   <label>
-                    Netto inhoud / gewicht (verplicht)
+                    Inhoud verpakking
                     <input
                       type="number"
                       step="any"
-                      value={formData.supplierNetContent}
-                      onChange={(event) => handleFieldChange('supplierNetContent', event.target.value)}
+                      value={formData.packageContent}
+                      onChange={(event) => handleFieldChange('packageContent', event.target.value)}
                     />
                   </label>
                 </div>
@@ -312,9 +406,9 @@ export default function Ingredientenbeheer() {
 
               <section className="modal-section">
                 <h4>Calculatie</h4>
-                <div className="modal-grid two-col">
+                <div className="modal-grid two-col calm-grid">
                   <label>
-                    Base unit (verplicht)
+                    Rekeneenheid
                     <input
                       type="text"
                       value={formData.baseUnit}
@@ -322,16 +416,16 @@ export default function Ingredientenbeheer() {
                     />
                   </label>
                   <label>
-                    Conversiefactor naar base unit (verplicht)
+                    Aantal per verpakking
                     <input
                       type="number"
                       step="any"
-                      value={formData.conversionFactorToBase}
-                      onChange={(event) => handleFieldChange('conversionFactorToBase', event.target.value)}
+                      value={formData.amountPerPackage}
+                      onChange={(event) => handleFieldChange('amountPerPackage', event.target.value)}
                     />
                   </label>
                   <label>
-                    Yield %
+                    Schoon rendement %
                     <input
                       type="number"
                       step="any"
@@ -340,7 +434,7 @@ export default function Ingredientenbeheer() {
                     />
                   </label>
                   <label>
-                    Waste %
+                    Snijverlies %
                     <input
                       type="number"
                       step="any"
@@ -353,7 +447,7 @@ export default function Ingredientenbeheer() {
 
               <section className="modal-section">
                 <h4>Intern</h4>
-                <div className="modal-grid one-col">
+                <div className="modal-grid one-col calm-grid">
                   <label>
                     Eigen categorie
                     <input
@@ -365,32 +459,33 @@ export default function Ingredientenbeheer() {
                   <label>
                     Notities
                     <textarea
-                      value={formData.internalNotes}
-                      onChange={(event) => handleFieldChange('internalNotes', event.target.value)}
+                      value={formData.notes}
+                      onChange={(event) => handleFieldChange('notes', event.target.value)}
                     />
                   </label>
                   <label>
-                    Extra allergenen / kruisbesmetting
+                    Allergenen / kruisbesmetting
                     <textarea
-                      value={formData.extraAllergensCrossContamination}
-                      onChange={(event) =>
-                        handleFieldChange('extraAllergensCrossContamination', event.target.value)
-                      }
+                      value={formData.allergensCross}
+                      onChange={(event) => handleFieldChange('allergensCross', event.target.value)}
                     />
                   </label>
                 </div>
               </section>
 
               {validationMessage ? <p className="form-error">{validationMessage}</p> : null}
-              {formMessage ? <p className="form-info">{formMessage}</p> : null}
             </div>
 
             <div className="modal-actions">
               <button type="button" className="secondary-btn" onClick={closeModal}>
                 Annuleren
               </button>
-              <button type="button" className="primary-btn" onClick={handleSaveIngredient} disabled={isSaving}>
-                {isSaving ? 'Opslaan...' : 'Opslaan'}
+              <button type="button" className="primary-btn" onClick={handleSave} disabled={isSaving}>
+                {isSaving
+                  ? 'Bezig met opslaan...'
+                  : editingIngredientId
+                    ? 'Wijzigingen opslaan'
+                    : 'Opslaan'}
               </button>
             </div>
           </div>
