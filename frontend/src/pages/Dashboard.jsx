@@ -65,6 +65,29 @@ export default function Dashboard() {
       .toLowerCase()
       .includes(searchTerm.toLowerCase())
   )
+  const hasSearch = searchTerm.trim().length > 0
+
+  function formatPrice(value) {
+    if (value === null || value === undefined || value === '') {
+      return '-'
+    }
+    const number = Number(value)
+    if (Number.isNaN(number)) {
+      return '-'
+    }
+    return `€ ${number.toFixed(2).replace('.', ',')}`
+  }
+
+  function formatVat(value) {
+    if (value === null || value === undefined || value === '') {
+      return '-'
+    }
+    const number = Number(value)
+    if (Number.isNaN(number)) {
+      return '-'
+    }
+    return `${number}%`
+  }
 
   return (
     <main className="dashboard">
@@ -92,15 +115,18 @@ export default function Dashboard() {
       <section className="card">
         <h2>Ingrediënten</h2>
         <input
+          className="search-input"
           type="text"
           placeholder="Zoek op naam"
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
         />
-        {filteredIngredients.length === 0 ? (
+        {!hasSearch ? (
+          <p>Typ om ingrediënten te zoeken</p>
+        ) : filteredIngredients.length === 0 ? (
           <p>Geen ingrediënten gevonden</p>
         ) : (
-          <table>
+          <table className="ingredients-table">
             <thead>
               <tr>
                 <th>Naam</th>
@@ -115,8 +141,8 @@ export default function Dashboard() {
                 <tr key={ingredient.id}>
                   <td>{ingredient.supplier_product_name || '-'}</td>
                   <td>{ingredient.supplier_name || '-'}</td>
-                  <td>{ingredient.supplier_price_ex_vat ?? '-'}</td>
-                  <td>{ingredient.supplier_vat_rate ?? '-'}</td>
+                  <td>{formatPrice(ingredient.supplier_price_ex_vat)}</td>
+                  <td>{formatVat(ingredient.supplier_vat_rate)}</td>
                   <td>{ingredient.supplier_unit || '-'}</td>
                 </tr>
               ))}
