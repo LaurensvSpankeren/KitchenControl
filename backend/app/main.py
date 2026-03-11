@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
+from app.api.imports import router as imports_router
 from app.api.ingredients import router as ingredients_router
 from app.db.base import Base
 from app.db.session import engine
@@ -32,3 +33,4 @@ def root() -> dict[str, str]:
 
 app.include_router(health_router)
 app.include_router(ingredients_router)
+app.include_router(imports_router)
