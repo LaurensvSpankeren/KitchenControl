@@ -41,6 +41,29 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getSemiFinishedProductDetail(id) {
+    const response = await fetch(`${API_BASE_URL}/api/semi-finished-products/${id}`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch semi-finished product detail: ${response.status}`)
+    }
+    return response.json()
+  },
+  async addSemiFinishedProductRecipeLine(semiFinishedProductId, payload) {
+    const response = await fetch(
+      `${API_BASE_URL}/api/semi-finished-products/${semiFinishedProductId}/recipe-lines`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }
+    )
+    if (!response.ok) {
+      throw new Error(`Failed to add recipe line: ${response.status}`)
+    }
+    return response.json()
+  },
   getStatus() {
     return {
       message: 'API placeholder: requests worden later toegevoegd.',
