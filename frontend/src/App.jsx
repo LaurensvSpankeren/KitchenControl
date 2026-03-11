@@ -3,7 +3,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import AppShell from './components/AppShell'
 import Dashboard from './pages/Dashboard'
-import Inkoopproducten from './pages/Inkoopproducten'
+import Ingredientenbeheer from './pages/Ingredientenbeheer'
+import Importbeheer from './pages/Importbeheer'
 import Halffabricaten from './pages/Halffabricaten'
 import Gerechten from './pages/Gerechten'
 import Menus from './pages/Menus'
@@ -43,7 +44,8 @@ export default function App() {
           }
         >
           <Route index element={<Dashboard />} />
-          <Route path="inkoopproducten" element={<Inkoopproducten />} />
+          <Route path="ingredientenbeheer" element={<Ingredientenbeheer />} />
+          <Route path="importbeheer" element={<Importbeheer />} />
           <Route path="halffabricaten" element={<Halffabricaten />} />
           <Route path="gerechten" element={<Gerechten />} />
           <Route path="menus" element={<Menus />} />

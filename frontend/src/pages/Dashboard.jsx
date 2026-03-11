@@ -45,7 +45,7 @@ export default function Dashboard() {
       <section className="card-grid">
         <article className="card">
           <h3>Laatste importstatus</h3>
-          <p>Gebruik Inkoopproducten om een nieuwe CSV-import te draaien.</p>
+          <p>Gebruik Importbeheer om een nieuwe CSV-import te draaien.</p>
         </article>
         <article className="card">
           <h3>Sterke prijsstijgingen</h3>
@@ -64,9 +64,13 @@ export default function Dashboard() {
       <section className="card quick-nav-card">
         <h3>Snelle navigatie</h3>
         <div className="quick-nav-grid">
-          <Link className="quick-nav-link" to="/inkoopproducten">
-            Inkoopproducten
+          <Link className="quick-nav-link" to="/ingredientenbeheer">
+            Ingrediëntenbeheer
             <span>{ingredientCount} producten</span>
+          </Link>
+          <Link className="quick-nav-link" to="/importbeheer">
+            Importbeheer
+            <span>CSV importeren</span>
           </Link>
           <Link className="quick-nav-link" to="/halffabricaten">
             Halffabricaten

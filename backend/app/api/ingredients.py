@@ -7,6 +7,19 @@ from app.models.ingredient import Ingredient
 router = APIRouter()
 
 
+def _parse_optional_float(payload: dict, field_name: str) -> float | None:
+    value = payload.get(field_name)
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid numeric value for field: {field_name}",
+        ) from exc
+
+
 @router.get("/api/ingredients", tags=["ingredients"])
 def list_ingredients(db: Session = Depends(get_db)) -> list[dict]:
     ingredients = (
@@ -79,12 +92,39 @@ def create_ingredient(payload: dict, db: Session = Depends(get_db)) -> dict:
             detail=f"Missing required fields: {', '.join(missing_fields)}",
         )
 
+    ingredient_data: dict = {
+        "supplier_name": payload["supplier_name"],
+        "supplier_product_code": payload["supplier_product_code"],
+        "supplier_product_name": payload["supplier_product_name"],
+        "supplier_unit": payload["supplier_unit"],
+        "base_unit": payload["base_unit"],
+    }
+
+    optional_string_fields = [
+        "supplier_brand",
+        "category",
+        "internal_notes",
+        "internal_allergens_extra",
+        "cross_contamination_notes",
+    ]
+    for field in optional_string_fields:
+        if field in payload:
+            ingredient_data[field] = payload.get(field) or None
+
+    optional_numeric_fields = [
+        "supplier_net_content",
+        "supplier_price_ex_vat",
+        "supplier_vat_rate",
+        "conversion_factor_to_base",
+        "yield_percent",
+        "waste_percent",
+    ]
+    for field in optional_numeric_fields:
+        if field in payload:
+            ingredient_data[field] = _parse_optional_float(payload, field)
+
     ingredient = Ingredient(
-        supplier_name=payload["supplier_name"],
-        supplier_product_code=payload["supplier_product_code"],
-        supplier_product_name=payload["supplier_product_name"],
-        supplier_unit=payload["supplier_unit"],
-        base_unit=payload["base_unit"],
+        **ingredient_data,
     )
     db.add(ingredient)
     db.commit()

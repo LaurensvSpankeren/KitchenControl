@@ -3,7 +3,8 @@ import { NavLink, Outlet } from 'react-router-dom'
 
 const navItems = [
   { to: '/', label: 'Dashboard', end: true },
-  { to: '/inkoopproducten', label: 'Inkoopproducten' },
+  { to: '/ingredientenbeheer', label: 'Ingrediëntenbeheer' },
+  { to: '/importbeheer', label: 'Importbeheer' },
   { to: '/halffabricaten', label: 'Halffabricaten' },
   { to: '/gerechten', label: 'Gerechten' },
   { to: '/menus', label: 'Menu\'s' },

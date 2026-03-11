@@ -8,6 +8,19 @@ export const apiClient = {
     }
     return response.json()
   },
+  async createIngredient(payload) {
+    const response = await fetch(`${API_BASE_URL}/api/ingredients`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to create ingredient: ${response.status}`)
+    }
+    return response.json()
+  },
   async importIngredientsCsv(file) {
     const formData = new FormData()
     formData.append('file', file)
