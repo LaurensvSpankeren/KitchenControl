@@ -1,14 +1,57 @@
-import React from 'react'
+import React, { useState } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+
+import AppShell from './components/AppShell'
 import Dashboard from './pages/Dashboard'
+import Inkoopproducten from './pages/Inkoopproducten'
+import Halffabricaten from './pages/Halffabricaten'
+import Gerechten from './pages/Gerechten'
+import Menus from './pages/Menus'
+import Buffetten from './pages/Buffetten'
+import Login from './pages/Login'
+
+function ProtectedRoute({ isAuthenticated, children }) {
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+  return children
+}
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <h1>KitchenControl</h1>
-        <p>Menu calculatie en receptuur</p>
-      </header>
-      <Dashboard />
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/" replace />
+            ) : (
+              <Login onLogin={() => setIsAuthenticated(true)} />
+            )
+          }
+        />
+
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <AppShell onLogout={() => setIsAuthenticated(false)} />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="inkoopproducten" element={<Inkoopproducten />} />
+          <Route path="halffabricaten" element={<Halffabricaten />} />
+          <Route path="gerechten" element={<Gerechten />} />
+          <Route path="menus" element={<Menus />} />
+          <Route path="buffetten" element={<Buffetten />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
