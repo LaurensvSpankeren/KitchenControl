@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+**/__pycache__/
+*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+.venv
+.venv/
+venv/
+.env
+
+# Node
+node_modules
+node_modules/
+dist
+dist/
+.vite/
