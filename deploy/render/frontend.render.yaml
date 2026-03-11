@@ -1,0 +1,6 @@
+service: kitchencontrol-frontend
+type: web
+runtime: node
+buildCommand: npm install && npm run build
+startCommand: npx serve dist
+rootDir: frontend
