@@ -5,6 +5,7 @@ import { apiClient } from '../api/client'
 
 export default function Dashboard() {
   const [ingredients, setIngredients] = useState([])
+  const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
     let active = true
@@ -29,6 +30,12 @@ export default function Dashboard() {
     }
   }, [])
 
+  const filteredIngredients = ingredients.filter((ingredient) =>
+    (ingredient.supplier_product_name || '')
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase())
+  )
+
   return (
     <main className="dashboard">
       <section className="card">
@@ -45,14 +52,37 @@ export default function Dashboard() {
       </section>
       <section className="card">
         <h2>Ingrediënten</h2>
-        {ingredients.length === 0 ? (
-          <p>Nog geen ingrediënten</p>
+        <input
+          type="text"
+          placeholder="Zoek op naam"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+        />
+        {filteredIngredients.length === 0 ? (
+          <p>Geen ingrediënten gevonden</p>
         ) : (
-          <ul>
-            {ingredients.map((ingredient) => (
-              <li key={ingredient.id}>{ingredient.supplier_product_name}</li>
-            ))}
-          </ul>
+          <table>
+            <thead>
+              <tr>
+                <th>Naam</th>
+                <th>Leverancier</th>
+                <th>Prijs</th>
+                <th>BTW</th>
+                <th>Eenheid</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredIngredients.map((ingredient) => (
+                <tr key={ingredient.id}>
+                  <td>{ingredient.supplier_product_name || '-'}</td>
+                  <td>{ingredient.supplier_name || '-'}</td>
+                  <td>{ingredient.supplier_price_ex_vat ?? '-'}</td>
+                  <td>{ingredient.supplier_vat_rate ?? '-'}</td>
+                  <td>{ingredient.supplier_unit || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </section>
     </main>
