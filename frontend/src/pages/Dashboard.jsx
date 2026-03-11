@@ -44,9 +44,9 @@ export default function Dashboard() {
         <h2>Snelle acties</h2>
       </section>
       <section className="card">
-        <h2>Ingredients</h2>
+        <h2>Ingrediënten</h2>
         {ingredients.length === 0 ? (
-          <p>No ingredients yet</p>
+          <p>Nog geen ingrediënten</p>
         ) : (
           <ul>
             {ingredients.map((ingredient) => (

@@ -8,6 +8,9 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+.db
+.db-journal
+*.db
 .venv
 .venv/
 venv/
