@@ -8,6 +8,19 @@ export const apiClient = {
     }
     return response.json()
   },
+  async importIngredientsCsv(file) {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch(`${API_BASE_URL}/api/imports/ingredients`, {
+      method: 'POST',
+      body: formData
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to import ingredients: ${response.status}`)
+    }
+    return response.json()
+  },
   getStatus() {
     return {
       message: 'API placeholder: requests worden later toegevoegd.',

@@ -6,11 +6,23 @@ import { apiClient } from '../api/client'
 export default function Dashboard() {
   const [ingredients, setIngredients] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [importMessage, setImportMessage] = useState('')
+  const [isImporting, setIsImporting] = useState(false)
+
+  async function loadIngredients() {
+    try {
+      const data = await apiClient.getIngredients()
+      setIngredients(Array.isArray(data) ? data : [])
+    } catch {
+      setIngredients([])
+    }
+  }
 
   useEffect(() => {
     let active = true
 
-    async function loadIngredients() {
+    async function loadIngredientsOnMount() {
       try {
         const data = await apiClient.getIngredients()
         if (active) {
@@ -23,12 +35,30 @@ export default function Dashboard() {
       }
     }
 
-    loadIngredients()
+    loadIngredientsOnMount()
 
     return () => {
       active = false
     }
   }, [])
+
+  async function handleImport() {
+    if (!selectedFile || isImporting) {
+      return
+    }
+
+    setIsImporting(true)
+    setImportMessage('')
+    try {
+      const result = await apiClient.importIngredientsCsv(selectedFile)
+      setImportMessage(`Import geslaagd: ${result.created} aangemaakt, ${result.updated} bijgewerkt`)
+      await loadIngredients()
+    } catch {
+      setImportMessage('Import mislukt')
+    } finally {
+      setIsImporting(false)
+    }
+  }
 
   const filteredIngredients = ingredients.filter((ingredient) =>
     (ingredient.supplier_product_name || '')
@@ -40,6 +70,15 @@ export default function Dashboard() {
     <main className="dashboard">
       <section className="card">
         <h2>Import status</h2>
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+        />
+        <button type="button" onClick={handleImport} disabled={!selectedFile || isImporting}>
+          {isImporting ? 'Bezig met importeren...' : 'CSV uploaden'}
+        </button>
+        {importMessage ? <p>{importMessage}</p> : null}
       </section>
       <section className="card">
         <h2>Prijsstijgingen</h2>
