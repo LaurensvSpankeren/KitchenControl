@@ -21,6 +21,26 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getSemiFinishedProducts() {
+    const response = await fetch(`${API_BASE_URL}/api/semi-finished-products`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch semi-finished products: ${response.status}`)
+    }
+    return response.json()
+  },
+  async createSemiFinishedProduct(payload) {
+    const response = await fetch(`${API_BASE_URL}/api/semi-finished-products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to create semi-finished product: ${response.status}`)
+    }
+    return response.json()
+  },
   getStatus() {
     return {
       message: 'API placeholder: requests worden later toegevoegd.',

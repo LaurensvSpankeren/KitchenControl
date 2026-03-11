@@ -5,7 +5,11 @@ import { apiClient } from '../api/client'
 
 export default function Dashboard() {
   const [ingredients, setIngredients] = useState([])
+  const [semiFinishedProducts, setSemiFinishedProducts] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [semiFinishedName, setSemiFinishedName] = useState('')
+  const [semiFinishedDescription, setSemiFinishedDescription] = useState('')
+  const [semiFinishedMessage, setSemiFinishedMessage] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
   const [importMessage, setImportMessage] = useState('')
   const [isImporting, setIsImporting] = useState(false)
@@ -19,23 +23,39 @@ export default function Dashboard() {
     }
   }
 
+  async function loadSemiFinishedProducts() {
+    try {
+      const data = await apiClient.getSemiFinishedProducts()
+      setSemiFinishedProducts(Array.isArray(data) ? data : [])
+    } catch {
+      setSemiFinishedProducts([])
+    }
+  }
+
   useEffect(() => {
     let active = true
 
-    async function loadIngredientsOnMount() {
+    async function loadDataOnMount() {
       try {
-        const data = await apiClient.getIngredients()
+        const [ingredientsData, semiFinishedProductsData] = await Promise.all([
+          apiClient.getIngredients(),
+          apiClient.getSemiFinishedProducts()
+        ])
         if (active) {
-          setIngredients(Array.isArray(data) ? data : [])
+          setIngredients(Array.isArray(ingredientsData) ? ingredientsData : [])
+          setSemiFinishedProducts(
+            Array.isArray(semiFinishedProductsData) ? semiFinishedProductsData : []
+          )
         }
       } catch {
         if (active) {
           setIngredients([])
+          setSemiFinishedProducts([])
         }
       }
     }
 
-    loadIngredientsOnMount()
+    loadDataOnMount()
 
     return () => {
       active = false
@@ -57,6 +77,27 @@ export default function Dashboard() {
       setImportMessage('Import mislukt')
     } finally {
       setIsImporting(false)
+    }
+  }
+
+  async function handleCreateSemiFinishedProduct() {
+    const name = semiFinishedName.trim()
+    if (!name) {
+      setSemiFinishedMessage('Naam is verplicht')
+      return
+    }
+
+    try {
+      await apiClient.createSemiFinishedProduct({
+        name,
+        description: semiFinishedDescription.trim() || null
+      })
+      setSemiFinishedMessage('Halffabricaat opgeslagen')
+      setSemiFinishedName('')
+      setSemiFinishedDescription('')
+      await loadSemiFinishedProducts()
+    } catch {
+      setSemiFinishedMessage('Opslaan mislukt')
     }
   }
 
@@ -111,6 +152,36 @@ export default function Dashboard() {
       </section>
       <section className="card">
         <h2>Snelle acties</h2>
+      </section>
+      <section className="card">
+        <h2>Halffabricaten</h2>
+        <input
+          type="text"
+          placeholder="Naam"
+          value={semiFinishedName}
+          onChange={(event) => setSemiFinishedName(event.target.value)}
+        />
+        <textarea
+          placeholder="Omschrijving (optioneel)"
+          value={semiFinishedDescription}
+          onChange={(event) => setSemiFinishedDescription(event.target.value)}
+        />
+        <button type="button" onClick={handleCreateSemiFinishedProduct}>
+          Halffabricaat toevoegen
+        </button>
+        {semiFinishedMessage ? <p>{semiFinishedMessage}</p> : null}
+        {semiFinishedProducts.length === 0 ? (
+          <p>Nog geen halffabricaten</p>
+        ) : (
+          <ul>
+            {semiFinishedProducts.map((item) => (
+              <li key={item.id}>
+                <strong>{item.name}</strong>
+                {item.description ? ` - ${item.description}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
       <section className="card">
         <h2>Ingrediënten</h2>
