@@ -328,6 +328,17 @@ body {
   overflow: auto;
 }
 
+.modal-validation-banner {
+  margin-bottom: 0.9rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  border-radius: 8px;
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
 .modal-section + .modal-section {
   margin-top: 1rem;
 }

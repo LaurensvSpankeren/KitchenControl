@@ -36,6 +36,13 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
             )
             supplier_vat_rate = _parse_number(row.get("BTW waarde"))
             supplier_allergens_raw = (row.get("Ingredienten - declaratie") or "").strip() or None
+            supplier_brand = (row.get("Merknaam voluit") or "").strip() or None
+            supplier_net_content = (
+                _parse_number(row.get("Netto inhoud"))
+                or _parse_number(row.get("Netto Gewicht"))
+                or _parse_number(row.get("Netto gewicht"))
+            )
+            category = (row.get("Omschrijving hoofdproduktgroep") or "").strip() or None
 
             if not supplier_product_code:
                 continue
@@ -52,16 +59,22 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 ingredient.supplier_price_ex_vat = supplier_price_ex_vat
                 ingredient.supplier_vat_rate = supplier_vat_rate
                 ingredient.supplier_allergens_raw = supplier_allergens_raw
+                ingredient.supplier_brand = supplier_brand
+                ingredient.supplier_net_content = supplier_net_content
+                ingredient.category = category
                 updated += 1
             else:
                 ingredient = Ingredient(
                     supplier_name="Bidfood",
                     supplier_product_code=supplier_product_code,
                     supplier_product_name=supplier_product_name or supplier_product_code,
+                    supplier_brand=supplier_brand,
                     supplier_unit=supplier_unit or "st",
+                    supplier_net_content=supplier_net_content,
                     supplier_price_ex_vat=supplier_price_ex_vat,
                     supplier_vat_rate=supplier_vat_rate,
                     supplier_allergens_raw=supplier_allergens_raw,
+                    category=category,
                     base_unit=supplier_unit or "st",
                 )
                 db.add(ingredient)

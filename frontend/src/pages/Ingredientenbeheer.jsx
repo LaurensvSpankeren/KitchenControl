@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { apiClient } from '../api/client'
 
@@ -123,6 +123,7 @@ export default function Ingredientenbeheer() {
   const [validationMessage, setValidationMessage] = useState('')
   const [saveMessage, setSaveMessage] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const modalBodyRef = useRef(null)
 
   async function loadIngredients() {
     try {
@@ -201,8 +202,13 @@ export default function Ingredientenbeheer() {
     const missing = requiredFields.filter((field) => !String(formData[field]).trim())
     if (missing.length > 0) {
       setValidationMessage(
-        `Vul verplichte velden in: ${missing.map((field) => requiredLabels[field]).join(', ')}`
+        `Opslaan lukt nog niet. Vul eerst deze velden in: ${missing
+          .map((field) => requiredLabels[field])
+          .join(', ')}`
       )
+      if (modalBodyRef.current) {
+        modalBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+      }
       return false
     }
 
@@ -316,7 +322,13 @@ export default function Ingredientenbeheer() {
               </h3>
             </div>
 
-            <div className="modal-body">
+            <div className="modal-body" ref={modalBodyRef}>
+              {validationMessage ? (
+                <div className="modal-validation-banner" role="alert">
+                  {validationMessage}
+                </div>
+              ) : null}
+
               <section className="modal-section">
                 <h4>Product</h4>
                 <div className="modal-grid two-col calm-grid">
@@ -473,7 +485,6 @@ export default function Ingredientenbeheer() {
                 </div>
               </section>
 
-              {validationMessage ? <p className="form-error">{validationMessage}</p> : null}
             </div>
 
             <div className="modal-actions">
