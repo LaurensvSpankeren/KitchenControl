@@ -226,11 +226,75 @@ body {
   font-size: 0.85rem;
 }
 
+.line-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.line-edit-input {
+  min-width: 92px;
+  margin-top: 0;
+  width: 100%;
+}
+
 .semi-finished-layout {
   margin-top: 0.9rem;
   display: grid;
   grid-template-columns: minmax(180px, 240px) 1fr;
   gap: 0.9rem;
+}
+
+.sfp-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(150px, 220px) minmax(150px, 220px) auto;
+  gap: 0.6rem;
+  align-items: end;
+}
+
+.sfp-toolbar select {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font: inherit;
+  background: #fff;
+}
+
+.sfp-new-btn {
+  width: auto;
+  min-width: 180px;
+}
+
+.sfp-modal .modal-body {
+  padding-top: 0.75rem;
+}
+
+.sfp-ingredient-add {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.sfp-total-line {
+  margin-top: 0.75rem;
+}
+
+.sfp-actions {
+  flex-wrap: wrap;
+}
+
+.payload-preview {
+  margin: 0;
+  padding: 0.7rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow: auto;
+  font-size: 0.82rem;
 }
 
 .semi-finished-list {
@@ -486,7 +550,8 @@ body {
   .card-grid,
   .quick-nav-grid,
   .recipe-line-inline,
-  .modal-grid.two-col {
+  .modal-grid.two-col,
+  .sfp-toolbar {
     grid-template-columns: 1fr;
   }
 
