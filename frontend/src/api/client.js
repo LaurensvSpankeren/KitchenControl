@@ -158,6 +158,42 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getSemiFinishedCategories() {
+    const response = await fetch(`${API_BASE_URL}/api/semi-finished-categories`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch semi-finished categories: ${response.status}`)
+    }
+    return response.json()
+  },
+  async createSemiFinishedCategory(payload) {
+    const response = await fetch(`${API_BASE_URL}/api/semi-finished-categories`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to create semi-finished category: ${response.status}`)
+    }
+    return response.json()
+  },
+  async createSemiFinishedSubcategory(categoryId, payload) {
+    const response = await fetch(
+      `${API_BASE_URL}/api/semi-finished-categories/${categoryId}/subcategories`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }
+    )
+    if (!response.ok) {
+      throw new Error(`Failed to create semi-finished subcategory: ${response.status}`)
+    }
+    return response.json()
+  },
   getStatus() {
     return {
       message: 'API placeholder: requests worden later toegevoegd.',

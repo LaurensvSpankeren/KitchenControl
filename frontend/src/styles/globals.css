@@ -117,17 +117,20 @@ body {
 
 .card input,
 .card textarea,
+.card select,
 .card button {
   width: 100%;
   margin-top: 0.6rem;
 }
 
 .card input,
-.card textarea {
+.card textarea,
+.card select {
   padding: 0.55rem 0.65rem;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   font: inherit;
+  background: #fff;
 }
 
 .card textarea {
@@ -341,6 +344,19 @@ body {
   text-align: left;
 }
 
+.ingredient-picker-item strong {
+  display: block;
+}
+
+.ingredient-picker-meta,
+.ingredient-selected-info {
+  display: block;
+  margin-top: 0.2rem;
+  color: #4b5563;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 .ingredient-picker-item.is-active {
   background: #e5eefc;
   border-color: #93c5fd;
@@ -440,8 +456,19 @@ body {
 }
 
 .modal-grid label input,
-.modal-grid label textarea {
+.modal-grid label textarea,
+.modal-grid label select {
   margin-top: 0;
+}
+
+.modal-grid label input,
+.modal-grid label textarea,
+.modal-grid label select {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font: inherit;
+  background: #fff;
 }
 
 .full-width {

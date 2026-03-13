@@ -55,6 +55,9 @@ def _serialize_semi_finished_product(item: SemiFinishedProduct) -> dict:
         "final_yield_unit": item.final_yield_unit,
         "shelf_life_days": item.shelf_life_days,
         "shelf_life_after_preparation_days": item.shelf_life_after_preparation_days,
+        "storage_fridge_days": item.storage_fridge_days,
+        "storage_freezer_days": item.storage_freezer_days,
+        "storage_notes": item.storage_notes,
         "storage_advice": item.storage_advice,
         "preparation_notes": item.preparation_notes,
         "created_at": item.created_at.isoformat() if item.created_at is not None else None,
@@ -73,7 +76,8 @@ def _apply_semi_finished_payload(item: SemiFinishedProduct, payload: dict) -> No
     item.subcategory = payload.get("subcategory") or None
     item.photo_url = payload.get("photo_url") or None
     item.final_yield_unit = payload.get("final_yield_unit") or None
-    item.storage_advice = payload.get("storage_advice") or None
+    item.storage_notes = payload.get("storage_notes") or payload.get("storage_advice") or None
+    item.storage_advice = payload.get("storage_advice") or payload.get("storage_notes") or None
     item.preparation_notes = payload.get("preparation_notes") or None
 
     item.yield_percent = _parse_optional_float(payload, "yield_percent")
@@ -83,6 +87,8 @@ def _apply_semi_finished_payload(item: SemiFinishedProduct, payload: dict) -> No
     item.shelf_life_after_preparation_days = _parse_optional_int(
         payload, "shelf_life_after_preparation_days"
     )
+    item.storage_fridge_days = _parse_optional_int(payload, "storage_fridge_days")
+    item.storage_freezer_days = _parse_optional_int(payload, "storage_freezer_days")
 
 
 def _serialize_recipe_steps(steps: list[RecipeStep]) -> list[dict]:
@@ -127,9 +133,21 @@ def _build_recipe_lines_detail(db: Session, semi_finished_product_id: int) -> di
 
                 if (
                     ingredient.supplier_price_ex_vat is not None
+                    and ingredient.calculation_quantity_per_package is not None
+                    and ingredient.calculation_quantity_per_package != 0
+                ):
+                    cost = (
+                        Decimal(line.quantity)
+                        * Decimal(ingredient.supplier_price_ex_vat)
+                        / Decimal(ingredient.calculation_quantity_per_package)
+                    )
+                    line_cost = float(cost)
+                elif (
+                    ingredient.supplier_price_ex_vat is not None
                     and ingredient.conversion_factor_to_base is not None
                     and ingredient.conversion_factor_to_base != 0
                 ):
+                    # Backward compatibility voor oudere records zonder calculation fields.
                     cost = (
                         Decimal(line.quantity)
                         * Decimal(ingredient.supplier_price_ex_vat)
@@ -494,7 +512,10 @@ def get_semi_finished_product_print_payload(
         "allergenen_totaal": detail["allergens_total"],
         "final_yield_amount": detail["final_yield_amount"],
         "final_yield_unit": detail["final_yield_unit"],
-        "storage_advice": detail["storage_advice"],
+        "storage_advice": detail["storage_notes"] or detail["storage_advice"],
+        "storage_fridge_days": detail["storage_fridge_days"],
+        "storage_freezer_days": detail["storage_freezer_days"],
+        "storage_notes": detail["storage_notes"],
         "shelf_life_after_preparation_days": detail["shelf_life_after_preparation_days"],
     }
 
@@ -518,7 +539,10 @@ def get_semi_finished_product_label_payload(
     return {
         "name": detail["name"],
         "production_date": production_date.isoformat(),
-        "storage_advice": detail["storage_advice"],
+        "storage_advice": detail["storage_notes"] or detail["storage_advice"],
+        "storage_fridge_days": detail["storage_fridge_days"],
+        "storage_freezer_days": detail["storage_freezer_days"],
+        "storage_notes": detail["storage_notes"],
         "shelf_life_after_preparation_days": shelf_life_days,
         "expiry_date": expiry_date,
         "allergens_short": detail["allergens_total"],

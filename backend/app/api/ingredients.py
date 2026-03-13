@@ -20,6 +20,112 @@ def _parse_optional_float(payload: dict, field_name: str) -> float | None:
         ) from exc
 
 
+def _normalize_unit(value: str | None) -> str | None:
+    if value is None:
+        return None
+    unit = str(value).strip().lower()
+    if not unit:
+        return None
+
+    mapping = {
+        "gr": "gram",
+        "g": "gram",
+        "gram": "gram",
+        "kg": "kg",
+        "l": "liter",
+        "lt": "liter",
+        "liter": "liter",
+        "ml": "ml",
+        "stuk": "stuk",
+        "st": "stuk",
+        "stuks": "stuk",
+        "pcs": "stuk",
+        "pc": "stuk",
+    }
+    return mapping.get(unit, unit)
+
+
+def _derive_calculation_values(
+    net_content_unit: str | None,
+    net_content_amount: float | None,
+    units_per_package: float | None,
+) -> tuple[str | None, float | None]:
+    unit = _normalize_unit(net_content_unit)
+
+    if unit == "kg" and net_content_amount is not None:
+        return "gram", net_content_amount * 1000
+    if unit == "gram" and net_content_amount is not None:
+        return "gram", net_content_amount
+    if unit == "liter" and net_content_amount is not None:
+        return "ml", net_content_amount * 1000
+    if unit == "ml" and net_content_amount is not None:
+        return "ml", net_content_amount
+    if unit == "stuk":
+        return "stuk", units_per_package if units_per_package else 1
+
+    return None, None
+
+
+def _parse_payload_values(payload: dict) -> dict:
+    data: dict = {
+        "supplier_name": payload["supplier_name"],
+        "supplier_product_code": payload["supplier_product_code"],
+        "supplier_product_name": payload["supplier_product_name"],
+        "supplier_unit": payload["supplier_unit"],
+        "base_unit": payload["base_unit"],
+    }
+
+    optional_string_fields = [
+        "supplier_brand",
+        "supplier_pack_description",
+        "packaging_type",
+        "net_content_unit",
+        "category",
+        "internal_notes",
+        "internal_allergens_extra",
+        "cross_contamination_notes",
+    ]
+    for field in optional_string_fields:
+        if field in payload:
+            data[field] = payload.get(field) or None
+
+    optional_numeric_fields = [
+        "supplier_net_content",
+        "units_per_package",
+        "net_content_amount",
+        "supplier_price_ex_vat",
+        "supplier_vat_rate",
+        "conversion_factor_to_base",
+        "yield_percent",
+        "waste_percent",
+    ]
+    for field in optional_numeric_fields:
+        if field in payload:
+            data[field] = _parse_optional_float(payload, field)
+
+    if "net_content_amount" not in data and data.get("supplier_net_content") is not None:
+        data["net_content_amount"] = data["supplier_net_content"]
+
+    if "packaging_type" not in data and payload.get("supplier_unit"):
+        data["packaging_type"] = payload.get("supplier_unit")
+
+    normalized_net_unit = _normalize_unit(data.get("net_content_unit"))
+    if normalized_net_unit is not None:
+        data["net_content_unit"] = normalized_net_unit
+
+    calc_unit, calc_quantity = _derive_calculation_values(
+        data.get("net_content_unit"),
+        data.get("net_content_amount"),
+        data.get("units_per_package"),
+    )
+    if calc_unit is not None and calc_quantity is not None:
+        data["calculation_unit"] = calc_unit
+        data["calculation_quantity_per_package"] = calc_quantity
+        data["conversion_factor_to_base"] = calc_quantity
+
+    return data
+
+
 def _serialize_ingredient(ingredient: Ingredient) -> dict:
     return {
         "id": ingredient.id,
@@ -31,6 +137,18 @@ def _serialize_ingredient(ingredient: Ingredient) -> dict:
         "supplier_unit": ingredient.supplier_unit,
         "supplier_net_content": float(ingredient.supplier_net_content)
         if ingredient.supplier_net_content is not None
+        else None,
+        "packaging_type": ingredient.packaging_type,
+        "units_per_package": float(ingredient.units_per_package)
+        if ingredient.units_per_package is not None
+        else None,
+        "net_content_amount": float(ingredient.net_content_amount)
+        if ingredient.net_content_amount is not None
+        else None,
+        "net_content_unit": ingredient.net_content_unit,
+        "calculation_unit": ingredient.calculation_unit,
+        "calculation_quantity_per_package": float(ingredient.calculation_quantity_per_package)
+        if ingredient.calculation_quantity_per_package is not None
         else None,
         "supplier_price_ex_vat": float(ingredient.supplier_price_ex_vat)
         if ingredient.supplier_price_ex_vat is not None
@@ -93,40 +211,9 @@ def create_ingredient(payload: dict, db: Session = Depends(get_db)) -> dict:
             detail=f"Missing required fields: {', '.join(missing_fields)}",
         )
 
-    ingredient_data: dict = {
-        "supplier_name": payload["supplier_name"],
-        "supplier_product_code": payload["supplier_product_code"],
-        "supplier_product_name": payload["supplier_product_name"],
-        "supplier_unit": payload["supplier_unit"],
-        "base_unit": payload["base_unit"],
-    }
+    ingredient_data = _parse_payload_values(payload)
 
-    optional_string_fields = [
-        "supplier_brand",
-        "category",
-        "internal_notes",
-        "internal_allergens_extra",
-        "cross_contamination_notes",
-    ]
-    for field in optional_string_fields:
-        if field in payload:
-            ingredient_data[field] = payload.get(field) or None
-
-    optional_numeric_fields = [
-        "supplier_net_content",
-        "supplier_price_ex_vat",
-        "supplier_vat_rate",
-        "conversion_factor_to_base",
-        "yield_percent",
-        "waste_percent",
-    ]
-    for field in optional_numeric_fields:
-        if field in payload:
-            ingredient_data[field] = _parse_optional_float(payload, field)
-
-    ingredient = Ingredient(
-        **ingredient_data,
-    )
+    ingredient = Ingredient(**ingredient_data)
     db.add(ingredient)
     db.commit()
     db.refresh(ingredient)
@@ -154,34 +241,9 @@ def update_ingredient(ingredient_id: int, payload: dict, db: Session = Depends(g
             detail=f"Missing required fields: {', '.join(missing_fields)}",
         )
 
-    ingredient.supplier_name = payload["supplier_name"]
-    ingredient.supplier_product_code = payload["supplier_product_code"]
-    ingredient.supplier_product_name = payload["supplier_product_name"]
-    ingredient.supplier_unit = payload["supplier_unit"]
-    ingredient.base_unit = payload["base_unit"]
-
-    optional_string_fields = [
-        "supplier_brand",
-        "category",
-        "internal_notes",
-        "internal_allergens_extra",
-        "cross_contamination_notes",
-    ]
-    for field in optional_string_fields:
-        if field in payload:
-            setattr(ingredient, field, payload.get(field) or None)
-
-    optional_numeric_fields = [
-        "supplier_net_content",
-        "supplier_price_ex_vat",
-        "supplier_vat_rate",
-        "conversion_factor_to_base",
-        "yield_percent",
-        "waste_percent",
-    ]
-    for field in optional_numeric_fields:
-        if field in payload:
-            setattr(ingredient, field, _parse_optional_float(payload, field))
+    ingredient_data = _parse_payload_values(payload)
+    for field, value in ingredient_data.items():
+        setattr(ingredient, field, value)
 
     db.commit()
     db.refresh(ingredient)

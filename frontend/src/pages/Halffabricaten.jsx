@@ -9,11 +9,13 @@ const initialForm = {
   subcategory: '',
   final_yield_amount: '',
   final_yield_unit: '',
-  storage_advice: '',
-  shelf_life_after_preparation_days: ''
+  storage_fridge_days: '',
+  storage_freezer_days: '',
+  storage_notes: ''
 }
 
 const EMPTY_STEPS = Array.from({ length: 10 }, () => '')
+const endProductUnitOptions = ['gram', 'kg', 'ml', 'liter', 'stuk']
 
 function formatCurrency(value, digits = 2) {
   if (value === null || value === undefined || value === '') {
@@ -44,6 +46,48 @@ function formatYield(value, unit) {
   return `${value} ${unit || ''}`.trim()
 }
 
+function formatDateForInput(date) {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatDateNl(isoDate) {
+  if (!isoDate) {
+    return '-'
+  }
+  const [year, month, day] = String(isoDate).split('-')
+  if (!year || !month || !day) {
+    return isoDate
+  }
+  return `${day}-${month}-${year}`
+}
+
+function addDaysToIsoDate(isoDate, days) {
+  const parsedDays = Number(days)
+  if (!isoDate || Number.isNaN(parsedDays) || parsedDays < 0) {
+    return null
+  }
+  const date = new Date(`${isoDate}T00:00:00`)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+  date.setDate(date.getDate() + parsedDays)
+  return formatDateForInput(date)
+}
+
+function formatCompactNumber(value, digits = 2) {
+  if (value === null || value === undefined || value === '') {
+    return '-'
+  }
+  const num = Number(value)
+  if (Number.isNaN(num)) {
+    return '-'
+  }
+  return num.toFixed(digits).replace('.', ',')
+}
+
 function mapProductToForm(product) {
   return {
     photo_url: product.photo_url || '',
@@ -52,8 +96,9 @@ function mapProductToForm(product) {
     subcategory: product.subcategory || '',
     final_yield_amount: product.final_yield_amount ?? '',
     final_yield_unit: product.final_yield_unit || '',
-    storage_advice: product.storage_advice || '',
-    shelf_life_after_preparation_days: product.shelf_life_after_preparation_days ?? ''
+    storage_fridge_days: product.storage_fridge_days ?? '',
+    storage_freezer_days: product.storage_freezer_days ?? '',
+    storage_notes: product.storage_notes || product.storage_advice || ''
   }
 }
 
@@ -65,17 +110,19 @@ function mapFormToPayload(form) {
     subcategory: form.subcategory.trim() || null,
     final_yield_amount: form.final_yield_amount === '' ? null : Number(form.final_yield_amount),
     final_yield_unit: form.final_yield_unit.trim() || null,
-    storage_advice: form.storage_advice.trim() || null,
-    shelf_life_after_preparation_days:
-      form.shelf_life_after_preparation_days === ''
-        ? null
-        : Number(form.shelf_life_after_preparation_days)
+    storage_fridge_days:
+      form.storage_fridge_days === '' ? null : Number(form.storage_fridge_days),
+    storage_freezer_days:
+      form.storage_freezer_days === '' ? null : Number(form.storage_freezer_days),
+    storage_notes: form.storage_notes.trim() || null,
+    storage_advice: form.storage_notes.trim() || null
   }
 }
 
 export default function Halffabricaten() {
   const [products, setProducts] = useState([])
   const [ingredients, setIngredients] = useState([])
+  const [semiFinishedCategories, setSemiFinishedCategories] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [subcategoryFilter, setSubcategoryFilter] = useState('')
@@ -94,12 +141,18 @@ export default function Halffabricaten() {
   const [editingLineId, setEditingLineId] = useState(null)
   const [editingLineQuantity, setEditingLineQuantity] = useState('')
   const [editingLineUnit, setEditingLineUnit] = useState('')
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [showNewSubcategoryInput, setShowNewSubcategoryInput] = useState(false)
+  const [newSubcategoryName, setNewSubcategoryName] = useState('')
 
   const [pageMessage, setPageMessage] = useState('')
   const [modalMessage, setModalMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
-  const [previewTitle, setPreviewTitle] = useState('')
-  const [previewPayload, setPreviewPayload] = useState(null)
+  const [isLabelModalOpen, setIsLabelModalOpen] = useState(false)
+  const [labelProductionDate, setLabelProductionDate] = useState(formatDateForInput(new Date()))
+  const [labelUseFridge, setLabelUseFridge] = useState(true)
+  const [labelUseFreezer, setLabelUseFreezer] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
   async function loadProducts() {
@@ -117,6 +170,15 @@ export default function Halffabricaten() {
       setIngredients(Array.isArray(data) ? data : [])
     } catch {
       setIngredients([])
+    }
+  }
+
+  async function loadSemiFinishedCategories() {
+    try {
+      const data = await apiClient.getSemiFinishedCategories()
+      setSemiFinishedCategories(Array.isArray(data) ? data : [])
+    } catch {
+      setSemiFinishedCategories([])
     }
   }
 
@@ -146,17 +208,29 @@ export default function Halffabricaten() {
   useEffect(() => {
     loadProducts()
     loadIngredients()
+    loadSemiFinishedCategories()
   }, [])
 
   const categoryOptions = useMemo(
-    () => [...new Set(products.map((item) => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nl')),
-    [products]
+    () =>
+      semiFinishedCategories
+        .map((category) => category.name)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, 'nl')),
+    [semiFinishedCategories]
   )
 
-  const subcategoryOptions = useMemo(
-    () => [...new Set(products.map((item) => item.subcategory).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nl')),
-    [products]
-  )
+  const filterSubcategoryOptions = useMemo(() => {
+    if (!categoryFilter) {
+      return []
+    }
+    const categoryRecord =
+      semiFinishedCategories.find((category) => category.name === categoryFilter) || null
+    return (categoryRecord?.subcategories || [])
+      .map((subcategory) => subcategory.name)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'nl'))
+  }, [semiFinishedCategories, categoryFilter])
 
   const filteredProducts = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
@@ -191,6 +265,31 @@ export default function Halffabricaten() {
       .slice(0, 25)
   }, [ingredientSearch, ingredients])
 
+  const selectedCategoryRecord = useMemo(
+    () =>
+      semiFinishedCategories.find((category) => category.name === formData.category) || null,
+    [semiFinishedCategories, formData.category]
+  )
+
+  const modalCategoryOptions = useMemo(() => {
+    const base = semiFinishedCategories.map((category) => category.name)
+    if (formData.category && !base.includes(formData.category)) {
+      return [...base, formData.category]
+    }
+    return base
+  }, [semiFinishedCategories, formData.category])
+
+  const modalSubcategoryOptions = useMemo(() => {
+    if (!selectedCategoryRecord) {
+      return formData.subcategory ? [formData.subcategory] : []
+    }
+    const base = (selectedCategoryRecord.subcategories || []).map((subcategory) => subcategory.name)
+    if (formData.subcategory && !base.includes(formData.subcategory)) {
+      return [...base, formData.subcategory]
+    }
+    return base
+  }, [selectedCategoryRecord, formData.subcategory])
+
   function openNewModal() {
     setSelectedProductId(null)
     setFormData(initialForm)
@@ -203,10 +302,12 @@ export default function Halffabricaten() {
     setEditingLineId(null)
     setEditingLineQuantity('')
     setEditingLineUnit('')
+    setShowNewCategoryInput(false)
+    setNewCategoryName('')
+    setShowNewSubcategoryInput(false)
+    setNewSubcategoryName('')
     setModalMessage('')
     setErrorMessage('')
-    setPreviewTitle('')
-    setPreviewPayload(null)
     setIsModalOpen(true)
   }
 
@@ -220,10 +321,12 @@ export default function Halffabricaten() {
     setEditingLineId(null)
     setEditingLineQuantity('')
     setEditingLineUnit('')
+    setShowNewCategoryInput(false)
+    setNewCategoryName('')
+    setShowNewSubcategoryInput(false)
+    setNewSubcategoryName('')
     setModalMessage('')
     setErrorMessage('')
-    setPreviewTitle('')
-    setPreviewPayload(null)
     setIsModalOpen(true)
     await loadDetail(product.id)
   }
@@ -237,6 +340,14 @@ export default function Halffabricaten() {
 
   function handleFormChange(field, value) {
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function handleCategoryChange(value) {
+    setFormData((prev) => ({
+      ...prev,
+      category: value,
+      subcategory: ''
+    }))
   }
 
   function handleStepChange(index, value) {
@@ -381,11 +492,13 @@ export default function Halffabricaten() {
 
     setErrorMessage('')
     try {
+      const selectedUnit =
+        selectedIngredient.calculation_unit || selectedIngredient.base_unit || recipeUnit
       await apiClient.addSemiFinishedProductRecipeLine(selectedProductId, {
         item_type: 'ingredient',
         item_id: selectedIngredient.id,
         quantity,
-        unit: recipeUnit.trim()
+        unit: selectedUnit
       })
       await loadDetail(selectedProductId)
       await loadProducts()
@@ -399,34 +512,116 @@ export default function Halffabricaten() {
     }
   }
 
-  async function handleShowPrintPayload() {
-    if (!selectedProductId) {
-      setErrorMessage('Sla eerst het halffabricaat op.')
+  async function handleCreateCategory() {
+    const name = newCategoryName.trim()
+    if (!name) {
+      setErrorMessage('Vul eerst een categorienaam in.')
       return
     }
 
+    setErrorMessage('')
     try {
-      const payload = await apiClient.getSemiFinishedProductPrint(selectedProductId)
-      setPreviewTitle('Productfiche payload')
-      setPreviewPayload(payload)
+      const created = await apiClient.createSemiFinishedCategory({ name })
+      await loadSemiFinishedCategories()
+      handleCategoryChange(created.name)
+      setShowNewCategoryInput(false)
+      setNewCategoryName('')
+      setModalMessage('Categorie toegevoegd.')
     } catch {
-      setErrorMessage('Productfiche payload ophalen mislukt.')
+      setErrorMessage('Categorie aanmaken mislukt.')
     }
   }
 
-  async function handleShowLabelPayload() {
+  async function handleCreateSubcategory() {
+    if (!selectedCategoryRecord) {
+      setErrorMessage('Kies eerst een categorie.')
+      return
+    }
+
+    const name = newSubcategoryName.trim()
+    if (!name) {
+      setErrorMessage('Vul eerst een subcategorienaam in.')
+      return
+    }
+
+    setErrorMessage('')
+    try {
+      const created = await apiClient.createSemiFinishedSubcategory(selectedCategoryRecord.id, {
+        name
+      })
+      await loadSemiFinishedCategories()
+      setFormData((prev) => ({ ...prev, subcategory: created.name }))
+      setShowNewSubcategoryInput(false)
+      setNewSubcategoryName('')
+      setModalMessage('Subcategorie toegevoegd.')
+    } catch {
+      setErrorMessage('Subcategorie aanmaken mislukt.')
+    }
+  }
+
+  function openLabelModal() {
     if (!selectedProductId) {
       setErrorMessage('Sla eerst het halffabricaat op.')
       return
     }
+    setLabelProductionDate(formatDateForInput(new Date()))
+    setLabelUseFridge(true)
+    setLabelUseFreezer(false)
+    setIsLabelModalOpen(true)
+  }
 
-    try {
-      const payload = await apiClient.getSemiFinishedProductLabel(selectedProductId)
-      setPreviewTitle('Dagetiket payload')
-      setPreviewPayload(payload)
-    } catch {
-      setErrorMessage('Dagetiket payload ophalen mislukt.')
+  function handlePrintLabel() {
+    const productName = formData.name || detail?.name || ''
+    const fridgeDate = labelUseFridge
+      ? addDaysToIsoDate(labelProductionDate, detail?.storage_fridge_days ?? formData.storage_fridge_days)
+      : null
+    const freezerDate = labelUseFreezer
+      ? addDaysToIsoDate(
+          labelProductionDate,
+          detail?.storage_freezer_days ?? formData.storage_freezer_days
+        )
+      : null
+
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=420,height=620')
+    if (!printWindow) {
+      setErrorMessage('Printvenster kon niet worden geopend.')
+      return
     }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Dagetiket - ${productName}</title>
+          <style>
+            @page { size: 89mm 36mm; margin: 4mm; }
+            body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+            .label { border: 1px solid #000; padding: 8px; width: 100%; }
+            .title { font-size: 14px; font-weight: 700; margin-bottom: 6px; text-transform: uppercase; }
+            .line { font-size: 12px; margin: 2px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="label">
+            <div class="title">${productName || '-'}</div>
+            <div class="line"><strong>Productiedatum:</strong> ${formatDateNl(labelProductionDate)}</div>
+            ${
+              labelUseFridge
+                ? `<div class="line"><strong>Koelkast houdbaar tot:</strong> ${formatDateNl(fridgeDate)}</div>`
+                : ''
+            }
+            ${
+              labelUseFreezer
+                ? `<div class="line"><strong>Vriezer houdbaar tot:</strong> ${formatDateNl(freezerDate)}</div>`
+                : ''
+            }
+          </div>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.focus()
+    printWindow.print()
+    setIsLabelModalOpen(false)
   }
 
   async function handlePrintRecipe() {
@@ -446,7 +641,7 @@ export default function Halffabricaten() {
       const lines = (payload.ingredients || [])
         .map(
           (line) =>
-            `<tr><td>${line.item_name || '-'}</td><td>${line.quantity || '-'}</td><td>${line.unit || '-'}</td><td>${line.line_cost ?? '-'}</td></tr>`
+            `<tr><td>${line.item_name || '-'}</td><td>${line.quantity || '-'}</td><td>${line.unit || '-'}</td></tr>`
         )
         .join('')
 
@@ -456,22 +651,45 @@ export default function Halffabricaten() {
 
       printWindow.document.write(`
         <html>
-          <head><title>Keukenrecept - ${payload.name}</title></head>
-          <body style="font-family: Arial, sans-serif; padding: 20px;">
+          <head>
+            <title>Keukenrecept - ${payload.name}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+              h1 { margin: 0 0 10px; }
+              h2 { margin: 18px 0 8px; font-size: 18px; }
+              p { margin: 4px 0; }
+              table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+              th, td { border: 1px solid #cfcfcf; padding: 8px; text-align: left; }
+              th { background: #f5f5f5; }
+              .meta { margin-bottom: 12px; }
+            </style>
+          </head>
+          <body>
             <h1>${payload.name || ''}</h1>
-            <p><strong>Categorie:</strong> ${payload.category || '-'}</p>
-            <p><strong>Subcategorie:</strong> ${payload.subcategory || '-'}</p>
-            <p><strong>Inslag totaal:</strong> ${formatCurrency(payload.inslag_totaal)}</p>
-            <p><strong>Allergenen totaal:</strong> ${payload.allergenen_totaal || 'Geen allergeneninformatie beschikbaar'}</p>
-            <p><strong>Eindgewicht/eindinhoud:</strong> ${formatYield(payload.final_yield_amount, payload.final_yield_unit)}</p>
-            <p><strong>Bewaaradvies:</strong> ${payload.storage_advice || '-'}</p>
+            <div class="meta">
+              <p><strong>Categorie:</strong> ${payload.category || '-'}</p>
+              <p><strong>Subcategorie:</strong> ${payload.subcategory || '-'}</p>
+              <p><strong>Batch opbrengst:</strong> ${formatYield(payload.final_yield_amount, payload.final_yield_unit)}</p>
+            </div>
             <h2>Ingrediënten</h2>
-            <table border="1" cellspacing="0" cellpadding="6">
-              <thead><tr><th>Ingrediënt</th><th>Hoeveelheid</th><th>Eenheid</th><th>Regelprijs</th></tr></thead>
+            <table>
+              <thead><tr><th>Naam</th><th>Hoeveelheid</th><th>Eenheid</th></tr></thead>
               <tbody>${lines}</tbody>
             </table>
             <h2>Receptstappen</h2>
-            <ol>${stepsHtml}</ol>
+            <ol>${stepsHtml || '<li>-</li>'}</ol>
+            <h2>Bewaaradvies</h2>
+            <p><strong>Koelkast:</strong> ${
+              payload.storage_fridge_days !== null && payload.storage_fridge_days !== undefined
+                ? `${payload.storage_fridge_days} dagen`
+                : '-'
+            }</p>
+            <p><strong>Vriezer:</strong> ${
+              payload.storage_freezer_days !== null && payload.storage_freezer_days !== undefined
+                ? `${payload.storage_freezer_days} dagen`
+                : '-'
+            }</p>
+            <p><strong>Extra bewaaradvies:</strong> ${payload.storage_notes || payload.storage_advice || '-'}</p>
           </body>
         </html>
       `)
@@ -483,7 +701,7 @@ export default function Halffabricaten() {
     }
   }
 
-  const allergensText = detail?.allergens_total || 'Geen allergeneninformatie beschikbaar'
+  const allergensText = detail?.allergens_total || 'Geen brondata allergenen beschikbaar'
 
   return (
     <div>
@@ -500,7 +718,13 @@ export default function Halffabricaten() {
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
           />
-          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+          <select
+            value={categoryFilter}
+            onChange={(event) => {
+              setCategoryFilter(event.target.value)
+              setSubcategoryFilter('')
+            }}
+          >
             <option value="">Alle categorieën</option>
             {categoryOptions.map((option) => (
               <option key={option} value={option}>
@@ -508,9 +732,13 @@ export default function Halffabricaten() {
               </option>
             ))}
           </select>
-          <select value={subcategoryFilter} onChange={(event) => setSubcategoryFilter(event.target.value)}>
+          <select
+            value={subcategoryFilter}
+            onChange={(event) => setSubcategoryFilter(event.target.value)}
+            disabled={!categoryFilter}
+          >
             <option value="">Alle subcategorieën</option>
-            {subcategoryOptions.map((option) => (
+            {filterSubcategoryOptions.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
@@ -547,7 +775,7 @@ export default function Halffabricaten() {
                     <td>{item.subcategory || '-'}</td>
                     <td>{formatCurrency(item.estimated_cost_total)}</td>
                     <td>{formatYield(item.final_yield_amount, item.final_yield_unit)}</td>
-                    <td>{item.allergens_total || 'Geen allergeneninformatie beschikbaar'}</td>
+                    <td>{item.allergens_total || 'Geen brondata allergenen beschikbaar'}</td>
                     <td>
                       <button type="button" className="table-action-btn" onClick={() => openEditModal(item)}>
                         Openen
@@ -594,19 +822,73 @@ export default function Halffabricaten() {
                   </label>
                   <label>
                     Categorie
-                    <input
-                      type="text"
+                    <select
                       value={formData.category}
-                      onChange={(event) => handleFormChange('category', event.target.value)}
-                    />
+                      onChange={(event) => handleCategoryChange(event.target.value)}
+                    >
+                      <option value="">Kies een categorie</option>
+                      {modalCategoryOptions.map((categoryName) => (
+                        <option key={categoryName} value={categoryName}>
+                          {categoryName}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="table-action-btn"
+                      onClick={() => setShowNewCategoryInput((prev) => !prev)}
+                    >
+                      Nieuwe categorie
+                    </button>
+                    {showNewCategoryInput ? (
+                      <div className="recipe-line-inline">
+                        <input
+                          type="text"
+                          placeholder="Nieuwe categorie"
+                          value={newCategoryName}
+                          onChange={(event) => setNewCategoryName(event.target.value)}
+                        />
+                        <button type="button" onClick={handleCreateCategory}>
+                          Opslaan
+                        </button>
+                      </div>
+                    ) : null}
                   </label>
                   <label>
                     Subcategorie
-                    <input
-                      type="text"
+                    <select
                       value={formData.subcategory}
                       onChange={(event) => handleFormChange('subcategory', event.target.value)}
-                    />
+                      disabled={!formData.category}
+                    >
+                      <option value="">Kies een subcategorie</option>
+                      {modalSubcategoryOptions.map((subcategoryName) => (
+                        <option key={subcategoryName} value={subcategoryName}>
+                          {subcategoryName}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="table-action-btn"
+                      onClick={() => setShowNewSubcategoryInput((prev) => !prev)}
+                      disabled={!formData.category}
+                    >
+                      Nieuwe subcategorie
+                    </button>
+                    {showNewSubcategoryInput ? (
+                      <div className="recipe-line-inline">
+                        <input
+                          type="text"
+                          placeholder="Nieuwe subcategorie"
+                          value={newSubcategoryName}
+                          onChange={(event) => setNewSubcategoryName(event.target.value)}
+                        />
+                        <button type="button" onClick={handleCreateSubcategory}>
+                          Opslaan
+                        </button>
+                      </div>
+                    ) : null}
                   </label>
                 </div>
               </section>
@@ -629,9 +911,23 @@ export default function Halffabricaten() {
                             key={ingredient.id}
                             type="button"
                             className={`ingredient-picker-item${selectedIngredient?.id === ingredient.id ? ' is-active' : ''}`}
-                            onClick={() => setSelectedIngredient(ingredient)}
+                            onClick={() => {
+                              setSelectedIngredient(ingredient)
+                              setRecipeUnit(
+                                ingredient.calculation_unit || ingredient.base_unit || 'gram'
+                              )
+                            }}
                           >
-                            {ingredient.supplier_product_name} {ingredient.supplier_brand ? `(${ingredient.supplier_brand})` : ''} - {ingredient.supplier_product_code}
+                            <strong>
+                              {ingredient.supplier_product_name}{' '}
+                              {ingredient.supplier_brand ? `(${ingredient.supplier_brand})` : ''}
+                            </strong>
+                            <span className="ingredient-picker-meta">
+                              #{ingredient.supplier_product_code || '-'} |{' '}
+                              {formatCurrency(ingredient.supplier_price_ex_vat)} / verpakking |{' '}
+                              {ingredient.calculation_unit || '-'} |{' '}
+                              {formatCompactNumber(ingredient.calculation_quantity_per_package, 4)}
+                            </span>
                           </button>
                         ))}
                       </div>
@@ -652,9 +948,18 @@ export default function Halffabricaten() {
                       type="text"
                       placeholder="Eenheid"
                       value={recipeUnit}
-                      onChange={(event) => setRecipeUnit(event.target.value)}
+                      readOnly
                     />
                   </div>
+                  {selectedIngredient ? (
+                    <p className="ingredient-selected-info">
+                      Gekozen: <strong>{selectedIngredient.supplier_product_name}</strong> | Merk:{' '}
+                      {selectedIngredient.supplier_brand || '-'} | Artikel:{' '}
+                      {selectedIngredient.supplier_product_code || '-'} | Rekeneenheid:{' '}
+                      {selectedIngredient.calculation_unit || '-'} | Aantal rekeneenheden:{' '}
+                      {formatCompactNumber(selectedIngredient.calculation_quantity_per_package, 4)}
+                    </p>
+                  ) : null}
 
                   <button type="button" onClick={handleAddIngredientLine}>
                     Toevoegen aan recept
@@ -700,7 +1005,7 @@ export default function Halffabricaten() {
                                   type="text"
                                   className="line-edit-input"
                                   value={editingLineUnit}
-                                  onChange={(event) => setEditingLineUnit(event.target.value)}
+                                  readOnly
                                 />
                               ) : (
                                 line.unit
@@ -708,7 +1013,7 @@ export default function Halffabricaten() {
                             </td>
                             <td>{formatCurrency(line.line_cost)}</td>
                             <td>{formatPercent(line.line_cost_share_percent)}</td>
-                            <td>{line.allergens_summary || 'Geen allergeneninformatie beschikbaar'}</td>
+                            <td>{line.allergens_summary || 'Geen brondata allergenen beschikbaar'}</td>
                             <td>
                               <div className="line-actions">
                                 {editingLineId === line.id ? (
@@ -781,27 +1086,44 @@ export default function Halffabricaten() {
                   </label>
                   <label>
                     Eenheid eindproduct
-                    <input
-                      type="text"
+                    <select
                       value={formData.final_yield_unit}
                       onChange={(event) => handleFormChange('final_yield_unit', event.target.value)}
-                    />
+                    >
+                      <option value="">Kies een eenheid</option>
+                      {endProductUnitOptions.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="full-width">
-                    Bewaaradvies
+                    Extra bewaaradvies
                     <textarea
-                      value={formData.storage_advice}
-                      onChange={(event) => handleFormChange('storage_advice', event.target.value)}
+                      value={formData.storage_notes}
+                      onChange={(event) => handleFormChange('storage_notes', event.target.value)}
                     />
                   </label>
                   <label>
-                    Houdbaarheid na bereiding (dagen)
+                    Koelkast houdbaar (dagen)
                     <input
                       type="number"
                       step="1"
-                      value={formData.shelf_life_after_preparation_days}
+                      value={formData.storage_fridge_days}
                       onChange={(event) =>
-                        handleFormChange('shelf_life_after_preparation_days', event.target.value)
+                        handleFormChange('storage_fridge_days', event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Vriezer houdbaar (dagen)
+                    <input
+                      type="number"
+                      step="1"
+                      value={formData.storage_freezer_days}
+                      onChange={(event) =>
+                        handleFormChange('storage_freezer_days', event.target.value)
                       }
                     />
                   </label>
@@ -809,16 +1131,9 @@ export default function Halffabricaten() {
               </section>
 
               <section className="modal-section">
-                <h4>Allergenen</h4>
+                <h4>Allergenen broninformatie</h4>
                 <p>{allergensText}</p>
               </section>
-
-              {previewPayload ? (
-                <section className="modal-section">
-                  <h4>{previewTitle}</h4>
-                  <pre className="payload-preview">{JSON.stringify(previewPayload, null, 2)}</pre>
-                </section>
-              ) : null}
             </div>
 
             <div className="modal-actions sfp-actions">
@@ -826,9 +1141,57 @@ export default function Halffabricaten() {
                 {isSaving ? 'Opslaan...' : 'Opslaan'}
               </button>
               <button type="button" onClick={handlePrintRecipe}>Print keukenrecept</button>
-              <button type="button" onClick={handleShowPrintPayload}>Toon productfiche payload</button>
-              <button type="button" onClick={handleShowLabelPayload}>Toon dagetiket payload</button>
+              <button type="button" onClick={openLabelModal}>Print dagetiket</button>
               <button type="button" className="secondary-btn" onClick={closeModal}>Sluiten</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {isLabelModalOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h3>Print dagetiket</h3>
+            </div>
+            <div className="modal-body">
+              <div className="modal-grid one-col calm-grid">
+                <label>
+                  Productnaam
+                  <input type="text" value={formData.name || detail?.name || ''} readOnly />
+                </label>
+                <label>
+                  Productiedatum
+                  <input
+                    type="date"
+                    value={labelProductionDate}
+                    onChange={(event) => setLabelProductionDate(event.target.value)}
+                  />
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={labelUseFridge}
+                    onChange={(event) => setLabelUseFridge(event.target.checked)}
+                  />
+                  Opslaan in koelkast
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={labelUseFreezer}
+                    onChange={(event) => setLabelUseFreezer(event.target.checked)}
+                  />
+                  Opslaan in vriezer
+                </label>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="secondary-btn" onClick={() => setIsLabelModalOpen(false)}>
+                Annuleren
+              </button>
+              <button type="button" className="primary-btn" onClick={handlePrintLabel}>
+                Print
+              </button>
             </div>
           </div>
         </div>

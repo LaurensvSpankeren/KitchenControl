@@ -8,11 +8,12 @@ const requiredLabels = {
   supplier: 'Leverancier',
   pricePerPackage: 'Prijs per verpakking',
   vat: 'BTW',
-  packageUnit: 'Verpakking',
-  packageContent: 'Inhoud verpakking',
-  baseUnit: 'Rekeneenheid',
-  amountPerPackage: 'Aantal per verpakking'
+  packagingType: 'Verpakkingstype',
+  netContentAmount: 'Netto inhoud verpakking',
+  netContentUnit: 'Inhoudseenheid'
 }
+
+const netContentUnitOptions = ['gram', 'kg', 'ml', 'liter', 'stuk']
 
 const initialForm = {
   name: '',
@@ -22,10 +23,12 @@ const initialForm = {
   productGroup: '',
   pricePerPackage: '',
   vat: '',
-  packageUnit: '',
-  packageContent: '',
-  baseUnit: '',
-  amountPerPackage: '',
+  packagingType: '',
+  unitsPerPackage: '',
+  netContentAmount: '',
+  netContentUnit: 'gram',
+  calculationUnit: '',
+  calculationQuantityPerPackage: '',
   yieldPercent: '',
   wastePercent: '',
   internalCategory: '',
@@ -42,6 +45,17 @@ function formatPrice(value) {
     return '-'
   }
   return `€ ${number.toFixed(2).replace('.', ',')}`
+}
+
+function formatNumber(value, digits = 2) {
+  if (value === null || value === undefined || value === '') {
+    return '-'
+  }
+  const number = Number(value)
+  if (Number.isNaN(number)) {
+    return '-'
+  }
+  return number.toFixed(digits).replace('.', ',')
 }
 
 function splitInternalNotes(value) {
@@ -62,6 +76,86 @@ function splitInternalNotes(value) {
   return { internalCategory: '', notes: String(value) }
 }
 
+function normalizeUnit(value) {
+  const unit = String(value || '').trim().toLowerCase()
+  if (!unit) {
+    return ''
+  }
+
+  const mapping = {
+    g: 'gram',
+    gr: 'gram',
+    gram: 'gram',
+    kg: 'kg',
+    ml: 'ml',
+    l: 'liter',
+    lt: 'liter',
+    liter: 'liter',
+    st: 'stuk',
+    stuks: 'stuk',
+    stuk: 'stuk'
+  }
+  return mapping[unit] || unit
+}
+
+function deriveCalculation(netContentAmount, netContentUnit, unitsPerPackage) {
+  const amount = Number(netContentAmount)
+  const units = Number(unitsPerPackage)
+  const unit = normalizeUnit(netContentUnit)
+
+  if (unit === 'kg' && !Number.isNaN(amount)) {
+    return { calculationUnit: 'gram', calculationQuantityPerPackage: amount * 1000 }
+  }
+  if (unit === 'gram' && !Number.isNaN(amount)) {
+    return { calculationUnit: 'gram', calculationQuantityPerPackage: amount }
+  }
+  if (unit === 'liter' && !Number.isNaN(amount)) {
+    return { calculationUnit: 'ml', calculationQuantityPerPackage: amount * 1000 }
+  }
+  if (unit === 'ml' && !Number.isNaN(amount)) {
+    return { calculationUnit: 'ml', calculationQuantityPerPackage: amount }
+  }
+  if (unit === 'stuk') {
+    return {
+      calculationUnit: 'stuk',
+      calculationQuantityPerPackage: Number.isNaN(units) || units <= 0 ? 1 : units
+    }
+  }
+  return { calculationUnit: '', calculationQuantityPerPackage: '' }
+}
+
+function formatPackagingText(ingredient) {
+  const packagingType = ingredient.packaging_type || ingredient.supplier_unit || ''
+  const units = ingredient.units_per_package
+
+  if (units !== null && units !== undefined && units !== '') {
+    const unitsNumber = Number(units)
+    if (!Number.isNaN(unitsNumber)) {
+      const formattedUnits = Number.isInteger(unitsNumber)
+        ? String(unitsNumber)
+        : formatNumber(unitsNumber, 2)
+      if (packagingType) {
+        return `${formattedUnits} ${packagingType}`
+      }
+      return `${formattedUnits} stuks`
+    }
+  }
+
+  return packagingType || '-'
+}
+
+function formatNetContentText(ingredient) {
+  const amount = ingredient.net_content_amount ?? ingredient.supplier_net_content
+  const unit = ingredient.net_content_unit
+  if (amount === null || amount === undefined || amount === '') {
+    return '-'
+  }
+  if (unit) {
+    return `${formatNumber(amount, 4).replace(/,?0+$/, '')} ${unit}`
+  }
+  return formatNumber(amount, 4).replace(/,?0+$/, '')
+}
+
 function mapIngredientToForm(ingredient) {
   const parsedNotes = splitInternalNotes(ingredient.internal_notes)
   return {
@@ -72,10 +166,13 @@ function mapIngredientToForm(ingredient) {
     productGroup: ingredient.category || '',
     pricePerPackage: ingredient.supplier_price_ex_vat ?? '',
     vat: ingredient.supplier_vat_rate ?? '',
-    packageUnit: ingredient.supplier_unit || '',
-    packageContent: ingredient.supplier_net_content ?? '',
-    baseUnit: ingredient.base_unit || '',
-    amountPerPackage: ingredient.conversion_factor_to_base ?? '',
+    packagingType: ingredient.packaging_type || ingredient.supplier_unit || '',
+    unitsPerPackage: ingredient.units_per_package ?? '',
+    netContentAmount: ingredient.net_content_amount ?? ingredient.supplier_net_content ?? '',
+    netContentUnit: ingredient.net_content_unit || 'gram',
+    calculationUnit: ingredient.calculation_unit || ingredient.base_unit || '',
+    calculationQuantityPerPackage:
+      ingredient.calculation_quantity_per_package ?? ingredient.conversion_factor_to_base ?? '',
     yieldPercent: ingredient.yield_percent ?? '',
     wastePercent: ingredient.waste_percent ?? '',
     internalCategory: parsedNotes.internalCategory,
@@ -85,7 +182,7 @@ function mapIngredientToForm(ingredient) {
   }
 }
 
-function mapFormToPayload(formData) {
+function mapFormToPayload(formData, derivedCalculation) {
   const internalCategory = formData.internalCategory.trim()
   const noteText = formData.notes.trim()
   const notesWithCategory = internalCategory
@@ -94,17 +191,29 @@ function mapFormToPayload(formData) {
       : `Eigen categorie: ${internalCategory}`
     : noteText || null
 
+  const calculationUnit = derivedCalculation.calculationUnit || null
+  const calculationQuantity =
+    derivedCalculation.calculationQuantityPerPackage === ''
+      ? null
+      : Number(derivedCalculation.calculationQuantityPerPackage)
+
   return {
     supplier_name: formData.supplier.trim(),
     supplier_product_code: formData.articleNumber.trim(),
     supplier_product_name: formData.name.trim(),
     supplier_brand: formData.brand.trim() || null,
-    supplier_unit: formData.packageUnit.trim(),
-    supplier_net_content: Number(formData.packageContent),
+    supplier_unit: formData.packagingType.trim(),
+    packaging_type: formData.packagingType.trim(),
+    units_per_package: formData.unitsPerPackage ? Number(formData.unitsPerPackage) : null,
+    net_content_amount: Number(formData.netContentAmount),
+    net_content_unit: normalizeUnit(formData.netContentUnit),
+    supplier_net_content: Number(formData.netContentAmount),
     supplier_price_ex_vat: Number(formData.pricePerPackage),
     supplier_vat_rate: Number(formData.vat),
-    base_unit: formData.baseUnit.trim(),
-    conversion_factor_to_base: Number(formData.amountPerPackage),
+    base_unit: calculationUnit || normalizeUnit(formData.netContentUnit) || 'stuk',
+    calculation_unit: calculationUnit,
+    calculation_quantity_per_package: calculationQuantity,
+    conversion_factor_to_base: calculationQuantity,
     yield_percent: formData.yieldPercent ? Number(formData.yieldPercent) : null,
     waste_percent: formData.wastePercent ? Number(formData.wastePercent) : null,
     category: formData.productGroup.trim() || internalCategory || null,
@@ -124,6 +233,16 @@ export default function Ingredientenbeheer() {
   const [saveMessage, setSaveMessage] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const modalBodyRef = useRef(null)
+
+  const derivedCalculation = useMemo(
+    () =>
+      deriveCalculation(
+        formData.netContentAmount,
+        formData.netContentUnit,
+        formData.unitsPerPackage
+      ),
+    [formData.netContentAmount, formData.netContentUnit, formData.unitsPerPackage]
+  )
 
   async function loadIngredients() {
     try {
@@ -193,10 +312,9 @@ export default function Ingredientenbeheer() {
       'supplier',
       'pricePerPackage',
       'vat',
-      'packageUnit',
-      'packageContent',
-      'baseUnit',
-      'amountPerPackage'
+      'packagingType',
+      'netContentAmount',
+      'netContentUnit'
     ]
 
     const missing = requiredFields.filter((field) => !String(formData[field]).trim())
@@ -225,7 +343,7 @@ export default function Ingredientenbeheer() {
     setSaveMessage('')
 
     try {
-      const payload = mapFormToPayload(formData)
+      const payload = mapFormToPayload(formData, derivedCalculation)
       if (editingIngredientId) {
         await apiClient.updateIngredient(editingIngredientId, payload)
       } else {
@@ -278,9 +396,8 @@ export default function Ingredientenbeheer() {
                   <th>Naam</th>
                   <th>Merk</th>
                   <th>Netto prijs</th>
-                  <th>Verpakking</th>
                   <th>Inhoud verpakking</th>
-                  <th>Hoofdproductgroep</th>
+                  <th>Nettogewicht</th>
                   <th>Actie</th>
                 </tr>
               </thead>
@@ -291,9 +408,8 @@ export default function Ingredientenbeheer() {
                     <td>{ingredient.supplier_product_name || '-'}</td>
                     <td>{ingredient.supplier_brand || '-'}</td>
                     <td>{formatPrice(ingredient.supplier_price_ex_vat)}</td>
-                    <td>{ingredient.supplier_unit || '-'}</td>
-                    <td>{ingredient.supplier_net_content ?? '-'}</td>
-                    <td>{ingredient.category || '-'}</td>
+                    <td>{formatPackagingText(ingredient)}</td>
+                    <td>{formatNetContentText(ingredient)}</td>
                     <td>
                       <button
                         type="button"
@@ -315,11 +431,7 @@ export default function Ingredientenbeheer() {
         <div className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="modal-card modal-wide">
             <div className="modal-header">
-              <h3>
-                {editingIngredientId
-                  ? 'Ingrediënt bewerken'
-                  : 'Handmatig ingrediënt toevoegen'}
-              </h3>
+              <h3>{editingIngredientId ? 'Ingrediënt bewerken' : 'Handmatig ingrediënt toevoegen'}</h3>
             </div>
 
             <div className="modal-body" ref={modalBodyRef}>
@@ -376,7 +488,7 @@ export default function Ingredientenbeheer() {
               </section>
 
               <section className="modal-section">
-                <h4>Inkoop en verpakking</h4>
+                <h4>Inkoop</h4>
                 <div className="modal-grid two-col calm-grid">
                   <label>
                     Prijs per verpakking
@@ -396,22 +508,50 @@ export default function Ingredientenbeheer() {
                       onChange={(event) => handleFieldChange('vat', event.target.value)}
                     />
                   </label>
+                </div>
+              </section>
+
+              <section className="modal-section">
+                <h4>Verpakking</h4>
+                <div className="modal-grid two-col calm-grid">
                   <label>
-                    Verpakking
+                    Verpakkingstype
                     <input
                       type="text"
-                      value={formData.packageUnit}
-                      onChange={(event) => handleFieldChange('packageUnit', event.target.value)}
+                      value={formData.packagingType}
+                      onChange={(event) => handleFieldChange('packagingType', event.target.value)}
                     />
                   </label>
                   <label>
-                    Inhoud verpakking
+                    Aantal stuks per verpakking
                     <input
                       type="number"
                       step="any"
-                      value={formData.packageContent}
-                      onChange={(event) => handleFieldChange('packageContent', event.target.value)}
+                      value={formData.unitsPerPackage}
+                      onChange={(event) => handleFieldChange('unitsPerPackage', event.target.value)}
                     />
+                  </label>
+                  <label>
+                    Netto inhoud verpakking
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.netContentAmount}
+                      onChange={(event) => handleFieldChange('netContentAmount', event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Inhoudseenheid
+                    <select
+                      value={formData.netContentUnit}
+                      onChange={(event) => handleFieldChange('netContentUnit', event.target.value)}
+                    >
+                      {netContentUnitOptions.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 </div>
               </section>
@@ -423,17 +563,22 @@ export default function Ingredientenbeheer() {
                     Rekeneenheid
                     <input
                       type="text"
-                      value={formData.baseUnit}
-                      onChange={(event) => handleFieldChange('baseUnit', event.target.value)}
+                      value={derivedCalculation.calculationUnit || formData.calculationUnit || '-'}
+                      readOnly
                     />
                   </label>
                   <label>
-                    Aantal per verpakking
+                    Aantal rekeneenheden per verpakking
                     <input
-                      type="number"
-                      step="any"
-                      value={formData.amountPerPackage}
-                      onChange={(event) => handleFieldChange('amountPerPackage', event.target.value)}
+                      type="text"
+                      value={
+                        derivedCalculation.calculationQuantityPerPackage !== ''
+                          ? formatNumber(derivedCalculation.calculationQuantityPerPackage, 4)
+                          : formData.calculationQuantityPerPackage !== ''
+                            ? formatNumber(formData.calculationQuantityPerPackage, 4)
+                            : '-'
+                      }
+                      readOnly
                     />
                   </label>
                   <label>
@@ -484,7 +629,6 @@ export default function Ingredientenbeheer() {
                   </label>
                 </div>
               </section>
-
             </div>
 
             <div className="modal-actions">
