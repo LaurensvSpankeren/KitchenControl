@@ -51,6 +51,7 @@ NEGATIVE_ALLERGEN_VALUES = {
 }
 
 PIECE_HINT_TERMS = ("stuk", "stuks", " st ", "x", "rol", "rollen", "brood", "portie")
+AMOUNT_MATCH_EPSILON = 1e-6
 
 
 def _parse_number(value: str | None) -> float | None:
@@ -175,6 +176,48 @@ def _extract_explicit_volume_unit(row: dict) -> str | None:
     return None
 
 
+def _normalize_weight_to_gram(amount: float, unit: str | None) -> float | None:
+    normalized_unit = _normalize_unit(unit)
+    if normalized_unit == "kg":
+        return amount * 1000
+    if normalized_unit == "gram":
+        return amount
+    return None
+
+
+def _normalize_volume_to_ml(amount: float, unit: str | None) -> float | None:
+    normalized_unit = _normalize_unit(unit)
+    if normalized_unit == "liter":
+        return amount * 1000
+    if normalized_unit == "ml":
+        return amount
+    return None
+
+
+def _values_match_by_unit_conversion(
+    amount: float | None,
+    text_amount: float | None,
+    text_unit: str | None,
+    possible_amount_units: tuple[str, ...],
+    normalize_fn,
+) -> bool:
+    if amount is None or text_amount is None or text_unit is None:
+        return False
+
+    normalized_text = normalize_fn(text_amount, text_unit)
+    if normalized_text is None:
+        return False
+
+    for amount_unit in possible_amount_units:
+        normalized_amount = normalize_fn(amount, amount_unit)
+        if normalized_amount is None:
+            continue
+        if abs(normalized_amount - normalized_text) <= AMOUNT_MATCH_EPSILON:
+            return True
+
+    return False
+
+
 def _extract_package_weight(row: dict) -> tuple[float | None, str | None]:
     amount = _parse_number(row.get("Netto Gewicht"))
     if amount is None:
@@ -190,7 +233,13 @@ def _extract_package_weight(row: dict) -> tuple[float | None, str | None]:
         unit is None
         and text_amount is not None
         and text_unit in {"kg", "gram"}
-        and abs(text_amount - amount) < 1e-9
+        and _values_match_by_unit_conversion(
+            amount,
+            text_amount,
+            text_unit,
+            ("kg", "gram"),
+            _normalize_weight_to_gram,
+        )
     ):
         unit = text_unit
 
@@ -214,7 +263,13 @@ def _extract_package_volume(row: dict) -> tuple[float | None, str | None]:
         unit is None
         and text_amount is not None
         and text_unit in {"liter", "ml"}
-        and abs(text_amount - amount) < 1e-9
+        and _values_match_by_unit_conversion(
+            amount,
+            text_amount,
+            text_unit,
+            ("liter", "ml"),
+            _normalize_volume_to_ml,
+        )
     ):
         unit = text_unit
 
