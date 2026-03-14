@@ -252,13 +252,18 @@ def _extract_package_weight(row: dict) -> tuple[float | None, str | None]:
 
 def _extract_package_volume(row: dict) -> tuple[float | None, str | None]:
     amount = _parse_number(row.get("Netto inhoud"))
-    if amount == 0:
-        amount = None
-    if amount is None:
-        return None, None
-
     unit = _extract_explicit_volume_unit(row)
     text_amount, text_unit = _extract_amount_and_unit_from_text(row.get("Omschrijving inhoud artikel"))
+
+    if amount == 0:
+        amount = None
+
+    # Veilige text-only fallback: alleen gebruiken wanneer volumekolom ontbreekt/0 is.
+    if amount is None:
+        if text_amount is not None and text_unit in {"liter", "ml"}:
+            return text_amount, text_unit
+        return None, None
+
     if (
         unit is None
         and text_amount is not None
