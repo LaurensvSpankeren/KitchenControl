@@ -32,8 +32,7 @@ const initialForm = {
   yieldPercent: '',
   wastePercent: '',
   internalCategory: '',
-  notes: '',
-  allergensCross: ''
+  notes: ''
 }
 
 function formatPrice(value) {
@@ -176,9 +175,7 @@ function mapIngredientToForm(ingredient) {
     yieldPercent: ingredient.yield_percent ?? '',
     wastePercent: ingredient.waste_percent ?? '',
     internalCategory: parsedNotes.internalCategory,
-    notes: parsedNotes.notes,
-    allergensCross:
-      ingredient.cross_contamination_notes || ingredient.internal_allergens_extra || ''
+    notes: parsedNotes.notes
   }
 }
 
@@ -217,9 +214,7 @@ function mapFormToPayload(formData, derivedCalculation) {
     yield_percent: formData.yieldPercent ? Number(formData.yieldPercent) : null,
     waste_percent: formData.wastePercent ? Number(formData.wastePercent) : null,
     category: formData.productGroup.trim() || internalCategory || null,
-    internal_notes: notesWithCategory,
-    internal_allergens_extra: formData.allergensCross.trim() || null,
-    cross_contamination_notes: formData.allergensCross.trim() || null
+    internal_notes: notesWithCategory
   }
 }
 
@@ -618,13 +613,6 @@ export default function Ingredientenbeheer() {
                     <textarea
                       value={formData.notes}
                       onChange={(event) => handleFieldChange('notes', event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Allergenen / kruisbesmetting
-                    <textarea
-                      value={formData.allergensCross}
-                      onChange={(event) => handleFieldChange('allergensCross', event.target.value)}
                     />
                   </label>
                 </div>
