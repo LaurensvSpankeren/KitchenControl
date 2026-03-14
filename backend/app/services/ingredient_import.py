@@ -149,6 +149,78 @@ def _extract_explicit_net_unit(row: dict) -> str | None:
     return None
 
 
+def _extract_explicit_weight_unit(row: dict) -> str | None:
+    unit_columns = [
+        "Eenheid Netto Gewicht",
+        "Eenheid netto gewicht",
+        "Netto gewicht eenheid",
+    ]
+    for column_name in unit_columns:
+        normalized_unit = _normalize_unit(row.get(column_name))
+        if normalized_unit in {"kg", "gram"}:
+            return normalized_unit
+    return None
+
+
+def _extract_explicit_volume_unit(row: dict) -> str | None:
+    unit_columns = [
+        "Eenheid Netto inhoud",
+        "Eenheid netto inhoud",
+        "Netto inhoud eenheid",
+    ]
+    for column_name in unit_columns:
+        normalized_unit = _normalize_unit(row.get(column_name))
+        if normalized_unit in {"liter", "ml"}:
+            return normalized_unit
+    return None
+
+
+def _extract_package_weight(row: dict) -> tuple[float | None, str | None]:
+    amount = _parse_number(row.get("Netto Gewicht"))
+    if amount is None:
+        amount = _parse_number(row.get("Netto gewicht"))
+    if amount == 0:
+        amount = None
+    if amount is None:
+        return None, None
+
+    unit = _extract_explicit_weight_unit(row)
+    text_amount, text_unit = _extract_amount_and_unit_from_text(row.get("Omschrijving inhoud artikel"))
+    if (
+        unit is None
+        and text_amount is not None
+        and text_unit in {"kg", "gram"}
+        and abs(text_amount - amount) < 1e-9
+    ):
+        unit = text_unit
+
+    if unit is None:
+        # Bidfood "Netto Gewicht" is doorgaans in kilogram.
+        unit = "kg"
+
+    return amount, unit
+
+
+def _extract_package_volume(row: dict) -> tuple[float | None, str | None]:
+    amount = _parse_number(row.get("Netto inhoud"))
+    if amount == 0:
+        amount = None
+    if amount is None:
+        return None, None
+
+    unit = _extract_explicit_volume_unit(row)
+    text_amount, text_unit = _extract_amount_and_unit_from_text(row.get("Omschrijving inhoud artikel"))
+    if (
+        unit is None
+        and text_amount is not None
+        and text_unit in {"liter", "ml"}
+        and abs(text_amount - amount) < 1e-9
+    ):
+        unit = text_unit
+
+    return amount, unit
+
+
 def _derive_calculation_values(
     net_content_unit: str | None,
     net_content_amount: float | None,
@@ -292,6 +364,8 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
             packaging_type = (row.get("Omschrijving verkoopeenheid") or "").strip() or None
             units_per_package = _extract_units_per_package(row)
             net_content_amount, net_content_unit = _extract_net_content(row)
+            package_weight_amount, package_weight_unit = _extract_package_weight(row)
+            package_volume_amount, package_volume_unit = _extract_package_volume(row)
             supplier_pack_description = (row.get("Omschrijving inhoud artikel") or "").strip() or None
 
             calc_unit, calc_quantity = _derive_calculation_values(
@@ -330,6 +404,10 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 ingredient.net_content_amount = net_content_amount
                 ingredient.net_content_unit = net_content_unit
                 ingredient.supplier_net_content = net_content_amount
+                ingredient.package_weight_amount = package_weight_amount
+                ingredient.package_weight_unit = package_weight_unit
+                ingredient.package_volume_amount = package_volume_amount
+                ingredient.package_volume_unit = package_volume_unit
                 if calc_unit is not None and calc_quantity is not None:
                     ingredient.calculation_unit = calc_unit
                     ingredient.calculation_quantity_per_package = calc_quantity
@@ -360,6 +438,10 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                     units_per_package=units_per_package,
                     net_content_amount=net_content_amount,
                     net_content_unit=net_content_unit,
+                    package_weight_amount=package_weight_amount,
+                    package_weight_unit=package_weight_unit,
+                    package_volume_amount=package_volume_amount,
+                    package_volume_unit=package_volume_unit,
                     calculation_unit=calc_unit,
                     calculation_quantity_per_package=calc_quantity,
                     preferred_unit=preferred_unit,
