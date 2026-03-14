@@ -16,6 +16,21 @@ const initialForm = {
 
 const EMPTY_STEPS = Array.from({ length: 10 }, () => '')
 const endProductUnitOptions = ['gram', 'kg', 'ml', 'liter', 'stuk']
+const PRINT_BASE_URL_RAW =
+  import.meta.env.VITE_PRINT_BASE_URL || 'https://kitchencontrol-frontend.onrender.com'
+
+function normalizeBaseUrl(value) {
+  const trimmed = String(value || '').trim()
+  if (!trimmed) {
+    return 'https://kitchencontrol-frontend.onrender.com'
+  }
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed.replace(/\/$/, '')
+  }
+  return `https://${trimmed.replace(/\/$/, '')}`
+}
+
+const PRINT_BASE_URL = normalizeBaseUrl(PRINT_BASE_URL_RAW)
 
 function normalizeUnit(value) {
   const unit = String(value || '').trim().toLowerCase()
@@ -151,6 +166,52 @@ function formatCompactNumber(value, digits = 2) {
     return '-'
   }
   return num.toFixed(digits).replace('.', ',')
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function getCurrentChefName() {
+  if (typeof window === 'undefined') {
+    return '-'
+  }
+
+  const candidateKeys = ['currentUser', 'user', 'kc_user', 'kitchencontrol_user']
+  for (const key of candidateKeys) {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) {
+      continue
+    }
+    try {
+      const parsed = JSON.parse(raw)
+      const name =
+        parsed?.name ||
+        parsed?.full_name ||
+        parsed?.fullName ||
+        parsed?.username ||
+        parsed?.email
+      if (name) {
+        return String(name)
+      }
+    } catch {
+      // Ignore malformed storage content and continue fallback chain.
+    }
+  }
+
+  return '-'
+}
+
+function buildSemiFinishedDetailUrl(id) {
+  if (!id) {
+    return `${PRINT_BASE_URL}/halffabricaten`
+  }
+  return `${PRINT_BASE_URL}/halffabricaten?id=${id}`
 }
 
 function formatPackageWeightLabel(ingredient) {
@@ -538,6 +599,14 @@ export default function Halffabricaten() {
       setErrorMessage('Naam is verplicht.')
       return
     }
+    if (formData.final_yield_amount === '' || Number(formData.final_yield_amount) <= 0) {
+      setErrorMessage('Vul eerst eindgewicht of eindinhoud in.')
+      return
+    }
+    if (!formData.final_yield_unit.trim()) {
+      setErrorMessage('Kies eerst een eenheid voor het eindproduct.')
+      return
+    }
 
     setIsSaving(true)
     setErrorMessage('')
@@ -692,33 +761,69 @@ export default function Halffabricaten() {
       setErrorMessage('Printvenster kon niet worden geopend.')
       return
     }
+    const allergensLabel = detail?.allergens_total || 'Geen brondata allergenen beschikbaar'
+    const qrTargetUrl = buildSemiFinishedDetailUrl(selectedProductId)
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=128x128&data=${encodeURIComponent(
+      qrTargetUrl
+    )}`
 
     printWindow.document.write(`
       <html>
         <head>
           <title>Dagetiket - ${productName}</title>
           <style>
-            @page { size: 89mm 36mm; margin: 4mm; }
+            @page { size: 89mm 36mm; margin: 2mm; }
             body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-            .label { border: 1px solid #000; padding: 8px; width: 100%; }
-            .title { font-size: 14px; font-weight: 700; margin-bottom: 6px; text-transform: uppercase; }
-            .line { font-size: 12px; margin: 2px 0; }
+            .label {
+              width: 100%;
+              height: 100%;
+              border: 1px solid #000;
+              box-sizing: border-box;
+              padding: 2.5mm;
+              display: grid;
+              grid-template-columns: 1fr 18mm;
+              column-gap: 2mm;
+              align-items: stretch;
+            }
+            .content { min-width: 0; }
+            .title {
+              font-size: 12px;
+              font-weight: 700;
+              margin: 0 0 1.5mm;
+              text-transform: uppercase;
+              line-height: 1.2;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .line { font-size: 10px; margin: 0 0 0.8mm; line-height: 1.2; }
+            .allergens { font-size: 8px; line-height: 1.2; margin-top: 1.2mm; }
+            .qr-wrap { display: flex; align-items: center; justify-content: center; }
+            .qr-wrap img { width: 18mm; height: 18mm; object-fit: contain; }
           </style>
         </head>
         <body>
           <div class="label">
-            <div class="title">${productName || '-'}</div>
-            <div class="line"><strong>Productiedatum:</strong> ${formatDateNl(labelProductionDate)}</div>
-            ${
-              labelUseFridge
-                ? `<div class="line"><strong>Koelkast houdbaar tot:</strong> ${formatDateNl(fridgeDate)}</div>`
-                : ''
-            }
-            ${
-              labelUseFreezer
-                ? `<div class="line"><strong>Vriezer houdbaar tot:</strong> ${formatDateNl(freezerDate)}</div>`
-                : ''
-            }
+            <div class="content">
+              <div class="title">${escapeHtml(productName || '-')}</div>
+              <div class="line"><strong>Productiedatum:</strong> ${escapeHtml(
+                formatDateNl(labelProductionDate)
+              )}</div>
+              ${
+                labelUseFridge
+                  ? `<div class="line"><strong>Koelkast t/m:</strong> ${escapeHtml(formatDateNl(fridgeDate))}</div>`
+                  : ''
+              }
+              ${
+                labelUseFreezer
+                  ? `<div class="line"><strong>Vriezer t/m:</strong> ${escapeHtml(formatDateNl(freezerDate))}</div>`
+                  : ''
+              }
+              <div class="allergens"><strong>Allergenen:</strong> ${escapeHtml(allergensLabel)}</div>
+            </div>
+            <div class="qr-wrap">
+              <img src="${qrCodeUrl}" alt="QR code" />
+            </div>
           </div>
         </body>
       </html>
@@ -736,65 +841,136 @@ export default function Halffabricaten() {
     }
 
     try {
-      const payload = await apiClient.getSemiFinishedProductPrint(selectedProductId)
+      const payload = detail || (await apiClient.getSemiFinishedProductDetail(selectedProductId))
       const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700')
       if (!printWindow) {
         setErrorMessage('Printvenster kon niet worden geopend.')
         return
       }
+      const chefName = getCurrentChefName()
+      const printDateTime = new Date().toLocaleString('nl-NL')
 
-      const lines = (payload.ingredients || [])
+      const lines = (payload.recipe_lines || [])
         .map(
           (line) =>
-            `<tr><td>${line.item_name || '-'}</td><td>${line.quantity || '-'}</td><td>${line.unit || '-'}</td></tr>`
+            `<tr>
+              <td>${escapeHtml(line.item_name || '-')}</td>
+              <td>${escapeHtml(line.item_brand || '-')}</td>
+              <td>${escapeHtml(
+                ingredients.find((ingredient) => ingredient.id === line.item_id)?.supplier_product_code || '-'
+              )}</td>
+              <td>${escapeHtml(line.quantity ?? '-')}</td>
+              <td>${escapeHtml(line.unit || '-')}</td>
+              <td>${escapeHtml(formatCurrency(line.line_cost))}</td>
+              <td>${escapeHtml(formatPercent(line.line_cost_share_percent))}</td>
+            </tr>`
         )
         .join('')
 
       const stepsHtml = (payload.recipe_steps || [])
-        .map((step) => `<li>${step.step_number}. ${step.instruction}</li>`)
+        .map((step) => `<li>${escapeHtml(step.instruction || '')}</li>`)
         .join('')
+      const photoHtml = payload.photo_url
+        ? `<img src="${escapeHtml(payload.photo_url)}" alt="Productfoto" />`
+        : ''
 
       printWindow.document.write(`
         <html>
           <head>
             <title>Keukenrecept - ${payload.name}</title>
             <style>
-              body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
-              h1 { margin: 0 0 10px; }
-              h2 { margin: 18px 0 8px; font-size: 18px; }
-              p { margin: 4px 0; }
-              table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-              th, td { border: 1px solid #cfcfcf; padding: 8px; text-align: left; }
-              th { background: #f5f5f5; }
-              .meta { margin-bottom: 12px; }
+              @page { size: A4; margin: 14mm; }
+              body { font-family: Arial, sans-serif; color: #111; margin: 0; }
+              .sheet { width: 100%; }
+              .header {
+                display: grid;
+                grid-template-columns: 1fr 130px;
+                gap: 14px;
+                align-items: start;
+                margin-bottom: 14px;
+              }
+              .title { font-size: 30px; font-weight: 700; margin: 0 0 8px; line-height: 1.1; }
+              .meta-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 4px 14px;
+                font-size: 12px;
+              }
+              .meta-grid .full { grid-column: 1 / -1; }
+              .photo {
+                width: 130px;
+                height: 95px;
+                border: 1px solid #222;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+              }
+              .photo img { width: 100%; height: 100%; object-fit: cover; }
+              h2 { margin: 16px 0 8px; font-size: 16px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; }
+              th, td { border: 1px solid #d0d0d0; padding: 6px; text-align: left; vertical-align: top; }
+              th { background: #f5f5f5; font-weight: 600; }
+              ol { margin: 8px 0 0 20px; padding: 0; }
+              li { margin-bottom: 4px; line-height: 1.4; }
+              .allergens {
+                margin-top: 14px;
+                padding-top: 8px;
+                border-top: 1px solid #ccc;
+                font-size: 12px;
+              }
             </style>
           </head>
           <body>
-            <h1>${payload.name || ''}</h1>
-            <div class="meta">
-              <p><strong>Categorie:</strong> ${payload.category || '-'}</p>
-              <p><strong>Subcategorie:</strong> ${payload.subcategory || '-'}</p>
-              <p><strong>Batch opbrengst:</strong> ${formatYield(payload.final_yield_amount, payload.final_yield_unit)}</p>
+            <div class="sheet">
+              <div class="header">
+                <div>
+                  <h1 class="title">${escapeHtml(payload.name || '')}</h1>
+                  <div class="meta-grid">
+                    <div><strong>Categorie:</strong> ${escapeHtml(payload.category || '-')}</div>
+                    <div><strong>Subcategorie:</strong> ${escapeHtml(payload.subcategory || '-')}</div>
+                    <div><strong>Chef:</strong> ${escapeHtml(chefName)}</div>
+                    <div><strong>Printdatum:</strong> ${escapeHtml(printDateTime)}</div>
+                    <div><strong>Batch opbrengst:</strong> ${escapeHtml(
+                      formatYield(payload.final_yield_amount, payload.final_yield_unit)
+                    )}</div>
+                    <div><strong>Kostprijs batch:</strong> ${escapeHtml(
+                      formatCurrency(payload.estimated_cost_total)
+                    )}</div>
+                    <div class="full"><strong>Kostprijs per eenheid:</strong> ${escapeHtml(
+                      payload.cost_per_final_unit !== null &&
+                        payload.cost_per_final_unit !== undefined &&
+                        payload.final_yield_unit
+                        ? `${formatCurrency(payload.cost_per_final_unit, 4)} per ${payload.final_yield_unit}`
+                        : '-'
+                    )}</div>
+                  </div>
+                </div>
+                <div class="photo">${photoHtml || ''}</div>
+              </div>
+              <h2>Ingrediënten</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ingrediënt</th>
+                    <th>Merk</th>
+                    <th>Artikel</th>
+                    <th>Hoeveelheid</th>
+                    <th>Eenheid</th>
+                    <th>Regelprijs</th>
+                    <th>% inslag</th>
+                  </tr>
+                </thead>
+                <tbody>${lines || '<tr><td colspan="7">Geen ingrediëntenregels</td></tr>'}</tbody>
+              </table>
+              <h2>Receptstappen</h2>
+              <ol>${stepsHtml || '<li>-</li>'}</ol>
+              <div class="allergens">
+                <strong>Allergenen:</strong> ${escapeHtml(
+                  payload.allergens_total || 'Geen brondata allergenen beschikbaar'
+                )}
+              </div>
             </div>
-            <h2>Ingrediënten</h2>
-            <table>
-              <thead><tr><th>Naam</th><th>Hoeveelheid</th><th>Eenheid</th></tr></thead>
-              <tbody>${lines}</tbody>
-            </table>
-            <h2>Receptstappen</h2>
-            <ol>${stepsHtml || '<li>-</li>'}</ol>
-            <h2>Bewaaradvies</h2>
-            <p><strong>Koelkast:</strong> ${
-              payload.storage_fridge_days !== null && payload.storage_fridge_days !== undefined
-                ? `${payload.storage_fridge_days} dagen`
-                : '-'
-            }</p>
-            <p><strong>Vriezer:</strong> ${
-              payload.storage_freezer_days !== null && payload.storage_freezer_days !== undefined
-                ? `${payload.storage_freezer_days} dagen`
-                : '-'
-            }</p>
-            <p><strong>Extra bewaaradvies:</strong> ${payload.storage_notes || payload.storage_advice || '-'}</p>
           </body>
         </html>
       `)
@@ -1260,12 +1436,16 @@ export default function Halffabricaten() {
             </div>
 
             <div className="modal-actions sfp-actions">
-              <button type="button" className="primary-btn" onClick={handleSaveProduct} disabled={isSaving}>
-                {isSaving ? 'Opslaan...' : 'Opslaan'}
-              </button>
-              <button type="button" onClick={handlePrintRecipe}>Print keukenrecept</button>
-              <button type="button" onClick={openLabelModal}>Print dagetiket</button>
-              <button type="button" className="secondary-btn" onClick={closeModal}>Sluiten</button>
+              <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginRight: 'auto' }}>
+                <button type="button" onClick={handlePrintRecipe}>Print keukenrecept</button>
+                <button type="button" onClick={openLabelModal}>Print dagetiket</button>
+              </div>
+              <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }}>
+                <button type="button" className="primary-btn" onClick={handleSaveProduct} disabled={isSaving}>
+                  {isSaving ? 'Opslaan...' : 'Opslaan'}
+                </button>
+                <button type="button" className="secondary-btn" onClick={closeModal}>Sluiten</button>
+              </div>
             </div>
           </div>
         </div>
