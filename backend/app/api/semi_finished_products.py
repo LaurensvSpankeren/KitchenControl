@@ -46,6 +46,31 @@ KNOWN_ALLERGENS = {
 }
 
 
+def _normalize_unit(value: str | None) -> str | None:
+    if value is None:
+        return None
+    unit = str(value).strip().lower()
+    if not unit:
+        return None
+
+    mapping = {
+        "gr": "gram",
+        "g": "gram",
+        "gram": "gram",
+        "kg": "kg",
+        "l": "liter",
+        "lt": "liter",
+        "liter": "liter",
+        "ml": "ml",
+        "stuk": "stuk",
+        "st": "stuk",
+        "stuks": "stuk",
+        "pcs": "stuk",
+        "pc": "stuk",
+    }
+    return mapping.get(unit, unit)
+
+
 def _parse_optional_float(payload: dict, field_name: str) -> float | None:
     value = payload.get(field_name)
     if value in (None, ""):
@@ -163,6 +188,35 @@ def _serialize_recipe_steps(steps: list[RecipeStep]) -> list[dict]:
     ]
 
 
+def _to_calculation_quantity(line: RecipeLine, ingredient: Ingredient) -> Decimal:
+    quantity = Decimal(line.quantity)
+    line_unit = _normalize_unit(line.unit)
+    calculation_unit = _normalize_unit(ingredient.calculation_unit)
+
+    if line_unit is None or calculation_unit is None or line_unit == calculation_unit:
+        return quantity
+
+    preferred_unit = _normalize_unit(ingredient.preferred_unit)
+    secondary_unit = _normalize_unit(ingredient.secondary_unit)
+    factor = ingredient.secondary_unit_factor
+
+    if (
+        preferred_unit is None
+        or secondary_unit is None
+        or factor is None
+        or Decimal(factor) == 0
+    ):
+        return quantity
+
+    factor_decimal = Decimal(factor)
+    if line_unit == preferred_unit and calculation_unit == secondary_unit:
+        return quantity * factor_decimal
+    if line_unit == secondary_unit and calculation_unit == preferred_unit:
+        return quantity / factor_decimal
+
+    return quantity
+
+
 def _build_recipe_lines_detail(db: Session, semi_finished_product_id: int) -> dict:
     recipe_lines = (
         db.query(RecipeLine)
@@ -195,8 +249,9 @@ def _build_recipe_lines_detail(db: Session, semi_finished_product_id: int) -> di
                     and ingredient.calculation_quantity_per_package is not None
                     and ingredient.calculation_quantity_per_package != 0
                 ):
+                    quantity_for_cost = _to_calculation_quantity(line, ingredient)
                     cost = (
-                        Decimal(line.quantity)
+                        quantity_for_cost
                         * Decimal(ingredient.supplier_price_ex_vat)
                         / Decimal(ingredient.calculation_quantity_per_package)
                     )
@@ -207,8 +262,9 @@ def _build_recipe_lines_detail(db: Session, semi_finished_product_id: int) -> di
                     and ingredient.conversion_factor_to_base != 0
                 ):
                     # Backward compatibility voor oudere records zonder calculation fields.
+                    quantity_for_cost = _to_calculation_quantity(line, ingredient)
                     cost = (
-                        Decimal(line.quantity)
+                        quantity_for_cost
                         * Decimal(ingredient.supplier_price_ex_vat)
                         / Decimal(ingredient.conversion_factor_to_base)
                     )

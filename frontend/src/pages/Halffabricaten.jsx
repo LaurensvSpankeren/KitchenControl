@@ -17,6 +17,52 @@ const initialForm = {
 const EMPTY_STEPS = Array.from({ length: 10 }, () => '')
 const endProductUnitOptions = ['gram', 'kg', 'ml', 'liter', 'stuk']
 
+function normalizeUnit(value) {
+  const unit = String(value || '').trim().toLowerCase()
+  if (!unit) {
+    return ''
+  }
+  const mapping = {
+    g: 'gram',
+    gr: 'gram',
+    gram: 'gram',
+    kg: 'kg',
+    ml: 'ml',
+    l: 'liter',
+    lt: 'liter',
+    liter: 'liter',
+    st: 'stuk',
+    stuks: 'stuk',
+    stuk: 'stuk',
+    pc: 'stuk',
+    pcs: 'stuk'
+  }
+  return mapping[unit] || unit
+}
+
+function getIngredientUnitOptions(ingredient) {
+  if (!ingredient) {
+    return []
+  }
+
+  const options = []
+  const preferred = normalizeUnit(ingredient.preferred_unit)
+  const secondary = normalizeUnit(ingredient.secondary_unit)
+  const calculation = normalizeUnit(ingredient.calculation_unit || ingredient.base_unit)
+
+  if (preferred) {
+    options.push(preferred)
+  }
+  if (secondary && !options.includes(secondary)) {
+    options.push(secondary)
+  }
+  if (calculation && !options.includes(calculation)) {
+    options.push(calculation)
+  }
+
+  return options
+}
+
 function formatCurrency(value, digits = 2) {
   if (value === null || value === undefined || value === '') {
     return '-'
@@ -264,6 +310,10 @@ export default function Halffabricaten() {
       })
       .slice(0, 25)
   }, [ingredientSearch, ingredients])
+  const selectedIngredientUnitOptions = useMemo(
+    () => getIngredientUnitOptions(selectedIngredient),
+    [selectedIngredient]
+  )
 
   const selectedCategoryRecord = useMemo(
     () =>
@@ -493,7 +543,7 @@ export default function Halffabricaten() {
     setErrorMessage('')
     try {
       const selectedUnit =
-        selectedIngredient.calculation_unit || selectedIngredient.base_unit || recipeUnit
+        recipeUnit || selectedIngredient.calculation_unit || selectedIngredient.base_unit || 'gram'
       await apiClient.addSemiFinishedProductRecipeLine(selectedProductId, {
         item_type: 'ingredient',
         item_id: selectedIngredient.id,
@@ -913,9 +963,8 @@ export default function Halffabricaten() {
                             className={`ingredient-picker-item${selectedIngredient?.id === ingredient.id ? ' is-active' : ''}`}
                             onClick={() => {
                               setSelectedIngredient(ingredient)
-                              setRecipeUnit(
-                                ingredient.calculation_unit || ingredient.base_unit || 'gram'
-                              )
+                              const options = getIngredientUnitOptions(ingredient)
+                              setRecipeUnit(options[0] || 'gram')
                             }}
                           >
                             <strong>
@@ -926,7 +975,8 @@ export default function Halffabricaten() {
                               #{ingredient.supplier_product_code || '-'} |{' '}
                               {formatCurrency(ingredient.supplier_price_ex_vat)} / verpakking |{' '}
                               {ingredient.calculation_unit || '-'} |{' '}
-                              {formatCompactNumber(ingredient.calculation_quantity_per_package, 4)}
+                              {formatCompactNumber(ingredient.calculation_quantity_per_package, 4)} |{' '}
+                              Eenheden: {getIngredientUnitOptions(ingredient).join(' / ') || '-'}
                             </span>
                           </button>
                         ))}
@@ -944,12 +994,20 @@ export default function Halffabricaten() {
                       value={recipeQuantity}
                       onChange={(event) => setRecipeQuantity(event.target.value)}
                     />
-                    <input
-                      type="text"
-                      placeholder="Eenheid"
+                    <select
                       value={recipeUnit}
-                      readOnly
-                    />
+                      onChange={(event) => setRecipeUnit(event.target.value)}
+                      disabled={!selectedIngredient || selectedIngredientUnitOptions.length === 0}
+                    >
+                      {!selectedIngredientUnitOptions.length ? (
+                        <option value="">Kies eerst ingrediënt</option>
+                      ) : null}
+                      {selectedIngredientUnitOptions.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   {selectedIngredient ? (
                     <p className="ingredient-selected-info">
@@ -957,7 +1015,8 @@ export default function Halffabricaten() {
                       {selectedIngredient.supplier_brand || '-'} | Artikel:{' '}
                       {selectedIngredient.supplier_product_code || '-'} | Rekeneenheid:{' '}
                       {selectedIngredient.calculation_unit || '-'} | Aantal rekeneenheden:{' '}
-                      {formatCompactNumber(selectedIngredient.calculation_quantity_per_package, 4)}
+                      {formatCompactNumber(selectedIngredient.calculation_quantity_per_package, 4)} | Keuze:{' '}
+                      {selectedIngredientUnitOptions.join(' / ') || '-'}
                     </p>
                   ) : null}
 
