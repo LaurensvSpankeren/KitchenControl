@@ -129,6 +129,24 @@ def _extract_units_per_package(row: dict) -> float | None:
     return None
 
 
+def _extract_explicit_net_unit(row: dict) -> str | None:
+    unit_columns = [
+        "Eenheid Netto inhoud",
+        "Eenheid netto inhoud",
+        "Netto inhoud eenheid",
+        "Eenheid Netto Gewicht",
+        "Eenheid netto gewicht",
+        "Netto gewicht eenheid",
+    ]
+
+    for column_name in unit_columns:
+        normalized_unit = _normalize_unit(row.get(column_name))
+        if normalized_unit:
+            return normalized_unit
+
+    return None
+
+
 def _derive_calculation_values(
     net_content_unit: str | None,
     net_content_amount: float | None,
@@ -152,27 +170,43 @@ def _derive_calculation_values(
 
 def _extract_net_content(row: dict) -> tuple[float | None, str | None]:
     amount = _parse_number(row.get("Netto inhoud"))
-    amount_source = "netto_inhoud"
+    amount_source = "netto_inhoud" if amount is not None else None
     if amount == 0:
         amount = None
+        amount_source = None
 
     if amount is None:
         amount = _parse_number(row.get("Netto Gewicht"))
-        amount_source = "netto_gewicht"
+        amount_source = "netto_gewicht" if amount is not None else amount_source
     if amount is None:
         amount = _parse_number(row.get("Netto gewicht"))
-        amount_source = "netto_gewicht"
+        amount_source = "netto_gewicht" if amount is not None else amount_source
 
     text_amount, text_unit = _extract_amount_and_unit_from_text(row.get("Omschrijving inhoud artikel"))
+    explicit_unit = _extract_explicit_net_unit(row)
 
     if amount is None and text_amount is not None:
         amount = text_amount
+        amount_source = "text"
 
-    unit = text_unit
-    if amount_source == "netto_gewicht" and amount is not None and unit in (None, "stuk"):
-        # Bidfood "Netto Gewicht" is doorgaans in kilogram.
-        unit = "kg"
-    elif unit is None and amount is not None:
+    # Expliciete bronkolommen zijn leidend. Vrije tekst gebruiken we hier alleen als
+    # extra unit-hint wanneer de teksthoeveelheid overeenkomt met de kolomhoeveelheid.
+    if amount_source in {"netto_inhoud", "netto_gewicht"}:
+        unit = explicit_unit
+        if (
+            unit is None
+            and text_unit is not None
+            and text_amount is not None
+            and amount is not None
+            and abs(text_amount - amount) < 1e-9
+        ):
+            unit = text_unit
+        if unit is None and amount_source == "netto_gewicht" and amount is not None:
+            unit = "kg"
+        return amount, unit
+
+    unit = explicit_unit or text_unit
+    if amount_source == "text" and amount is not None and unit is None:
         unit = "kg"
 
     return amount, unit
