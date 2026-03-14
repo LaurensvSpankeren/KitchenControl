@@ -5,6 +5,51 @@ from sqlalchemy.orm import Session
 
 from app.models.ingredient import Ingredient
 
+ALLERGEN_COLUMN_MAP = {
+    "Zwaveldioxide en sulfieten": "zwaveldioxide en sulfieten",
+    "Pinda's (aardnoten)": "pinda",
+    "Bevat sporen van boomnoten": "boomnoten",
+    "Melk": "melk",
+    "Lactose": "lactose",
+    "Sesam": "sesam",
+    "Gluten": "gluten",
+    "Mosterd": "mosterd",
+    "Selderij": "selderij",
+    "Ei": "ei",
+    "Weekdieren": "weekdieren",
+    "Schaaldieren": "schaaldieren",
+    "Vis": "vis",
+    "Soja": "soja",
+    "Tarwe": "tarwe",
+    "Rogge": "rogge",
+    "Lupine": "lupine",
+    "Gerst": "gerst",
+    "Haver": "haver",
+    "Spelt": "spelt",
+    "Kamut": "kamut",
+    "Hazelnoten": "hazelnoten",
+    "Walnoten": "walnoten",
+    "Pecannoten": "pecannoten",
+    "Paranoten": "paranoten",
+    "Macadamianoten": "macadamianoten",
+    "Pistachenoten": "pistachenoten",
+    "Amandelen": "amandelen",
+    "Cashewnoten": "cashewnoten",
+}
+
+NEGATIVE_ALLERGEN_VALUES = {
+    "",
+    "-",
+    "bevat geen",
+    "geen",
+    "n.v.t.",
+    "nvt",
+    "nee",
+    "no",
+    "false",
+    "0",
+}
+
 
 def _parse_number(value: str | None) -> float | None:
     if value is None:
@@ -133,6 +178,28 @@ def _extract_net_content(row: dict) -> tuple[float | None, str | None]:
     return amount, unit
 
 
+def _is_positive_allergen_value(value: str | None) -> bool:
+    normalized = (value or "").strip().lower()
+    if normalized in NEGATIVE_ALLERGEN_VALUES:
+        return False
+    if "bevat geen" in normalized:
+        return False
+    if "bevat" in normalized:
+        return True
+    return normalized in {"ja", "yes", "true", "1", "sporen"}
+
+
+def _extract_supplier_allergens(row: dict) -> str | None:
+    allergens: list[str] = []
+    for column_name, allergen_name in ALLERGEN_COLUMN_MAP.items():
+        if _is_positive_allergen_value(row.get(column_name)):
+            allergens.append(allergen_name)
+
+    if not allergens:
+        return None
+    return " | ".join(dict.fromkeys(allergens))
+
+
 def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
     created = 0
     updated = 0
@@ -151,7 +218,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 row.get("Nettoprijs artikel (incl. klantconditie)")
             )
             supplier_vat_rate = _parse_number(row.get("BTW waarde"))
-            supplier_allergens_raw = (row.get("Ingredienten - declaratie") or "").strip() or None
+            supplier_allergens_raw = _extract_supplier_allergens(row)
             supplier_brand = (row.get("Merknaam voluit") or "").strip() or None
             category = (row.get("Omschrijving hoofdproduktgroep") or "").strip() or None
 

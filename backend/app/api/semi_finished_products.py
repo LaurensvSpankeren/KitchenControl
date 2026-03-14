@@ -13,6 +13,37 @@ from app.models.semi_finished_product import SemiFinishedProduct
 router = APIRouter()
 
 ALLERGEN_PLACEHOLDERS = {"-", "--", "nvt", "n.v.t.", "geen", "none", "null"}
+KNOWN_ALLERGENS = {
+    "ei",
+    "melk",
+    "gluten",
+    "selderij",
+    "mosterd",
+    "sesam",
+    "soja",
+    "vis",
+    "schaaldieren",
+    "weekdieren",
+    "lupine",
+    "tarwe",
+    "rogge",
+    "gerst",
+    "haver",
+    "spelt",
+    "kamut",
+    "pinda",
+    "hazelnoten",
+    "walnoten",
+    "pecannoten",
+    "paranoten",
+    "macadamianoten",
+    "pistachenoten",
+    "amandelen",
+    "cashewnoten",
+    "zwaveldioxide en sulfieten",
+    "lactose",
+    "boomnoten",
+}
 
 
 def _parse_optional_float(payload: dict, field_name: str) -> float | None:
@@ -39,6 +70,34 @@ def _parse_optional_int(payload: dict, field_name: str) -> int | None:
             status_code=400,
             detail=f"Invalid integer value for field: {field_name}",
         ) from exc
+
+
+def _extract_clean_allergens(value: str | None) -> list[str]:
+    if not value:
+        return []
+
+    normalized_value = value.strip().lower()
+    if not normalized_value or normalized_value in ALLERGEN_PLACEHOLDERS:
+        return []
+
+    raw_parts = [
+        part.strip().lower()
+        for part in normalized_value.replace("\n", "|").replace(",", "|").split("|")
+    ]
+    result: list[str] = []
+    for part in raw_parts:
+        if not part or part in ALLERGEN_PLACEHOLDERS:
+            continue
+        if part in KNOWN_ALLERGENS:
+            result.append(part)
+
+    # Fallback for free text: pick only explicitly known allergens found in the text.
+    if not result:
+        for allergen in sorted(KNOWN_ALLERGENS):
+            if allergen in normalized_value:
+                result.append(allergen)
+
+    return list(dict.fromkeys(result))
 
 
 def _serialize_semi_finished_product(item: SemiFinishedProduct) -> dict:
@@ -155,15 +214,13 @@ def _build_recipe_lines_detail(db: Session, semi_finished_product_id: int) -> di
                     )
                     line_cost = float(cost)
 
-                allergies = []
+                allergies: list[str] = []
                 for value in [
                     (ingredient.supplier_allergens_raw or "").strip(),
                     (ingredient.internal_allergens_extra or "").strip(),
                     (ingredient.cross_contamination_notes or "").strip(),
                 ]:
-                    normalized = value.lower().strip()
-                    if value and normalized not in ALLERGEN_PLACEHOLDERS:
-                        allergies.append(value)
+                    allergies.extend(_extract_clean_allergens(value))
                 if allergies:
                     allergens_summary = " | ".join(dict.fromkeys(allergies))
                     allergens_parts.append(allergens_summary)
