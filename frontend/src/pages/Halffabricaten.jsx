@@ -214,6 +214,35 @@ function buildSemiFinishedDetailUrl(id) {
   return `${PRINT_BASE_URL}/halffabricaten?id=${id}`
 }
 
+function getPrintBootstrapScript() {
+  return `
+    <script>
+      (function () {
+        let hasPrinted = false;
+        function triggerPrint() {
+          if (hasPrinted) {
+            return;
+          }
+          hasPrinted = true;
+          try { window.focus(); } catch (error) {}
+          window.print();
+        }
+
+        window.addEventListener('load', function () {
+          setTimeout(triggerPrint, 350);
+        });
+
+        setTimeout(triggerPrint, 1400);
+
+        const fallbackButton = document.getElementById('manual-print-btn');
+        if (fallbackButton) {
+          fallbackButton.addEventListener('click', triggerPrint);
+        }
+      })();
+    </script>
+  `
+}
+
 function formatPackageWeightLabel(ingredient) {
   if (!ingredient) {
     return null
@@ -774,6 +803,15 @@ export default function Halffabricaten() {
           <style>
             @page { size: 89mm 36mm; margin: 2mm; }
             body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+            .print-fallback-wrap { padding: 3mm 2mm 1mm; text-align: center; }
+            .print-fallback-btn {
+              border: 1px solid #222;
+              background: #fff;
+              color: #111;
+              font-size: 10px;
+              padding: 1.5mm 2.5mm;
+              cursor: pointer;
+            }
             .label {
               width: 100%;
               height: 100%;
@@ -800,9 +838,17 @@ export default function Halffabricaten() {
             .allergens { font-size: 8px; line-height: 1.2; margin-top: 1.2mm; }
             .qr-wrap { display: flex; align-items: center; justify-content: center; }
             .qr-wrap img { width: 18mm; height: 18mm; object-fit: contain; }
+            @media print {
+              .print-fallback-wrap { display: none; }
+            }
           </style>
         </head>
         <body>
+          <div class="print-fallback-wrap">
+            <button id="manual-print-btn" class="print-fallback-btn" type="button">
+              Klik hier als printen niet automatisch start
+            </button>
+          </div>
           <div class="label">
             <div class="content">
               <div class="title">${escapeHtml(productName || '-')}</div>
@@ -825,12 +871,11 @@ export default function Halffabricaten() {
               <img src="${qrCodeUrl}" alt="QR code" />
             </div>
           </div>
+          ${getPrintBootstrapScript()}
         </body>
       </html>
     `)
     printWindow.document.close()
-    printWindow.focus()
-    printWindow.print()
     setIsLabelModalOpen(false)
   }
 
@@ -919,10 +964,30 @@ export default function Halffabricaten() {
                 border-top: 1px solid #ccc;
                 font-size: 12px;
               }
+              .print-fallback-wrap {
+                margin: 0 0 10px;
+                text-align: right;
+              }
+              .print-fallback-btn {
+                border: 1px solid #222;
+                background: #fff;
+                color: #111;
+                font-size: 12px;
+                padding: 5px 8px;
+                cursor: pointer;
+              }
+              @media print {
+                .print-fallback-wrap { display: none; }
+              }
             </style>
           </head>
           <body>
             <div class="sheet">
+              <div class="print-fallback-wrap">
+                <button id="manual-print-btn" class="print-fallback-btn" type="button">
+                  Klik hier als printen niet automatisch start
+                </button>
+              </div>
               <div class="header">
                 <div>
                   <h1 class="title">${escapeHtml(payload.name || '')}</h1>
@@ -971,12 +1036,11 @@ export default function Halffabricaten() {
                 )}
               </div>
             </div>
+            ${getPrintBootstrapScript()}
           </body>
         </html>
       `)
       printWindow.document.close()
-      printWindow.focus()
-      printWindow.print()
     } catch {
       setErrorMessage('Printen mislukt.')
     }
