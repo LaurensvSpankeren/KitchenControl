@@ -80,6 +80,8 @@ def _parse_payload_values(payload: dict) -> dict:
         "supplier_pack_description",
         "packaging_type",
         "net_content_unit",
+        "preferred_unit",
+        "secondary_unit",
         "category",
         "internal_notes",
         "internal_allergens_extra",
@@ -95,6 +97,7 @@ def _parse_payload_values(payload: dict) -> dict:
         "net_content_amount",
         "supplier_price_ex_vat",
         "supplier_vat_rate",
+        "secondary_unit_factor",
         "conversion_factor_to_base",
         "yield_percent",
         "waste_percent",
@@ -149,6 +152,11 @@ def _serialize_ingredient(ingredient: Ingredient) -> dict:
         "calculation_unit": ingredient.calculation_unit,
         "calculation_quantity_per_package": float(ingredient.calculation_quantity_per_package)
         if ingredient.calculation_quantity_per_package is not None
+        else None,
+        "preferred_unit": ingredient.preferred_unit,
+        "secondary_unit": ingredient.secondary_unit,
+        "secondary_unit_factor": float(ingredient.secondary_unit_factor)
+        if ingredient.secondary_unit_factor is not None
         else None,
         "supplier_price_ex_vat": float(ingredient.supplier_price_ex_vat)
         if ingredient.supplier_price_ex_vat is not None

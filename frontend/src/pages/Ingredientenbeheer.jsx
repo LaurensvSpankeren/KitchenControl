@@ -14,6 +14,7 @@ const requiredLabels = {
 }
 
 const netContentUnitOptions = ['gram', 'kg', 'ml', 'liter', 'stuk']
+const dualUnitOptions = ['stuk', 'gram', 'kg', 'ml', 'liter']
 
 const initialForm = {
   name: '',
@@ -29,6 +30,9 @@ const initialForm = {
   netContentUnit: 'gram',
   calculationUnit: '',
   calculationQuantityPerPackage: '',
+  preferredUnit: '',
+  secondaryUnit: '',
+  secondaryUnitFactor: '',
   yieldPercent: '',
   wastePercent: '',
   internalCategory: '',
@@ -172,6 +176,9 @@ function mapIngredientToForm(ingredient) {
     calculationUnit: ingredient.calculation_unit || ingredient.base_unit || '',
     calculationQuantityPerPackage:
       ingredient.calculation_quantity_per_package ?? ingredient.conversion_factor_to_base ?? '',
+    preferredUnit: ingredient.preferred_unit || '',
+    secondaryUnit: ingredient.secondary_unit || '',
+    secondaryUnitFactor: ingredient.secondary_unit_factor ?? '',
     yieldPercent: ingredient.yield_percent ?? '',
     wastePercent: ingredient.waste_percent ?? '',
     internalCategory: parsedNotes.internalCategory,
@@ -210,6 +217,9 @@ function mapFormToPayload(formData, derivedCalculation) {
     base_unit: calculationUnit || normalizeUnit(formData.netContentUnit) || 'stuk',
     calculation_unit: calculationUnit,
     calculation_quantity_per_package: calculationQuantity,
+    preferred_unit: formData.preferredUnit || null,
+    secondary_unit: formData.secondaryUnit || null,
+    secondary_unit_factor: formData.secondaryUnitFactor ? Number(formData.secondaryUnitFactor) : null,
     conversion_factor_to_base: calculationQuantity,
     yield_percent: formData.yieldPercent ? Number(formData.yieldPercent) : null,
     waste_percent: formData.wastePercent ? Number(formData.wastePercent) : null,
@@ -592,6 +602,49 @@ export default function Ingredientenbeheer() {
                       step="any"
                       value={formData.wastePercent}
                       onChange={(event) => handleFieldChange('wastePercent', event.target.value)}
+                    />
+                  </label>
+                </div>
+              </section>
+
+              <section className="modal-section">
+                <h4>Dubbele rekeneenheid</h4>
+                <div className="modal-grid two-col calm-grid">
+                  <label>
+                    Voorkeursrekeneenheid
+                    <select
+                      value={formData.preferredUnit}
+                      onChange={(event) => handleFieldChange('preferredUnit', event.target.value)}
+                    >
+                      <option value="">Kies een eenheid</option>
+                      {dualUnitOptions.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Alternatieve rekeneenheid
+                    <select
+                      value={formData.secondaryUnit}
+                      onChange={(event) => handleFieldChange('secondaryUnit', event.target.value)}
+                    >
+                      <option value="">Kies een eenheid</option>
+                      {dualUnitOptions.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="full-width">
+                    Omrekening: 1 voorkeursrekeneenheid = X alternatieve rekeneenheid
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.secondaryUnitFactor}
+                      onChange={(event) => handleFieldChange('secondaryUnitFactor', event.target.value)}
                     />
                   </label>
                 </div>
