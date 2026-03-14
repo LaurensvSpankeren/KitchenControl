@@ -28,6 +28,10 @@ const initialForm = {
   unitsPerPackage: '',
   netContentAmount: '',
   netContentUnit: 'gram',
+  packageWeightAmount: '',
+  packageWeightUnit: '',
+  packageVolumeAmount: '',
+  packageVolumeUnit: '',
   calculationUnit: '',
   calculationQuantityPerPackage: '',
   preferredUnit: '',
@@ -59,6 +63,40 @@ function formatNumber(value, digits = 2) {
     return '-'
   }
   return number.toFixed(digits).replace('.', ',')
+}
+
+function normalizeDisplayUnit(value) {
+  return normalizeUnit(value)
+}
+
+function formatPackageWeight(amount, unit) {
+  const numericAmount = Number(amount)
+  const normalizedUnit = normalizeDisplayUnit(unit)
+  if (Number.isNaN(numericAmount) || !normalizedUnit) {
+    return '-'
+  }
+  if (normalizedUnit === 'kg') {
+    return `${formatNumber(numericAmount * 1000, 0).replace(/,?0+$/, '')} gram`
+  }
+  if (normalizedUnit === 'gram') {
+    return `${formatNumber(numericAmount, 0).replace(/,?0+$/, '')} gram`
+  }
+  return `${formatNumber(numericAmount, 4).replace(/,?0+$/, '')} ${normalizedUnit}`
+}
+
+function formatPackageVolume(amount, unit) {
+  const numericAmount = Number(amount)
+  const normalizedUnit = normalizeDisplayUnit(unit)
+  if (Number.isNaN(numericAmount) || !normalizedUnit) {
+    return '-'
+  }
+  if (normalizedUnit === 'liter') {
+    return `${formatNumber(numericAmount * 1000, 0).replace(/,?0+$/, '')} ml`
+  }
+  if (normalizedUnit === 'ml') {
+    return `${formatNumber(numericAmount, 0).replace(/,?0+$/, '')} ml`
+  }
+  return `${formatNumber(numericAmount, 4).replace(/,?0+$/, '')} ${normalizedUnit}`
 }
 
 function splitInternalNotes(value) {
@@ -173,6 +211,10 @@ function mapIngredientToForm(ingredient) {
     unitsPerPackage: ingredient.units_per_package ?? '',
     netContentAmount: ingredient.net_content_amount ?? ingredient.supplier_net_content ?? '',
     netContentUnit: ingredient.net_content_unit || 'gram',
+    packageWeightAmount: ingredient.package_weight_amount ?? '',
+    packageWeightUnit: ingredient.package_weight_unit || '',
+    packageVolumeAmount: ingredient.package_volume_amount ?? '',
+    packageVolumeUnit: ingredient.package_volume_unit || '',
     calculationUnit: ingredient.calculation_unit || ingredient.base_unit || '',
     calculationQuantityPerPackage:
       ingredient.calculation_quantity_per_package ?? ingredient.conversion_factor_to_base ?? '',
@@ -364,6 +406,9 @@ export default function Ingredientenbeheer() {
       setIsSaving(false)
     }
   }
+
+  const packageWeightLabel = formatPackageWeight(formData.packageWeightAmount, formData.packageWeightUnit)
+  const packageVolumeLabel = formatPackageVolume(formData.packageVolumeAmount, formData.packageVolumeUnit)
 
   return (
     <div>
@@ -557,6 +602,20 @@ export default function Ingredientenbeheer() {
                         </option>
                       ))}
                     </select>
+                  </label>
+                </div>
+              </section>
+
+              <section className="modal-section">
+                <h4>Brondata verpakking</h4>
+                <div className="modal-grid two-col calm-grid">
+                  <label>
+                    Gewicht per verpakking
+                    <input type="text" value={packageWeightLabel} readOnly />
+                  </label>
+                  <label>
+                    Inhoud per verpakking
+                    <input type="text" value={packageVolumeLabel} readOnly />
                   </label>
                 </div>
               </section>

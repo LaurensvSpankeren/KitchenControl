@@ -49,16 +49,35 @@ function getIngredientUnitOptions(ingredient) {
   const preferred = normalizeUnit(ingredient.preferred_unit)
   const secondary = normalizeUnit(ingredient.secondary_unit)
   const calculation = normalizeUnit(ingredient.calculation_unit || ingredient.base_unit)
+  const hasWeight =
+    ingredient.package_weight_amount !== null &&
+    ingredient.package_weight_amount !== undefined &&
+    ingredient.package_weight_unit
+  const hasVolume =
+    ingredient.package_volume_amount !== null &&
+    ingredient.package_volume_amount !== undefined &&
+    ingredient.package_volume_unit
 
-  if (preferred) {
-    options.push(preferred)
+  const addOption = (unit) => {
+    const normalized = normalizeUnit(unit)
+    if (normalized && !options.includes(normalized)) {
+      options.push(normalized)
+    }
   }
-  if (secondary && !options.includes(secondary)) {
-    options.push(secondary)
+
+  if (preferred === 'stuk' || secondary === 'stuk' || calculation === 'stuk') {
+    addOption('stuk')
   }
-  if (calculation && !options.includes(calculation)) {
-    options.push(calculation)
+  if (hasWeight) {
+    addOption('gram')
   }
+  if (hasVolume) {
+    addOption('ml')
+  }
+
+  addOption(preferred)
+  addOption(secondary)
+  addOption(calculation)
 
   return options
 }
@@ -132,6 +151,42 @@ function formatCompactNumber(value, digits = 2) {
     return '-'
   }
   return num.toFixed(digits).replace('.', ',')
+}
+
+function formatPackageWeightLabel(ingredient) {
+  if (!ingredient) {
+    return null
+  }
+  const amount = Number(ingredient.package_weight_amount)
+  const unit = normalizeUnit(ingredient.package_weight_unit)
+  if (Number.isNaN(amount) || !unit) {
+    return null
+  }
+  if (unit === 'kg') {
+    return `${(amount * 1000).toFixed(0)} gram`
+  }
+  if (unit === 'gram') {
+    return `${amount.toFixed(0)} gram`
+  }
+  return `${formatCompactNumber(amount, 4).replace(/,?0+$/, '')} ${unit}`
+}
+
+function formatPackageVolumeLabel(ingredient) {
+  if (!ingredient) {
+    return null
+  }
+  const amount = Number(ingredient.package_volume_amount)
+  const unit = normalizeUnit(ingredient.package_volume_unit)
+  if (Number.isNaN(amount) || !unit) {
+    return null
+  }
+  if (unit === 'liter') {
+    return `${(amount * 1000).toFixed(0)} ml`
+  }
+  if (unit === 'ml') {
+    return `${amount.toFixed(0)} ml`
+  }
+  return `${formatCompactNumber(amount, 4).replace(/,?0+$/, '')} ${unit}`
 }
 
 function mapProductToForm(product) {
@@ -973,10 +1028,13 @@ export default function Halffabricaten() {
                             </strong>
                             <span className="ingredient-picker-meta">
                               #{ingredient.supplier_product_code || '-'} |{' '}
-                              {formatCurrency(ingredient.supplier_price_ex_vat)} / verpakking |{' '}
-                              {ingredient.calculation_unit || '-'} |{' '}
-                              {formatCompactNumber(ingredient.calculation_quantity_per_package, 4)} |{' '}
-                              Eenheden: {getIngredientUnitOptions(ingredient).join(' / ') || '-'}
+                              {formatCurrency(ingredient.supplier_price_ex_vat)} / verpakking
+                              {formatPackageWeightLabel(ingredient)
+                                ? ` | Gewicht: ${formatPackageWeightLabel(ingredient)}`
+                                : ''}
+                              {formatPackageVolumeLabel(ingredient)
+                                ? ` | Inhoud: ${formatPackageVolumeLabel(ingredient)}`
+                                : ''}
                             </span>
                           </button>
                         ))}
@@ -1015,8 +1073,14 @@ export default function Halffabricaten() {
                       {selectedIngredient.supplier_brand || '-'} | Artikel:{' '}
                       {selectedIngredient.supplier_product_code || '-'} | Rekeneenheid:{' '}
                       {selectedIngredient.calculation_unit || '-'} | Aantal rekeneenheden:{' '}
-                      {formatCompactNumber(selectedIngredient.calculation_quantity_per_package, 4)} | Keuze:{' '}
-                      {selectedIngredientUnitOptions.join(' / ') || '-'}
+                      {formatCompactNumber(selectedIngredient.calculation_quantity_per_package, 4)}
+                      {formatPackageWeightLabel(selectedIngredient)
+                        ? ` | Gewicht: ${formatPackageWeightLabel(selectedIngredient)}`
+                        : ''}
+                      {formatPackageVolumeLabel(selectedIngredient)
+                        ? ` | Inhoud: ${formatPackageVolumeLabel(selectedIngredient)}`
+                        : ''}
+                      {' | '}Keuze: {selectedIngredientUnitOptions.join(' / ') || '-'}
                     </p>
                   ) : null}
 
