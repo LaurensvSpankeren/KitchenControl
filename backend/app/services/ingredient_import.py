@@ -50,6 +50,8 @@ NEGATIVE_ALLERGEN_VALUES = {
     "0",
 }
 
+PIECE_HINT_TERMS = ("stuk", "stuks", " st ", "x", "rol", "rollen", "brood", "portie")
+
 
 def _parse_number(value: str | None) -> float | None:
     if value is None:
@@ -168,6 +170,37 @@ def _derive_calculation_values(
     return None, None
 
 
+def _derive_dual_unit_values(
+    calc_unit: str | None,
+    calc_quantity: float | None,
+    units_per_package: float | None,
+    supplier_unit: str | None,
+    supplier_pack_description: str | None,
+) -> tuple[str | None, str | None, float | None]:
+    if (
+        calc_unit is None
+        or calc_quantity is None
+        or calc_quantity <= 0
+        or units_per_package is None
+        or units_per_package <= 1
+    ):
+        return None, None, None
+
+    normalized_calc_unit = _normalize_unit(calc_unit)
+    if normalized_calc_unit not in {"gram", "ml"}:
+        return None, None, None
+
+    combined_text = f"{supplier_unit or ''} {supplier_pack_description or ''}".lower()
+    if not any(term in combined_text for term in PIECE_HINT_TERMS):
+        return None, None, None
+
+    factor = calc_quantity / units_per_package
+    if factor <= 0:
+        return None, None, None
+
+    return "stuk", normalized_calc_unit, factor
+
+
 def _extract_net_content(row: dict) -> tuple[float | None, str | None]:
     amount = _parse_number(row.get("Netto inhoud"))
     amount_source = "netto_inhoud" if amount is not None else None
@@ -266,6 +299,13 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 net_content_amount,
                 units_per_package,
             )
+            preferred_unit, secondary_unit, secondary_unit_factor = _derive_dual_unit_values(
+                calc_unit,
+                calc_quantity,
+                units_per_package,
+                supplier_unit,
+                supplier_pack_description,
+            )
 
             if not supplier_product_code:
                 continue
@@ -294,6 +334,17 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                     ingredient.calculation_unit = calc_unit
                     ingredient.calculation_quantity_per_package = calc_quantity
                     ingredient.conversion_factor_to_base = calc_quantity
+                if (
+                    preferred_unit is not None
+                    and secondary_unit is not None
+                    and secondary_unit_factor is not None
+                    and ingredient.preferred_unit is None
+                    and ingredient.secondary_unit is None
+                    and ingredient.secondary_unit_factor is None
+                ):
+                    ingredient.preferred_unit = preferred_unit
+                    ingredient.secondary_unit = secondary_unit
+                    ingredient.secondary_unit_factor = secondary_unit_factor
                 updated += 1
             else:
                 base_unit = calc_unit or supplier_unit or "st"
@@ -311,6 +362,9 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                     net_content_unit=net_content_unit,
                     calculation_unit=calc_unit,
                     calculation_quantity_per_package=calc_quantity,
+                    preferred_unit=preferred_unit,
+                    secondary_unit=secondary_unit,
+                    secondary_unit_factor=secondary_unit_factor,
                     supplier_price_ex_vat=supplier_price_ex_vat,
                     supplier_vat_rate=supplier_vat_rate,
                     supplier_allergens_raw=supplier_allergens_raw,
