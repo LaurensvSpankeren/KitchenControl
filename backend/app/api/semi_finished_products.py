@@ -278,8 +278,9 @@ def _build_recipe_lines_detail(db: Session, semi_finished_product_id: int) -> di
                 ]:
                     allergies.extend(_extract_clean_allergens(value))
                 if allergies:
-                    allergens_summary = " | ".join(dict.fromkeys(allergies))
-                    allergens_parts.append(allergens_summary)
+                    unique_allergies = list(dict.fromkeys(allergies))
+                    allergens_summary = " | ".join(unique_allergies)
+                    allergens_parts.extend(unique_allergies)
         elif line.item_type == "semi_finished_product":
             nested = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == line.item_id).first()
             if nested is not None:
