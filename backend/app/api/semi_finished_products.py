@@ -144,6 +144,7 @@ def _serialize_semi_finished_product(item: SemiFinishedProduct) -> dict:
         "storage_notes": item.storage_notes,
         "storage_advice": item.storage_advice,
         "preparation_notes": item.preparation_notes,
+        "is_archived": item.is_archived,
         "created_at": item.created_at.isoformat() if item.created_at is not None else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at is not None else None,
     }
@@ -363,7 +364,31 @@ def _build_semi_finished_detail(db: Session, item: SemiFinishedProduct) -> dict:
 
 @router.get("/api/semi-finished-products", tags=["semi-finished-products"])
 def list_semi_finished_products(db: Session = Depends(get_db)) -> list[dict]:
-    items = db.query(SemiFinishedProduct).order_by(SemiFinishedProduct.name.asc()).all()
+    items = (
+        db.query(SemiFinishedProduct)
+        .filter(SemiFinishedProduct.is_archived.is_(False))
+        .order_by(SemiFinishedProduct.name.asc())
+        .all()
+    )
+
+    result = []
+    for item in items:
+        serialized = _serialize_semi_finished_product(item)
+        lines_data = _build_recipe_lines_detail(db, item.id)
+        serialized["estimated_cost_total"] = lines_data["estimated_cost_total"]
+        serialized["allergens_total"] = lines_data["allergens_total"]
+        result.append(serialized)
+    return result
+
+
+@router.get("/api/semi-finished-products/archived", tags=["semi-finished-products"])
+def list_archived_semi_finished_products(db: Session = Depends(get_db)) -> list[dict]:
+    items = (
+        db.query(SemiFinishedProduct)
+        .filter(SemiFinishedProduct.is_archived.is_(True))
+        .order_by(SemiFinishedProduct.name.asc())
+        .all()
+    )
 
     result = []
     for item in items:
@@ -596,6 +621,64 @@ def replace_recipe_steps(
         .all()
     )
     return {"steps": _serialize_recipe_steps(refreshed_steps)}
+
+
+@router.put("/api/semi-finished-products/{semi_finished_product_id}/archive", tags=["semi-finished-products"])
+def archive_semi_finished_product(
+    semi_finished_product_id: int, db: Session = Depends(get_db)
+) -> dict:
+    item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Semi finished product not found")
+
+    item.is_archived = True
+    db.commit()
+    db.refresh(item)
+    return _serialize_semi_finished_product(item)
+
+
+@router.put("/api/semi-finished-products/{semi_finished_product_id}/restore", tags=["semi-finished-products"])
+def restore_semi_finished_product(
+    semi_finished_product_id: int, db: Session = Depends(get_db)
+) -> dict:
+    item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Semi finished product not found")
+
+    item.is_archived = False
+    db.commit()
+    db.refresh(item)
+    return _serialize_semi_finished_product(item)
+
+
+@router.delete("/api/semi-finished-products/{semi_finished_product_id}", tags=["semi-finished-products"])
+def delete_semi_finished_product(
+    semi_finished_product_id: int, db: Session = Depends(get_db)
+) -> dict:
+    item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Semi finished product not found")
+
+    (
+        db.query(RecipeLine)
+        .filter(
+            RecipeLine.parent_type == "semi_finished_product",
+            RecipeLine.parent_id == semi_finished_product_id,
+        )
+        .delete(synchronize_session=False)
+    )
+    (
+        db.query(RecipeStep)
+        .filter(
+            RecipeStep.parent_type == "semi_finished_product",
+            RecipeStep.parent_id == semi_finished_product_id,
+        )
+        .delete(synchronize_session=False)
+    )
+
+    db.delete(item)
+    db.commit()
+    return {"status": "deleted", "semi_finished_product_id": semi_finished_product_id}
 
 
 @router.get("/api/semi-finished-products/{semi_finished_product_id}", tags=["semi-finished-products"])
