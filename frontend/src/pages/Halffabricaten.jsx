@@ -1636,7 +1636,7 @@ export default function Halffabricaten() {
                   <strong>Kostprijs per eindeenheid:</strong>{' '}
                   {detail?.cost_per_final_unit !== null && detail?.cost_per_final_unit !== undefined && detail?.final_yield_unit
                     ? `${formatCurrency(detail.cost_per_final_unit, 4)} per ${detail.final_yield_unit}`
-                    : 'Nog niet berekenbaar'}
+                    : 'eindgewicht of eindinhoud ontbreekt'}
                 </p>
               </section>
 
