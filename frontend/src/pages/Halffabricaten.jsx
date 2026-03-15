@@ -355,6 +355,36 @@ export default function Halffabricaten() {
   const [isSaving, setIsSaving] = useState(false)
   const [isModalDirty, setIsModalDirty] = useState(false)
   const isReadOnlyModal = isSelectedArchived
+  const uiStyles = {
+    viewModeSwitch: { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' },
+    photoPreviewWrap: { marginTop: '0.5rem' },
+    photoLink: { display: 'block', wordBreak: 'break-all', marginBottom: '0.5rem' },
+    photoPreview: {
+      display: 'block',
+      width: '100%',
+      maxWidth: '220px',
+      maxHeight: '140px',
+      objectFit: 'cover',
+      border: '1px solid #d1d5db',
+      borderRadius: '8px',
+      marginBottom: '0.5rem'
+    },
+    recipeAddBlock: {
+      border: '1px solid #e5e7eb',
+      borderRadius: '8px',
+      padding: '0.65rem',
+      background: '#f9fafb'
+    },
+    recipeAddBlockSpaced: {
+      border: '1px solid #e5e7eb',
+      borderRadius: '8px',
+      padding: '0.65rem',
+      background: '#f9fafb',
+      marginTop: '0.9rem'
+    },
+    modalActionsLeft: { display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginRight: 'auto' },
+    modalActionsRight: { display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }
+  }
 
   async function loadProducts() {
     try {
@@ -1277,7 +1307,7 @@ export default function Halffabricaten() {
       </header>
 
       <section className="card">
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        <div style={uiStyles.viewModeSwitch}>
           <button
             type="button"
             className="table-action-btn"
@@ -1410,28 +1440,19 @@ export default function Halffabricaten() {
                         onChange={(event) => handleFormChange('photo_url', event.target.value)}
                       />
                     ) : (
-                      <div style={{ marginTop: '0.5rem' }}>
+                      <div style={uiStyles.photoPreviewWrap}>
                         <a
                           href={formData.photo_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ display: 'block', wordBreak: 'break-all', marginBottom: '0.5rem' }}
+                          style={uiStyles.photoLink}
                         >
                           {formData.photo_url}
                         </a>
                         <img
                           src={formData.photo_url}
                           alt="Foto preview"
-                          style={{
-                            display: 'block',
-                            width: '100%',
-                            maxWidth: '220px',
-                            maxHeight: '140px',
-                            objectFit: 'cover',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '8px',
-                            marginBottom: '0.5rem'
-                          }}
+                          style={uiStyles.photoPreview}
                         />
                         <button
                           type="button"
@@ -1532,7 +1553,7 @@ export default function Halffabricaten() {
 
               <section className="modal-section">
                 <h4>Ingrediënten</h4>
-                <div className="sfp-ingredient-add">
+                <div className="sfp-ingredient-add" style={uiStyles.recipeAddBlock}>
                   <input
                     type="text"
                     placeholder="Zoek op naam, merk of artikelnummer"
@@ -1634,7 +1655,7 @@ export default function Halffabricaten() {
                   </button>
                 </div>
 
-                <div className="sfp-ingredient-add" style={{ marginTop: '0.9rem' }}>
+                <div className="sfp-ingredient-add" style={uiStyles.recipeAddBlockSpaced}>
                   <input
                     type="text"
                     placeholder="Zoek halffabricaat op naam"
@@ -1905,13 +1926,13 @@ export default function Halffabricaten() {
             </div>
 
             <div className="modal-actions sfp-actions">
-              <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginRight: 'auto' }}>
-                <button type="button" onClick={handlePrintRecipe}>Print keukenrecept</button>
-                <button type="button" onClick={openLabelModal}>Print dagetiket</button>
+              <div style={uiStyles.modalActionsLeft}>
+                <button type="button" className="table-action-btn" onClick={handlePrintRecipe}>Print keukenrecept</button>
+                <button type="button" className="table-action-btn" onClick={openLabelModal}>Print dagetiket</button>
               </div>
-              <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }}>
+              <div style={uiStyles.modalActionsRight}>
                 {selectedProductId && !isSelectedArchived ? (
-                  <button type="button" onClick={handleArchiveProduct}>
+                  <button type="button" className="table-action-btn" onClick={handleArchiveProduct}>
                     Archiveren
                   </button>
                 ) : null}
@@ -1924,7 +1945,7 @@ export default function Halffabricaten() {
                     <button type="button" className="primary-btn" onClick={handleRestoreProduct}>
                       Herstellen
                     </button>
-                    <button type="button" onClick={handleDeleteProduct}>
+                    <button type="button" className="table-action-btn" onClick={handleDeleteProduct}>
                       Verwijderen
                     </button>
                   </>
