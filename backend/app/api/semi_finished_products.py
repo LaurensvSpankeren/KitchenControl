@@ -218,6 +218,31 @@ def _to_calculation_quantity(line: RecipeLine, ingredient: Ingredient) -> Decima
     return quantity
 
 
+def _convert_quantity_to_unit(
+    quantity: Decimal, from_unit: str | None, to_unit: str | None
+) -> Decimal | None:
+    source = _normalize_unit(from_unit)
+    target = _normalize_unit(to_unit)
+
+    if source is None or target is None:
+        return None
+    if source == target:
+        return quantity
+
+    weight_in_gram = {"gram": Decimal("1"), "kg": Decimal("1000")}
+    volume_in_ml = {"ml": Decimal("1"), "liter": Decimal("1000")}
+
+    if source in weight_in_gram and target in weight_in_gram:
+        quantity_in_gram = quantity * weight_in_gram[source]
+        return quantity_in_gram / weight_in_gram[target]
+
+    if source in volume_in_ml and target in volume_in_ml:
+        quantity_in_ml = quantity * volume_in_ml[source]
+        return quantity_in_ml / volume_in_ml[target]
+
+    return None
+
+
 def _build_recipe_lines_detail(
     db: Session, semi_finished_product_id: int, active_chain: set[int] | None = None
 ) -> dict:
@@ -291,9 +316,24 @@ def _build_recipe_lines_detail(
                 item_name = nested.name
                 if nested.id != semi_finished_product_id and nested.id not in chain:
                     nested_detail = _build_semi_finished_detail(db, nested, active_chain=chain)
-                    if nested_detail.get("estimated_cost_total") is not None:
-                        # Veilige eerste stap: neem batchkostprijs van genest halffabricaat over.
-                        line_cost = float(nested_detail["estimated_cost_total"])
+                    nested_cost_total = nested_detail.get("estimated_cost_total")
+                    nested_final_yield_amount = nested_detail.get("final_yield_amount")
+                    nested_final_yield_unit = nested_detail.get("final_yield_unit")
+                    if (
+                        nested_cost_total is not None
+                        and nested_final_yield_amount is not None
+                        and Decimal(str(nested_final_yield_amount)) > 0
+                    ):
+                        converted_quantity = _convert_quantity_to_unit(
+                            Decimal(line.quantity),
+                            line.unit,
+                            nested_final_yield_unit,
+                        )
+                        if converted_quantity is not None:
+                            cost_per_final_unit = Decimal(str(nested_cost_total)) / Decimal(
+                                str(nested_final_yield_amount)
+                            )
+                            line_cost = float(cost_per_final_unit * converted_quantity)
 
                     nested_allergens = _extract_clean_allergens(nested_detail.get("allergens_total"))
                     if nested_allergens:
