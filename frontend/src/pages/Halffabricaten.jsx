@@ -312,11 +312,13 @@ function mapFormToPayload(form) {
 
 export default function Halffabricaten() {
   const [products, setProducts] = useState([])
+  const [archivedProducts, setArchivedProducts] = useState([])
   const [ingredients, setIngredients] = useState([])
   const [semiFinishedCategories, setSemiFinishedCategories] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [subcategoryFilter, setSubcategoryFilter] = useState('')
+  const [viewMode, setViewMode] = useState('active')
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedProductId, setSelectedProductId] = useState(null)
@@ -333,6 +335,7 @@ export default function Halffabricaten() {
   const [editingLineQuantity, setEditingLineQuantity] = useState('')
   const [editingLineUnit, setEditingLineUnit] = useState('')
   const [isEditingPhotoUrl, setIsEditingPhotoUrl] = useState(true)
+  const [isSelectedArchived, setIsSelectedArchived] = useState(false)
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [showNewSubcategoryInput, setShowNewSubcategoryInput] = useState(false)
@@ -346,6 +349,7 @@ export default function Halffabricaten() {
   const [labelUseFridge, setLabelUseFridge] = useState(true)
   const [labelUseFreezer, setLabelUseFreezer] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const isReadOnlyModal = isSelectedArchived
 
   async function loadProducts() {
     try {
@@ -353,6 +357,15 @@ export default function Halffabricaten() {
       setProducts(Array.isArray(data) ? data : [])
     } catch {
       setProducts([])
+    }
+  }
+
+  async function loadArchivedProducts() {
+    try {
+      const data = await apiClient.getArchivedSemiFinishedProducts()
+      setArchivedProducts(Array.isArray(data) ? data : [])
+    } catch {
+      setArchivedProducts([])
     }
   }
 
@@ -399,6 +412,7 @@ export default function Halffabricaten() {
 
   useEffect(() => {
     loadProducts()
+    loadArchivedProducts()
     loadIngredients()
     loadSemiFinishedCategories()
   }, [])
@@ -441,6 +455,24 @@ export default function Halffabricaten() {
       })
       .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'nl'))
   }, [products, searchTerm, categoryFilter, subcategoryFilter])
+
+  const filteredArchivedProducts = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+    return archivedProducts
+      .filter((item) => {
+        if (categoryFilter && item.category !== categoryFilter) {
+          return false
+        }
+        if (subcategoryFilter && item.subcategory !== subcategoryFilter) {
+          return false
+        }
+        if (!term) {
+          return true
+        }
+        return String(item.name || '').toLowerCase().includes(term)
+      })
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'nl'))
+  }, [archivedProducts, searchTerm, categoryFilter, subcategoryFilter])
 
   const filteredIngredients = useMemo(() => {
     const term = ingredientSearch.trim().toLowerCase()
@@ -499,6 +531,7 @@ export default function Halffabricaten() {
     setEditingLineQuantity('')
     setEditingLineUnit('')
     setIsEditingPhotoUrl(true)
+    setIsSelectedArchived(false)
     setShowNewCategoryInput(false)
     setNewCategoryName('')
     setShowNewSubcategoryInput(false)
@@ -508,7 +541,7 @@ export default function Halffabricaten() {
     setIsModalOpen(true)
   }
 
-  async function openEditModal(product) {
+  async function openEditModal(product, sourceView = 'active') {
     setSelectedProductId(product.id)
     setFormData(mapProductToForm(product))
     setIngredientSearch('')
@@ -519,6 +552,7 @@ export default function Halffabricaten() {
     setEditingLineQuantity('')
     setEditingLineUnit('')
     setIsEditingPhotoUrl(!String(product.photo_url || '').trim())
+    setIsSelectedArchived(sourceView === 'archived' || !!product.is_archived)
     setShowNewCategoryInput(false)
     setNewCategoryName('')
     setShowNewSubcategoryInput(false)
@@ -529,6 +563,60 @@ export default function Halffabricaten() {
     await loadDetail(product.id)
   }
 
+  async function handleArchiveProduct() {
+    if (!selectedProductId) {
+      return
+    }
+
+    try {
+      await apiClient.archiveSemiFinishedProduct(selectedProductId)
+      await loadProducts()
+      await loadArchivedProducts()
+      setIsModalOpen(false)
+      setViewMode('active')
+      setPageMessage('Halffabricaat gearchiveerd.')
+    } catch {
+      setErrorMessage('Archiveren mislukt.')
+    }
+  }
+
+  async function handleRestoreProduct() {
+    if (!selectedProductId) {
+      return
+    }
+
+    try {
+      await apiClient.restoreSemiFinishedProduct(selectedProductId)
+      await loadProducts()
+      await loadArchivedProducts()
+      setIsModalOpen(false)
+      setViewMode('active')
+      setPageMessage('Halffabricaat hersteld uit archief.')
+    } catch {
+      setErrorMessage('Herstellen mislukt.')
+    }
+  }
+
+  async function handleDeleteProduct() {
+    if (!selectedProductId || !isSelectedArchived) {
+      return
+    }
+
+    const confirmed = window.confirm('Weet je zeker dat je dit halffabricaat definitief wilt verwijderen?')
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await apiClient.deleteSemiFinishedProduct(selectedProductId)
+      await loadArchivedProducts()
+      setIsModalOpen(false)
+      setPageMessage('Halffabricaat verwijderd.')
+    } catch {
+      setErrorMessage('Verwijderen mislukt.')
+    }
+  }
+
   function closeModal() {
     if (isSaving) {
       return
@@ -537,10 +625,16 @@ export default function Halffabricaten() {
   }
 
   function handleFormChange(field, value) {
+    if (isReadOnlyModal) {
+      return
+    }
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
   function handleCategoryChange(value) {
+    if (isReadOnlyModal) {
+      return
+    }
     setFormData((prev) => ({
       ...prev,
       category: value,
@@ -549,6 +643,9 @@ export default function Halffabricaten() {
   }
 
   function handleStepChange(index, value) {
+    if (isReadOnlyModal) {
+      return
+    }
     setSteps((prev) => {
       const next = [...prev]
       next[index] = value
@@ -557,6 +654,9 @@ export default function Halffabricaten() {
   }
 
   function startEditLine(line) {
+    if (isReadOnlyModal) {
+      return
+    }
     setEditingLineId(line.id)
     setEditingLineQuantity(String(line.quantity ?? ''))
     setEditingLineUnit(line.unit || '')
@@ -571,7 +671,7 @@ export default function Halffabricaten() {
   }
 
   async function handleSaveEditedLine(line) {
-    if (!selectedProductId) {
+    if (!selectedProductId || isReadOnlyModal) {
       return
     }
 
@@ -602,7 +702,7 @@ export default function Halffabricaten() {
   }
 
   async function handleDeleteLine(line) {
-    if (!selectedProductId) {
+    if (!selectedProductId || isReadOnlyModal) {
       return
     }
 
@@ -626,6 +726,9 @@ export default function Halffabricaten() {
   }
 
   async function handleSaveProduct() {
+    if (isReadOnlyModal) {
+      return
+    }
     const name = formData.name.trim()
     if (!name) {
       setErrorMessage('Naam is verplicht.')
@@ -665,6 +768,7 @@ export default function Halffabricaten() {
 
       await apiClient.saveSemiFinishedProductSteps(productId, { steps: cleanedSteps })
       await loadProducts()
+      await loadArchivedProducts()
       await loadDetail(productId)
       setModalMessage('Halffabricaat opgeslagen.')
       setPageMessage('Halffabricaat opgeslagen.')
@@ -676,6 +780,9 @@ export default function Halffabricaten() {
   }
 
   async function handleAddIngredientLine() {
+    if (isReadOnlyModal) {
+      return
+    }
     if (!selectedProductId) {
       setErrorMessage('Sla eerst het halffabricaat op voordat je ingrediënten toevoegt.')
       return
@@ -708,6 +815,7 @@ export default function Halffabricaten() {
       })
       await loadDetail(selectedProductId)
       await loadProducts()
+      await loadArchivedProducts()
       setIngredientSearch('')
       setSelectedIngredient(null)
       setRecipeQuantity('')
@@ -719,6 +827,9 @@ export default function Halffabricaten() {
   }
 
   async function handleCreateCategory() {
+    if (isReadOnlyModal) {
+      return
+    }
     const name = newCategoryName.trim()
     if (!name) {
       setErrorMessage('Vul eerst een categorienaam in.')
@@ -739,6 +850,9 @@ export default function Halffabricaten() {
   }
 
   async function handleCreateSubcategory() {
+    if (isReadOnlyModal) {
+      return
+    }
     if (!selectedCategoryRecord) {
       setErrorMessage('Kies eerst een categorie.')
       return
@@ -1051,6 +1165,7 @@ export default function Halffabricaten() {
   }
 
   const allergensText = detail?.allergens_total || 'Geen brondata allergenen beschikbaar'
+  const visibleProducts = viewMode === 'archived' ? filteredArchivedProducts : filteredProducts
 
   return (
     <div>
@@ -1060,6 +1175,24 @@ export default function Halffabricaten() {
       </header>
 
       <section className="card">
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          <button
+            type="button"
+            className="table-action-btn"
+            onClick={() => setViewMode('active')}
+            style={viewMode === 'active' ? { background: '#e5eefc', borderColor: '#93c5fd' } : undefined}
+          >
+            Actief
+          </button>
+          <button
+            type="button"
+            className="table-action-btn"
+            onClick={() => setViewMode('archived')}
+            style={viewMode === 'archived' ? { background: '#e5eefc', borderColor: '#93c5fd' } : undefined}
+          >
+            Archief
+          </button>
+        </div>
         <div className="sfp-toolbar">
           <input
             type="text"
@@ -1093,15 +1226,23 @@ export default function Halffabricaten() {
               </option>
             ))}
           </select>
-          <button type="button" className="sfp-new-btn" onClick={openNewModal}>
-            Nieuw halffabricaat
-          </button>
+          {viewMode === 'active' ? (
+            <button type="button" className="sfp-new-btn" onClick={openNewModal}>
+              Nieuw halffabricaat
+            </button>
+          ) : (
+            <div />
+          )}
         </div>
 
         {pageMessage ? <p className="form-info inline-message">{pageMessage}</p> : null}
 
-        {filteredProducts.length === 0 ? (
-          <p>Nog geen halffabricaten gevonden.</p>
+        {visibleProducts.length === 0 ? (
+          <p>
+            {viewMode === 'archived'
+              ? 'Nog geen gearchiveerde halffabricaten gevonden.'
+              : 'Nog geen halffabricaten gevonden.'}
+          </p>
         ) : (
           <div className="table-scroll">
             <table className="ingredients-table">
@@ -1117,7 +1258,7 @@ export default function Halffabricaten() {
                 </tr>
               </thead>
               <tbody>
-                {filteredProducts.map((item) => (
+                {visibleProducts.map((item) => (
                   <tr key={item.id}>
                     <td>{item.name}</td>
                     <td>{item.category || '-'}</td>
@@ -1126,7 +1267,11 @@ export default function Halffabricaten() {
                     <td>{formatYield(item.final_yield_amount, item.final_yield_unit)}</td>
                     <td>{item.allergens_total || 'Geen brondata allergenen beschikbaar'}</td>
                     <td>
-                      <button type="button" className="table-action-btn" onClick={() => openEditModal(item)}>
+                      <button
+                        type="button"
+                        className="table-action-btn"
+                        onClick={() => openEditModal(item, viewMode)}
+                      >
                         Openen
                       </button>
                     </td>
@@ -1159,6 +1304,7 @@ export default function Halffabricaten() {
                         type="text"
                         placeholder="https://..."
                         value={formData.photo_url}
+                        readOnly={isReadOnlyModal}
                         onChange={(event) => handleFormChange('photo_url', event.target.value)}
                       />
                     ) : (
@@ -1188,6 +1334,7 @@ export default function Halffabricaten() {
                         <button
                           type="button"
                           className="table-action-btn"
+                          disabled={isReadOnlyModal}
                           onClick={() => setIsEditingPhotoUrl(true)}
                         >
                           ✏️ Bewerken
@@ -1200,6 +1347,7 @@ export default function Halffabricaten() {
                     <input
                       type="text"
                       value={formData.name}
+                      readOnly={isReadOnlyModal}
                       onChange={(event) => handleFormChange('name', event.target.value)}
                     />
                   </label>
@@ -1207,6 +1355,7 @@ export default function Halffabricaten() {
                     Categorie
                     <select
                       value={formData.category}
+                      disabled={isReadOnlyModal}
                       onChange={(event) => handleCategoryChange(event.target.value)}
                     >
                       <option value="">Kies een categorie</option>
@@ -1219,6 +1368,7 @@ export default function Halffabricaten() {
                     <button
                       type="button"
                       className="table-action-btn"
+                      disabled={isReadOnlyModal}
                       onClick={() => setShowNewCategoryInput((prev) => !prev)}
                     >
                       Nieuwe categorie
@@ -1229,9 +1379,10 @@ export default function Halffabricaten() {
                           type="text"
                           placeholder="Nieuwe categorie"
                           value={newCategoryName}
+                          readOnly={isReadOnlyModal}
                           onChange={(event) => setNewCategoryName(event.target.value)}
                         />
-                        <button type="button" onClick={handleCreateCategory}>
+                        <button type="button" onClick={handleCreateCategory} disabled={isReadOnlyModal}>
                           Opslaan
                         </button>
                       </div>
@@ -1242,7 +1393,7 @@ export default function Halffabricaten() {
                     <select
                       value={formData.subcategory}
                       onChange={(event) => handleFormChange('subcategory', event.target.value)}
-                      disabled={!formData.category}
+                      disabled={!formData.category || isReadOnlyModal}
                     >
                       <option value="">Kies een subcategorie</option>
                       {modalSubcategoryOptions.map((subcategoryName) => (
@@ -1255,7 +1406,7 @@ export default function Halffabricaten() {
                       type="button"
                       className="table-action-btn"
                       onClick={() => setShowNewSubcategoryInput((prev) => !prev)}
-                      disabled={!formData.category}
+                      disabled={!formData.category || isReadOnlyModal}
                     >
                       Nieuwe subcategorie
                     </button>
@@ -1265,9 +1416,10 @@ export default function Halffabricaten() {
                           type="text"
                           placeholder="Nieuwe subcategorie"
                           value={newSubcategoryName}
+                          readOnly={isReadOnlyModal}
                           onChange={(event) => setNewSubcategoryName(event.target.value)}
                         />
-                        <button type="button" onClick={handleCreateSubcategory}>
+                        <button type="button" onClick={handleCreateSubcategory} disabled={isReadOnlyModal}>
                           Opslaan
                         </button>
                       </div>
@@ -1283,6 +1435,7 @@ export default function Halffabricaten() {
                     type="text"
                     placeholder="Zoek op naam, merk of artikelnummer"
                     value={ingredientSearch}
+                    readOnly={isReadOnlyModal}
                     onChange={(event) => setIngredientSearch(event.target.value)}
                   />
 
@@ -1295,10 +1448,14 @@ export default function Halffabricaten() {
                             type="button"
                             className={`ingredient-picker-item${selectedIngredient?.id === ingredient.id ? ' is-active' : ''}`}
                             onClick={() => {
+                              if (isReadOnlyModal) {
+                                return
+                              }
                               setSelectedIngredient(ingredient)
                               const options = getIngredientUnitOptions(ingredient)
                               setRecipeUnit(options[0] || 'gram')
                             }}
+                            disabled={isReadOnlyModal}
                           >
                             <strong>
                               {ingredient.supplier_product_name}{' '}
@@ -1328,12 +1485,13 @@ export default function Halffabricaten() {
                       step="any"
                       placeholder="Hoeveelheid"
                       value={recipeQuantity}
+                      readOnly={isReadOnlyModal}
                       onChange={(event) => setRecipeQuantity(event.target.value)}
                     />
                     <select
                       value={recipeUnit}
                       onChange={(event) => setRecipeUnit(event.target.value)}
-                      disabled={!selectedIngredient || selectedIngredientUnitOptions.length === 0}
+                      disabled={!selectedIngredient || selectedIngredientUnitOptions.length === 0 || isReadOnlyModal}
                     >
                       {!selectedIngredientUnitOptions.length ? (
                         <option value="">Kies eerst ingrediënt</option>
@@ -1362,7 +1520,7 @@ export default function Halffabricaten() {
                     </p>
                   ) : null}
 
-                  <button type="button" onClick={handleAddIngredientLine}>
+                  <button type="button" onClick={handleAddIngredientLine} disabled={isReadOnlyModal}>
                     Toevoegen aan recept
                   </button>
                 </div>
@@ -1394,6 +1552,7 @@ export default function Halffabricaten() {
                                   step="any"
                                   className="line-edit-input"
                                   value={editingLineQuantity}
+                                  readOnly={isReadOnlyModal}
                                   onChange={(event) => setEditingLineQuantity(event.target.value)}
                                 />
                               ) : (
@@ -1419,21 +1578,37 @@ export default function Halffabricaten() {
                               <div className="line-actions">
                                 {editingLineId === line.id ? (
                                   <>
-                                    <button type="button" className="table-action-btn" onClick={() => handleSaveEditedLine(line)}>
+                                    <button
+                                      type="button"
+                                      className="table-action-btn"
+                                      onClick={() => handleSaveEditedLine(line)}
+                                      disabled={isReadOnlyModal}
+                                    >
                                       Opslaan
                                     </button>
-                                    <button type="button" className="table-action-btn" onClick={cancelEditLine}>
+                                    <button
+                                      type="button"
+                                      className="table-action-btn"
+                                      onClick={cancelEditLine}
+                                      disabled={isReadOnlyModal}
+                                    >
                                       Annuleren
                                     </button>
                                   </>
                                 ) : (
                                   <>
-                                    <button type="button" className="table-action-btn" onClick={() => startEditLine(line)}>
-                                      Bewerken
-                                    </button>
-                                    <button type="button" className="table-action-btn" onClick={() => handleDeleteLine(line)}>
-                                      Verwijderen
-                                    </button>
+                                    {!isReadOnlyModal ? (
+                                      <>
+                                        <button type="button" className="table-action-btn" onClick={() => startEditLine(line)}>
+                                          Bewerken
+                                        </button>
+                                        <button type="button" className="table-action-btn" onClick={() => handleDeleteLine(line)}>
+                                          Verwijderen
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <span>-</span>
+                                    )}
                                   </>
                                 )}
                               </div>
@@ -1466,6 +1641,7 @@ export default function Halffabricaten() {
                       Stap {index + 1}
                       <textarea
                         value={step}
+                        readOnly={isReadOnlyModal}
                         onChange={(event) => handleStepChange(index, event.target.value)}
                       />
                     </label>
@@ -1482,6 +1658,7 @@ export default function Halffabricaten() {
                       type="number"
                       step="any"
                       value={formData.final_yield_amount}
+                      readOnly={isReadOnlyModal}
                       onChange={(event) => handleFormChange('final_yield_amount', event.target.value)}
                     />
                   </label>
@@ -1489,6 +1666,7 @@ export default function Halffabricaten() {
                     Eenheid eindproduct
                     <select
                       value={formData.final_yield_unit}
+                      disabled={isReadOnlyModal}
                       onChange={(event) => handleFormChange('final_yield_unit', event.target.value)}
                     >
                       <option value="">Kies een eenheid</option>
@@ -1503,6 +1681,7 @@ export default function Halffabricaten() {
                     Extra bewaaradvies
                     <textarea
                       value={formData.storage_notes}
+                      readOnly={isReadOnlyModal}
                       onChange={(event) => handleFormChange('storage_notes', event.target.value)}
                     />
                   </label>
@@ -1512,6 +1691,7 @@ export default function Halffabricaten() {
                       type="number"
                       step="1"
                       value={formData.storage_fridge_days}
+                      readOnly={isReadOnlyModal}
                       onChange={(event) =>
                         handleFormChange('storage_fridge_days', event.target.value)
                       }
@@ -1523,6 +1703,7 @@ export default function Halffabricaten() {
                       type="number"
                       step="1"
                       value={formData.storage_freezer_days}
+                      readOnly={isReadOnlyModal}
                       onChange={(event) =>
                         handleFormChange('storage_freezer_days', event.target.value)
                       }
@@ -1543,9 +1724,25 @@ export default function Halffabricaten() {
                 <button type="button" onClick={openLabelModal}>Print dagetiket</button>
               </div>
               <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }}>
-                <button type="button" className="primary-btn" onClick={handleSaveProduct} disabled={isSaving}>
-                  {isSaving ? 'Opslaan...' : 'Opslaan'}
-                </button>
+                {selectedProductId && !isSelectedArchived ? (
+                  <button type="button" onClick={handleArchiveProduct}>
+                    Archiveren
+                  </button>
+                ) : null}
+                {!isSelectedArchived ? (
+                  <button type="button" className="primary-btn" onClick={handleSaveProduct} disabled={isSaving}>
+                    {isSaving ? 'Opslaan...' : 'Opslaan'}
+                  </button>
+                ) : (
+                  <>
+                    <button type="button" className="primary-btn" onClick={handleRestoreProduct}>
+                      Herstellen
+                    </button>
+                    <button type="button" onClick={handleDeleteProduct}>
+                      Verwijderen
+                    </button>
+                  </>
+                )}
                 <button type="button" className="secondary-btn" onClick={closeModal}>Sluiten</button>
               </div>
             </div>

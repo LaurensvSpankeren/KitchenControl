@@ -54,6 +54,40 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getArchivedSemiFinishedProducts() {
+    const response = await fetch(`${API_BASE_URL}/api/semi-finished-products/archived`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch archived semi-finished products: ${response.status}`)
+    }
+    return response.json()
+  },
+  async archiveSemiFinishedProduct(id) {
+    const response = await fetch(`${API_BASE_URL}/api/semi-finished-products/${id}/archive`, {
+      method: 'PUT'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to archive semi-finished product: ${response.status}`)
+    }
+    return response.json()
+  },
+  async restoreSemiFinishedProduct(id) {
+    const response = await fetch(`${API_BASE_URL}/api/semi-finished-products/${id}/restore`, {
+      method: 'PUT'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to restore semi-finished product: ${response.status}`)
+    }
+    return response.json()
+  },
+  async deleteSemiFinishedProduct(id) {
+    const response = await fetch(`${API_BASE_URL}/api/semi-finished-products/${id}`, {
+      method: 'DELETE'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to delete semi-finished product: ${response.status}`)
+    }
+    return response.json()
+  },
   async createSemiFinishedProduct(payload) {
     const response = await fetch(`${API_BASE_URL}/api/semi-finished-products`, {
       method: 'POST',
