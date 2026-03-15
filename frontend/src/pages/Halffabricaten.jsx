@@ -730,15 +730,22 @@ export default function Halffabricaten() {
       return
     }
     const name = formData.name.trim()
+    const finalYieldAmount = Number(formData.final_yield_amount)
+    const hasFinalYieldAmount =
+      formData.final_yield_amount !== '' && !Number.isNaN(finalYieldAmount) && finalYieldAmount > 0
     if (!name) {
       setErrorMessage('Naam is verplicht.')
       return
     }
-    if (formData.final_yield_amount === '' || Number(formData.final_yield_amount) <= 0) {
-      setErrorMessage('Vul eerst eindgewicht of eindinhoud in.')
-      return
+    if (!hasFinalYieldAmount) {
+      const confirmed = window.confirm(
+        'Let op: zonder eindgewicht of eindinhoud kun je dit halffabricaat nog niet gebruiken in gerechten. Weet je zeker dat je nu al wilt opslaan?'
+      )
+      if (!confirmed) {
+        return
+      }
     }
-    if (!formData.final_yield_unit.trim()) {
+    if (hasFinalYieldAmount && !formData.final_yield_unit.trim()) {
       setErrorMessage('Kies eerst een eenheid voor het eindproduct.')
       return
     }
