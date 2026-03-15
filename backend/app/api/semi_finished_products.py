@@ -218,7 +218,10 @@ def _to_calculation_quantity(line: RecipeLine, ingredient: Ingredient) -> Decima
     return quantity
 
 
-def _build_recipe_lines_detail(db: Session, semi_finished_product_id: int) -> dict:
+def _build_recipe_lines_detail(
+    db: Session, semi_finished_product_id: int, active_chain: set[int] | None = None
+) -> dict:
+    chain = set(active_chain or set())
     recipe_lines = (
         db.query(RecipeLine)
         .filter(
@@ -286,6 +289,16 @@ def _build_recipe_lines_detail(db: Session, semi_finished_product_id: int) -> di
             nested = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == line.item_id).first()
             if nested is not None:
                 item_name = nested.name
+                if nested.id != semi_finished_product_id and nested.id not in chain:
+                    nested_detail = _build_semi_finished_detail(db, nested, active_chain=chain)
+                    if nested_detail.get("estimated_cost_total") is not None:
+                        # Veilige eerste stap: neem batchkostprijs van genest halffabricaat over.
+                        line_cost = float(nested_detail["estimated_cost_total"])
+
+                    nested_allergens = _extract_clean_allergens(nested_detail.get("allergens_total"))
+                    if nested_allergens:
+                        allergens_summary = " | ".join(nested_allergens)
+                        allergens_parts.extend(nested_allergens)
 
         serialized_lines.append(
             {
@@ -324,8 +337,28 @@ def _build_recipe_lines_detail(db: Session, semi_finished_product_id: int) -> di
     }
 
 
-def _build_semi_finished_detail(db: Session, item: SemiFinishedProduct) -> dict:
-    lines_data = _build_recipe_lines_detail(db, item.id)
+def _build_semi_finished_detail(
+    db: Session, item: SemiFinishedProduct, active_chain: set[int] | None = None
+) -> dict:
+    chain = set(active_chain or set())
+    if item.id in chain:
+        response = _serialize_semi_finished_product(item)
+        response["recipe_lines"] = []
+        response["recipe_steps"] = []
+        response["estimated_cost_total"] = None
+        response["allergens_total"] = None
+        response["cost_per_final_unit"] = None
+        response["totals"] = {
+            "estimated_cost_total": None,
+            "allergens_total": None,
+            "final_yield_amount": response["final_yield_amount"],
+            "final_yield_unit": response["final_yield_unit"],
+            "cost_per_final_unit": None,
+        }
+        return response
+
+    chain.add(item.id)
+    lines_data = _build_recipe_lines_detail(db, item.id, active_chain=chain)
     steps = (
         db.query(RecipeStep)
         .filter(
