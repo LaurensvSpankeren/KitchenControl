@@ -353,6 +353,7 @@ export default function Halffabricaten() {
   const [labelUseFridge, setLabelUseFridge] = useState(true)
   const [labelUseFreezer, setLabelUseFreezer] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isModalDirty, setIsModalDirty] = useState(false)
   const isReadOnlyModal = isSelectedArchived
 
   async function loadProducts() {
@@ -556,6 +557,7 @@ export default function Halffabricaten() {
     setNewSubcategoryName('')
     setModalMessage('')
     setErrorMessage('')
+    setIsModalDirty(false)
     setIsModalOpen(true)
   }
 
@@ -581,12 +583,17 @@ export default function Halffabricaten() {
     setNewSubcategoryName('')
     setModalMessage('')
     setErrorMessage('')
+    setIsModalDirty(false)
     setIsModalOpen(true)
     await loadDetail(product.id)
   }
 
   async function handleArchiveProduct() {
     if (!selectedProductId) {
+      return
+    }
+    const confirmed = window.confirm('Weet je zeker dat je dit halffabricaat wilt archiveren?')
+    if (!confirmed) {
       return
     }
 
@@ -643,6 +650,14 @@ export default function Halffabricaten() {
     if (isSaving) {
       return
     }
+    if (isModalDirty) {
+      const confirmed = window.confirm(
+        'Je hebt niet-opgeslagen wijzigingen. Weet je zeker dat je wilt sluiten?'
+      )
+      if (!confirmed) {
+        return
+      }
+    }
     setIsModalOpen(false)
   }
 
@@ -651,6 +666,7 @@ export default function Halffabricaten() {
       return
     }
     setFormData((prev) => ({ ...prev, [field]: value }))
+    setIsModalDirty(true)
   }
 
   function handleCategoryChange(value) {
@@ -662,6 +678,7 @@ export default function Halffabricaten() {
       category: value,
       subcategory: ''
     }))
+    setIsModalDirty(true)
   }
 
   function handleStepChange(index, value) {
@@ -673,6 +690,7 @@ export default function Halffabricaten() {
       next[index] = value
       return next
     })
+    setIsModalDirty(true)
   }
 
   function startEditLine(line) {
@@ -718,6 +736,7 @@ export default function Halffabricaten() {
       await loadProducts()
       setModalMessage('Receptregel bijgewerkt.')
       cancelEditLine()
+      setIsModalDirty(true)
     } catch {
       setErrorMessage('Receptregel bijwerken mislukt.')
     }
@@ -742,6 +761,7 @@ export default function Halffabricaten() {
       if (editingLineId === line.id) {
         cancelEditLine()
       }
+      setIsModalDirty(true)
     } catch {
       setErrorMessage('Receptregel verwijderen mislukt.')
     }
@@ -801,6 +821,7 @@ export default function Halffabricaten() {
       await loadDetail(productId)
       setModalMessage('Halffabricaat opgeslagen.')
       setPageMessage('Halffabricaat opgeslagen.')
+      setIsModalDirty(false)
     } catch {
       setErrorMessage('Opslaan mislukt.')
     } finally {
@@ -850,6 +871,7 @@ export default function Halffabricaten() {
       setRecipeQuantity('')
       setRecipeUnit('gram')
       setModalMessage('Ingrediënt toegevoegd aan recept.')
+      setIsModalDirty(true)
     } catch {
       setErrorMessage('Ingrediënt toevoegen mislukt.')
     }
@@ -899,6 +921,7 @@ export default function Halffabricaten() {
       setSemiFinishedRecipeQuantity('')
       setSemiFinishedRecipeUnit('gram')
       setModalMessage('Halffabricaat toegevoegd aan recept.')
+      setIsModalDirty(true)
     } catch {
       setErrorMessage('Halffabricaat toevoegen mislukt.')
     }
@@ -949,6 +972,7 @@ export default function Halffabricaten() {
       })
       await loadSemiFinishedCategories()
       setFormData((prev) => ({ ...prev, subcategory: created.name }))
+      setIsModalDirty(true)
       setShowNewSubcategoryInput(false)
       setNewSubcategoryName('')
       setModalMessage('Subcategorie toegevoegd.')
@@ -1532,6 +1556,7 @@ export default function Halffabricaten() {
                               setSelectedIngredient(ingredient)
                               const options = getIngredientUnitOptions(ingredient)
                               setRecipeUnit(options[0] || 'gram')
+                              setIsModalDirty(true)
                             }}
                             disabled={isReadOnlyModal}
                           >
@@ -1564,11 +1589,17 @@ export default function Halffabricaten() {
                       placeholder="Hoeveelheid"
                       value={recipeQuantity}
                       readOnly={isReadOnlyModal}
-                      onChange={(event) => setRecipeQuantity(event.target.value)}
+                      onChange={(event) => {
+                        setRecipeQuantity(event.target.value)
+                        setIsModalDirty(true)
+                      }}
                     />
                     <select
                       value={recipeUnit}
-                      onChange={(event) => setRecipeUnit(event.target.value)}
+                      onChange={(event) => {
+                        setRecipeUnit(event.target.value)
+                        setIsModalDirty(true)
+                      }}
                       disabled={!selectedIngredient || selectedIngredientUnitOptions.length === 0 || isReadOnlyModal}
                     >
                       {!selectedIngredientUnitOptions.length ? (
@@ -1626,6 +1657,7 @@ export default function Halffabricaten() {
                               }
                               setSelectedSemiFinishedRecipe(item)
                               setSemiFinishedRecipeUnit(item.final_yield_unit || 'gram')
+                              setIsModalDirty(true)
                             }}
                             disabled={isReadOnlyModal}
                           >
@@ -1648,14 +1680,20 @@ export default function Halffabricaten() {
                       placeholder="Hoeveelheid"
                       value={semiFinishedRecipeQuantity}
                       readOnly={isReadOnlyModal}
-                      onChange={(event) => setSemiFinishedRecipeQuantity(event.target.value)}
+                      onChange={(event) => {
+                        setSemiFinishedRecipeQuantity(event.target.value)
+                        setIsModalDirty(true)
+                      }}
                     />
                     <input
                       type="text"
                       placeholder="Eenheid"
                       value={semiFinishedRecipeUnit}
                       readOnly={isReadOnlyModal}
-                      onChange={(event) => setSemiFinishedRecipeUnit(event.target.value)}
+                      onChange={(event) => {
+                        setSemiFinishedRecipeUnit(event.target.value)
+                        setIsModalDirty(true)
+                      }}
                     />
                   </div>
                   {selectedSemiFinishedRecipe ? (
@@ -1698,7 +1736,10 @@ export default function Halffabricaten() {
                                   className="line-edit-input"
                                   value={editingLineQuantity}
                                   readOnly={isReadOnlyModal}
-                                  onChange={(event) => setEditingLineQuantity(event.target.value)}
+                                  onChange={(event) => {
+                                    setEditingLineQuantity(event.target.value)
+                                    setIsModalDirty(true)
+                                  }}
                                 />
                               ) : (
                                 line.quantity
