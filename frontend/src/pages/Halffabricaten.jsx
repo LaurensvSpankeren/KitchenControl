@@ -785,7 +785,7 @@ export default function Halffabricaten() {
         )
       : null
 
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=420,height=620')
+    const printWindow = window.open('', '_blank', 'width=420,height=620')
     if (!printWindow) {
       setErrorMessage('Printvenster kon niet worden geopend.')
       return
@@ -885,13 +885,14 @@ export default function Halffabricaten() {
       return
     }
 
+    const printWindow = window.open('', '_blank', 'width=900,height=700')
+    if (!printWindow) {
+      setErrorMessage('Printvenster kon niet worden geopend.')
+      return
+    }
+
     try {
       const payload = detail || (await apiClient.getSemiFinishedProductDetail(selectedProductId))
-      const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700')
-      if (!printWindow) {
-        setErrorMessage('Printvenster kon niet worden geopend.')
-        return
-      }
       const chefName = getCurrentChefName()
       const printDateTime = new Date().toLocaleString('nl-NL')
 
