@@ -330,6 +330,10 @@ export default function Halffabricaten() {
   const [selectedIngredient, setSelectedIngredient] = useState(null)
   const [recipeQuantity, setRecipeQuantity] = useState('')
   const [recipeUnit, setRecipeUnit] = useState('gram')
+  const [semiFinishedSearch, setSemiFinishedSearch] = useState('')
+  const [selectedSemiFinishedRecipe, setSelectedSemiFinishedRecipe] = useState(null)
+  const [semiFinishedRecipeQuantity, setSemiFinishedRecipeQuantity] = useState('')
+  const [semiFinishedRecipeUnit, setSemiFinishedRecipeUnit] = useState('gram')
 
   const [editingLineId, setEditingLineId] = useState(null)
   const [editingLineQuantity, setEditingLineQuantity] = useState('')
@@ -492,6 +496,16 @@ export default function Halffabricaten() {
     () => getIngredientUnitOptions(selectedIngredient),
     [selectedIngredient]
   )
+  const filteredSemiFinishedOptions = useMemo(() => {
+    const term = semiFinishedSearch.trim().toLowerCase()
+    if (!term) {
+      return []
+    }
+    return products
+      .filter((item) => item.id !== selectedProductId)
+      .filter((item) => String(item.name || '').toLowerCase().includes(term))
+      .slice(0, 25)
+  }, [semiFinishedSearch, products, selectedProductId])
 
   const selectedCategoryRecord = useMemo(
     () =>
@@ -527,6 +541,10 @@ export default function Halffabricaten() {
     setSelectedIngredient(null)
     setRecipeQuantity('')
     setRecipeUnit('gram')
+    setSemiFinishedSearch('')
+    setSelectedSemiFinishedRecipe(null)
+    setSemiFinishedRecipeQuantity('')
+    setSemiFinishedRecipeUnit('gram')
     setEditingLineId(null)
     setEditingLineQuantity('')
     setEditingLineUnit('')
@@ -548,6 +566,10 @@ export default function Halffabricaten() {
     setSelectedIngredient(null)
     setRecipeQuantity('')
     setRecipeUnit('gram')
+    setSemiFinishedSearch('')
+    setSelectedSemiFinishedRecipe(null)
+    setSemiFinishedRecipeQuantity('')
+    setSemiFinishedRecipeUnit('gram')
     setEditingLineId(null)
     setEditingLineQuantity('')
     setEditingLineUnit('')
@@ -830,6 +852,55 @@ export default function Halffabricaten() {
       setModalMessage('Ingrediënt toegevoegd aan recept.')
     } catch {
       setErrorMessage('Ingrediënt toevoegen mislukt.')
+    }
+  }
+
+  async function handleAddSemiFinishedLine() {
+    if (isReadOnlyModal) {
+      return
+    }
+    if (!selectedProductId) {
+      setErrorMessage('Sla eerst het halffabricaat op voordat je ingrediënten toevoegt.')
+      return
+    }
+    if (!selectedSemiFinishedRecipe) {
+      setErrorMessage('Kies eerst een halffabricaat.')
+      return
+    }
+    if (selectedSemiFinishedRecipe.id === selectedProductId) {
+      setErrorMessage('Je kunt een halffabricaat niet aan zichzelf toevoegen.')
+      return
+    }
+
+    const quantity = Number(semiFinishedRecipeQuantity)
+    if (!semiFinishedRecipeQuantity || Number.isNaN(quantity) || quantity <= 0) {
+      setErrorMessage('Vul een geldige hoeveelheid in.')
+      return
+    }
+
+    if (!semiFinishedRecipeUnit.trim()) {
+      setErrorMessage('Vul een eenheid in.')
+      return
+    }
+
+    setErrorMessage('')
+    try {
+      await apiClient.addSemiFinishedProductRecipeLine(selectedProductId, {
+        item_type: 'semi_finished_product',
+        item_id: selectedSemiFinishedRecipe.id,
+        quantity,
+        unit: semiFinishedRecipeUnit.trim()
+      })
+      await loadDetail(selectedProductId)
+      await loadProducts()
+      await loadArchivedProducts()
+      setSemiFinishedSearch('')
+      setSelectedSemiFinishedRecipe(null)
+      setSemiFinishedRecipeQuantity('')
+      setSemiFinishedRecipeUnit('gram')
+      setModalMessage('Halffabricaat toegevoegd aan recept.')
+    } catch {
+      setErrorMessage('Halffabricaat toevoegen mislukt.')
     }
   }
 
@@ -1529,6 +1600,73 @@ export default function Halffabricaten() {
 
                   <button type="button" onClick={handleAddIngredientLine} disabled={isReadOnlyModal}>
                     Toevoegen aan recept
+                  </button>
+                </div>
+
+                <div className="sfp-ingredient-add" style={{ marginTop: '0.9rem' }}>
+                  <input
+                    type="text"
+                    placeholder="Zoek halffabricaat op naam"
+                    value={semiFinishedSearch}
+                    readOnly={isReadOnlyModal}
+                    onChange={(event) => setSemiFinishedSearch(event.target.value)}
+                  />
+
+                  {semiFinishedSearch.trim() ? (
+                    filteredSemiFinishedOptions.length > 0 ? (
+                      <div className="ingredient-picker">
+                        {filteredSemiFinishedOptions.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={`ingredient-picker-item${selectedSemiFinishedRecipe?.id === item.id ? ' is-active' : ''}`}
+                            onClick={() => {
+                              if (isReadOnlyModal) {
+                                return
+                              }
+                              setSelectedSemiFinishedRecipe(item)
+                              setSemiFinishedRecipeUnit(item.final_yield_unit || 'gram')
+                            }}
+                            disabled={isReadOnlyModal}
+                          >
+                            <strong>{item.name}</strong>
+                            <span className="ingredient-picker-meta">
+                              Categorie: {item.category || '-'} | Subcategorie: {item.subcategory || '-'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p>Geen halffabricaten gevonden.</p>
+                    )
+                  ) : null}
+
+                  <div className="recipe-line-inline">
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="Hoeveelheid"
+                      value={semiFinishedRecipeQuantity}
+                      readOnly={isReadOnlyModal}
+                      onChange={(event) => setSemiFinishedRecipeQuantity(event.target.value)}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Eenheid"
+                      value={semiFinishedRecipeUnit}
+                      readOnly={isReadOnlyModal}
+                      onChange={(event) => setSemiFinishedRecipeUnit(event.target.value)}
+                    />
+                  </div>
+                  {selectedSemiFinishedRecipe ? (
+                    <p className="ingredient-selected-info">
+                      Gekozen halffabricaat: <strong>{selectedSemiFinishedRecipe.name}</strong> | Eenheid:{' '}
+                      {selectedSemiFinishedRecipe.final_yield_unit || '-'}
+                    </p>
+                  ) : null}
+
+                  <button type="button" onClick={handleAddSemiFinishedLine} disabled={isReadOnlyModal}>
+                    Halffabricaat toevoegen aan recept
                   </button>
                 </div>
 
