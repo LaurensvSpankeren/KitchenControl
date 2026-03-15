@@ -332,6 +332,7 @@ export default function Halffabricaten() {
   const [editingLineId, setEditingLineId] = useState(null)
   const [editingLineQuantity, setEditingLineQuantity] = useState('')
   const [editingLineUnit, setEditingLineUnit] = useState('')
+  const [isEditingPhotoUrl, setIsEditingPhotoUrl] = useState(true)
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [showNewSubcategoryInput, setShowNewSubcategoryInput] = useState(false)
@@ -497,6 +498,7 @@ export default function Halffabricaten() {
     setEditingLineId(null)
     setEditingLineQuantity('')
     setEditingLineUnit('')
+    setIsEditingPhotoUrl(true)
     setShowNewCategoryInput(false)
     setNewCategoryName('')
     setShowNewSubcategoryInput(false)
@@ -516,6 +518,7 @@ export default function Halffabricaten() {
     setEditingLineId(null)
     setEditingLineQuantity('')
     setEditingLineUnit('')
+    setIsEditingPhotoUrl(!String(product.photo_url || '').trim())
     setShowNewCategoryInput(false)
     setNewCategoryName('')
     setShowNewSubcategoryInput(false)
@@ -1151,12 +1154,46 @@ export default function Halffabricaten() {
                 <div className="modal-grid two-col calm-grid">
                   <label>
                     Foto URL
-                    <input
-                      type="text"
-                      placeholder="https://..."
-                      value={formData.photo_url}
-                      onChange={(event) => handleFormChange('photo_url', event.target.value)}
-                    />
+                    {!formData.photo_url.trim() || isEditingPhotoUrl ? (
+                      <input
+                        type="text"
+                        placeholder="https://..."
+                        value={formData.photo_url}
+                        onChange={(event) => handleFormChange('photo_url', event.target.value)}
+                      />
+                    ) : (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <a
+                          href={formData.photo_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: 'block', wordBreak: 'break-all', marginBottom: '0.5rem' }}
+                        >
+                          {formData.photo_url}
+                        </a>
+                        <img
+                          src={formData.photo_url}
+                          alt="Foto preview"
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            maxWidth: '220px',
+                            maxHeight: '140px',
+                            objectFit: 'cover',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '8px',
+                            marginBottom: '0.5rem'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="table-action-btn"
+                          onClick={() => setIsEditingPhotoUrl(true)}
+                        >
+                          ✏️ Bewerken
+                        </button>
+                      </div>
+                    )}
                   </label>
                   <label>
                     Naam
