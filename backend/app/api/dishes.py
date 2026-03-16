@@ -1,6 +1,10 @@
+from io import BytesIO
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from PIL import Image, ImageOps, UnidentifiedImageError
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -17,6 +21,8 @@ from app.api.semi_finished_products import (
 )
 
 router = APIRouter()
+UPLOADS_DIR = Path("uploads")
+UPLOADS_DISHES_DIR = UPLOADS_DIR / "dishes"
 
 
 def _parse_optional_float(payload: dict, field_name: str) -> float | None:
@@ -129,6 +135,23 @@ def _build_duplicate_name(db: Session, original_name: str) -> str:
         if exists is None:
             return candidate
         index += 1
+
+
+def _save_dish_photo(dish_id: int, uploaded_file: UploadFile) -> str:
+    try:
+        raw_bytes = uploaded_file.file.read()
+        image = Image.open(BytesIO(raw_bytes))
+        image = ImageOps.exif_transpose(image)
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Ongeldig afbeeldingsbestand.") from exc
+
+    image = image.convert("RGB")
+    image.thumbnail((1200, 1200))
+
+    UPLOADS_DISHES_DIR.mkdir(parents=True, exist_ok=True)
+    target_path = UPLOADS_DISHES_DIR / f"dish_{dish_id}.jpg"
+    image.save(target_path, format="JPEG", quality=82, optimize=True)
+    return f"/uploads/dishes/{target_path.name}"
 
 
 def _build_dish_detail(db: Session, item: Dish) -> dict:
@@ -345,6 +368,26 @@ def update_dish(dish_id: int, payload: dict, db: Session = Depends(get_db)) -> d
         raise HTTPException(status_code=404, detail="Dish not found")
 
     _apply_dish_payload(item, payload)
+    db.commit()
+    db.refresh(item)
+    return _serialize_dish(item)
+
+
+@router.post("/api/dishes/{dish_id}/photo", tags=["dishes"])
+def upload_dish_photo(
+    dish_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict:
+    item = db.query(Dish).filter(Dish.id == dish_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Dish not found")
+
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Bestand moet een afbeelding zijn.")
+
+    item.photo_path = _save_dish_photo(dish_id, file)
     db.commit()
     db.refresh(item)
     return _serialize_dish(item)

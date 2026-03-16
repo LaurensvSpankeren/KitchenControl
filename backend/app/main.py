@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.health import router as health_router
 from app.api.dish_categories import router as dish_categories_router
@@ -12,6 +15,7 @@ from app.db.base import Base
 from app.db.session import engine
 
 app = FastAPI(title="KitchenControl API")
+UPLOADS_DIR = Path("uploads")
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,6 +31,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
 
 
@@ -42,3 +47,4 @@ app.include_router(ingredients_router)
 app.include_router(imports_router)
 app.include_router(semi_finished_categories_router)
 app.include_router(semi_finished_products_router)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")

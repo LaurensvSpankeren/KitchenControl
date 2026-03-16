@@ -401,6 +401,19 @@ export const apiClient = {
     }
     return response.json()
   },
+  async uploadDishPhoto(dishId, file) {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${dishId}/photo`, {
+      method: 'POST',
+      body: formData
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to upload dish photo: ${response.status}`)
+    }
+    return response.json()
+  },
   getStatus() {
     return {
       message: 'API placeholder: requests worden later toegevoegd.',

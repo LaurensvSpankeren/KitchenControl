@@ -4,6 +4,7 @@ import { apiClient } from '../api/client'
 
 const initialForm = {
   name: '',
+  photo_path: '',
   category_id: '',
   subcategory_id: '',
   vat_rate: '',
@@ -157,9 +158,21 @@ function formatPackageVolumeLabel(ingredient) {
   return `${formatCompactNumber(amount, 4).replace(/,?0+$/, '')} ${unit}`
 }
 
+function resolvePhotoUrl(path) {
+  const value = String(path || '').trim()
+  if (!value) {
+    return ''
+  }
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return value
+  }
+  return `${apiClient.getStatus().baseUrl}${value.startsWith('/') ? value : `/${value}`}`
+}
+
 function mapDishToForm(dish) {
   return {
     name: dish.name || '',
+    photo_path: dish.photo_path || '',
     category_id: dish.category_id ?? '',
     subcategory_id: dish.subcategory_id ?? '',
     vat_rate: dish.vat_rate ?? '',
@@ -174,6 +187,7 @@ function mapDishToForm(dish) {
 function mapFormToPayload(form) {
   return {
     name: form.name.trim(),
+    photo_path: form.photo_path || null,
     category_id: form.category_id === '' ? null : Number(form.category_id),
     subcategory_id: form.subcategory_id === '' ? null : Number(form.subcategory_id),
     vat_rate: form.vat_rate === '' ? null : Number(form.vat_rate),
@@ -204,6 +218,7 @@ export default function Gerechten() {
   const [detail, setDetail] = useState(null)
   const [steps, setSteps] = useState(EMPTY_STEPS)
   const [salePriceInput, setSalePriceInput] = useState('')
+  const [photoCacheBuster, setPhotoCacheBuster] = useState(Date.now())
 
   const [ingredientSearch, setIngredientSearch] = useState('')
   const [selectedIngredient, setSelectedIngredient] = useState(null)
@@ -236,6 +251,17 @@ export default function Gerechten() {
 
   const uiStyles = {
     viewModeSwitch: { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' },
+    photoPreviewWrap: { marginTop: '0.5rem' },
+    photoPreview: {
+      display: 'block',
+      width: '100%',
+      maxWidth: '220px',
+      maxHeight: '140px',
+      objectFit: 'cover',
+      border: '1px solid #d1d5db',
+      borderRadius: '8px',
+      marginBottom: '0.5rem'
+    },
     recipeAddBlock: {
       border: '1px solid #e5e7eb',
       borderRadius: '8px',
@@ -582,6 +608,7 @@ export default function Gerechten() {
     setNewCategoryName('')
     setShowNewSubcategoryInput(false)
     setNewSubcategoryName('')
+    setPhotoCacheBuster(Date.now())
     setModalMessage('')
     setErrorMessage('')
     setIsModalDirty(false)
@@ -607,6 +634,7 @@ export default function Gerechten() {
     setNewCategoryName('')
     setShowNewSubcategoryInput(false)
     setNewSubcategoryName('')
+    setPhotoCacheBuster(Date.now())
     setModalMessage('')
     setErrorMessage('')
     setIsModalDirty(false)
@@ -727,6 +755,36 @@ export default function Gerechten() {
       setIsModalDirty(true)
     } catch {
       setErrorMessage('Subcategorie aanmaken mislukt.')
+    }
+  }
+
+  async function handleDishPhotoUpload(event) {
+    if (isReadOnlyModal) {
+      return
+    }
+
+    const file = event.target.files?.[0] || null
+    event.target.value = ''
+    if (!file) {
+      return
+    }
+
+    if (!selectedDishId) {
+      setErrorMessage('Sla eerst het gerecht op voordat je een foto uploadt.')
+      return
+    }
+
+    setErrorMessage('')
+    try {
+      const updatedDish = await apiClient.uploadDishPhoto(selectedDishId, file)
+      setFormData((prev) => ({ ...prev, photo_path: updatedDish.photo_path || '' }))
+      setPhotoCacheBuster(Date.now())
+      await loadDishes()
+      await loadArchivedDishes()
+      await loadDetail(selectedDishId)
+      setModalMessage('Foto geüpload.')
+    } catch {
+      setErrorMessage('Foto uploaden mislukt.')
     }
   }
 
@@ -1088,6 +1146,10 @@ export default function Gerechten() {
   }
 
   const allergensText = detail?.allergens_total || 'Geen brondata allergenen beschikbaar'
+  const resolvedPhotoPreviewUrl = resolvePhotoUrl(detail?.photo_path || formData.photo_path)
+  const photoPreviewUrl = resolvedPhotoPreviewUrl
+    ? `${resolvedPhotoPreviewUrl}?v=${photoCacheBuster}`
+    : ''
 
   return (
     <div>
@@ -1280,6 +1342,22 @@ export default function Gerechten() {
               <section className="modal-section">
                 <h4>Algemeen</h4>
                 <div className="modal-grid two-col calm-grid">
+                  <label>
+                    Foto
+                    {photoPreviewUrl ? (
+                      <div style={uiStyles.photoPreviewWrap}>
+                        <img src={photoPreviewUrl} alt="Gerechtfoto preview" style={uiStyles.photoPreview} />
+                      </div>
+                    ) : (
+                      <p className="ingredient-selected-info">Nog geen foto geüpload.</p>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isReadOnlyModal}
+                      onChange={handleDishPhotoUpload}
+                    />
+                  </label>
                   <label>
                     Naam
                     <input
