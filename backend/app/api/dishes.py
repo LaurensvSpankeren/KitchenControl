@@ -1,10 +1,20 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.dish import Dish
+from app.models.ingredient import Ingredient
 from app.models.recipe_line import RecipeLine
 from app.models.recipe_step import RecipeStep
+from app.models.semi_finished_product import SemiFinishedProduct
+from app.api.semi_finished_products import (
+    _build_semi_finished_detail,
+    _convert_quantity_to_unit,
+    _extract_clean_allergens,
+    _to_calculation_quantity,
+)
 
 router = APIRouter()
 
@@ -135,9 +145,173 @@ def _build_dish_detail(db: Session, item: Dish) -> dict:
         .all()
     )
 
+    serialized_lines: list[dict] = []
+    estimated_cost_total_decimal = Decimal("0")
+    has_any_line_cost = False
+    allergens_parts: list[str] = []
+
+    for line in lines:
+        item_name = None
+        item_brand = None
+        allergens_summary = None
+        serialized_line = {
+            "id": line.id,
+            "parent_type": line.parent_type,
+            "parent_id": line.parent_id,
+            "item_type": line.item_type,
+            "item_id": line.item_id,
+            "item_name": None,
+            "item_brand": None,
+            "quantity": float(line.quantity),
+            "unit": line.unit,
+            "sort_order": line.sort_order,
+            "created_at": line.created_at.isoformat() if line.created_at is not None else None,
+            "updated_at": line.updated_at.isoformat() if line.updated_at is not None else None,
+            "line_cost": None,
+            "line_cost_share_percent": None,
+            "allergens_summary": None,
+        }
+
+        if line.item_type == "ingredient":
+            ingredient = db.query(Ingredient).filter(Ingredient.id == line.item_id).first()
+            if ingredient is not None:
+                item_name = ingredient.supplier_product_name
+                item_brand = ingredient.supplier_brand
+
+                if (
+                    ingredient.supplier_price_ex_vat is not None
+                    and ingredient.calculation_quantity_per_package is not None
+                    and Decimal(ingredient.calculation_quantity_per_package) != 0
+                ):
+                    quantity_for_cost = _to_calculation_quantity(line, ingredient)
+                    line_cost_decimal = (
+                        quantity_for_cost
+                        * Decimal(ingredient.supplier_price_ex_vat)
+                        / Decimal(ingredient.calculation_quantity_per_package)
+                    )
+                    serialized_line["line_cost"] = float(line_cost_decimal)
+                    estimated_cost_total_decimal += line_cost_decimal
+                    has_any_line_cost = True
+                elif (
+                    ingredient.supplier_price_ex_vat is not None
+                    and ingredient.conversion_factor_to_base is not None
+                    and Decimal(ingredient.conversion_factor_to_base) != 0
+                ):
+                    quantity_for_cost = _to_calculation_quantity(line, ingredient)
+                    line_cost_decimal = (
+                        quantity_for_cost
+                        * Decimal(ingredient.supplier_price_ex_vat)
+                        / Decimal(ingredient.conversion_factor_to_base)
+                    )
+                    serialized_line["line_cost"] = float(line_cost_decimal)
+                    estimated_cost_total_decimal += line_cost_decimal
+                    has_any_line_cost = True
+
+                allergies: list[str] = []
+                for value in [
+                    (ingredient.supplier_allergens_raw or "").strip(),
+                    (ingredient.internal_allergens_extra or "").strip(),
+                    (ingredient.cross_contamination_notes or "").strip(),
+                ]:
+                    allergies.extend(_extract_clean_allergens(value))
+                if allergies:
+                    unique_allergies = list(dict.fromkeys(allergies))
+                    allergens_summary = " | ".join(unique_allergies)
+                    allergens_parts.extend(unique_allergies)
+
+        elif line.item_type == "semi_finished_product":
+            nested = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == line.item_id).first()
+            if nested is not None:
+                item_name = nested.name
+                nested_detail = _build_semi_finished_detail(db, nested)
+                nested_cost_total = nested_detail.get("estimated_cost_total")
+                nested_final_yield_amount = nested_detail.get("final_yield_amount")
+                nested_final_yield_unit = nested_detail.get("final_yield_unit")
+
+                if (
+                    nested_cost_total is not None
+                    and nested_final_yield_amount is not None
+                    and Decimal(str(nested_final_yield_amount)) > 0
+                    and nested_final_yield_unit
+                ):
+                    converted_quantity = _convert_quantity_to_unit(
+                        Decimal(line.quantity),
+                        line.unit,
+                        nested_final_yield_unit,
+                    )
+                    if converted_quantity is not None:
+                        cost_per_final_unit = Decimal(str(nested_cost_total)) / Decimal(
+                            str(nested_final_yield_amount)
+                        )
+                        line_cost_decimal = cost_per_final_unit * converted_quantity
+                        serialized_line["line_cost"] = float(line_cost_decimal)
+                        estimated_cost_total_decimal += line_cost_decimal
+                        has_any_line_cost = True
+
+                nested_allergens = _extract_clean_allergens(nested_detail.get("allergens_total"))
+                if nested_allergens:
+                    allergens_summary = " | ".join(nested_allergens)
+                    allergens_parts.extend(nested_allergens)
+
+        serialized_line["item_name"] = item_name
+        serialized_line["item_brand"] = item_brand
+        serialized_line["allergens_summary"] = allergens_summary
+
+        serialized_lines.append(serialized_line)
+
+    estimated_cost_total = float(estimated_cost_total_decimal) if has_any_line_cost else None
+    allergens_total = " | ".join(dict.fromkeys([part for part in allergens_parts if part])) or None
+
+    if estimated_cost_total and estimated_cost_total > 0:
+        for serialized_line in serialized_lines:
+            if serialized_line["line_cost"] is not None:
+                serialized_line["line_cost_share_percent"] = round(
+                    (serialized_line["line_cost"] / estimated_cost_total) * 100, 2
+                )
+
+    sale_price_excl_vat = None
+    gross_profit = None
+    gross_margin_percent = None
+    food_cost_percent = None
+    suggested_price_excl_vat = None
+    suggested_price_incl_vat = None
+
+    if (
+        estimated_cost_total is not None
+        and item.sale_price_incl_vat is not None
+        and item.vat_rate is not None
+    ):
+        vat_multiplier = Decimal("1") + (Decimal(item.vat_rate) / Decimal("100"))
+        if vat_multiplier != 0:
+            sale_price_excl_vat_decimal = Decimal(item.sale_price_incl_vat) / vat_multiplier
+            sale_price_excl_vat = float(sale_price_excl_vat_decimal)
+
+            gross_profit_decimal = sale_price_excl_vat_decimal - estimated_cost_total_decimal
+            gross_profit = float(gross_profit_decimal)
+
+            if sale_price_excl_vat_decimal != 0:
+                gross_margin_percent = float(
+                    (gross_profit_decimal / sale_price_excl_vat_decimal) * Decimal("100")
+                )
+                food_cost_percent = float(
+                    (estimated_cost_total_decimal / sale_price_excl_vat_decimal) * Decimal("100")
+                )
+
+            suggested_price_excl_vat_decimal = estimated_cost_total_decimal / Decimal("0.30")
+            suggested_price_excl_vat = float(suggested_price_excl_vat_decimal)
+            suggested_price_incl_vat = float(suggested_price_excl_vat_decimal * vat_multiplier)
+
     response = _serialize_dish(item)
-    response["recipe_lines"] = _serialize_recipe_lines(lines)
+    response["recipe_lines"] = serialized_lines
     response["recipe_steps"] = _serialize_recipe_steps(steps)
+    response["estimated_cost_total"] = estimated_cost_total
+    response["allergens_total"] = allergens_total
+    response["sale_price_excl_vat"] = sale_price_excl_vat
+    response["gross_profit"] = gross_profit
+    response["gross_margin_percent"] = gross_margin_percent
+    response["food_cost_percent"] = food_cost_percent
+    response["suggested_price_excl_vat"] = suggested_price_excl_vat
+    response["suggested_price_incl_vat"] = suggested_price_incl_vat
     return response
 
 
