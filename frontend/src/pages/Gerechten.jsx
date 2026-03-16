@@ -7,7 +7,7 @@ const initialForm = {
   photo_path: '',
   category_id: '',
   subcategory_id: '',
-  vat_rate: '',
+  vat_rate: '9',
   menu_name: '',
   menu_description: '',
   kitchen_note: '',
@@ -596,6 +596,53 @@ export default function Gerechten() {
     () => selectedCategoryRecord?.subcategories || [],
     [selectedCategoryRecord]
   )
+
+  const liveCalculation = useMemo(() => {
+    const estimatedCostTotal = Number(detail?.estimated_cost_total)
+    const vatRate = Number(formData.vat_rate)
+    const currentSalePriceInput =
+      salePriceInput.trim() !== ''
+        ? salePriceInput.trim()
+        : String(formData.sale_price_incl_vat ?? '').trim()
+    const salePriceIncl = Number(currentSalePriceInput)
+
+    if (
+      Number.isNaN(estimatedCostTotal) ||
+      Number.isNaN(vatRate) ||
+      Number.isNaN(salePriceIncl)
+    ) {
+      return null
+    }
+
+    const vatMultiplier = 1 + vatRate / 100
+    if (!Number.isFinite(vatMultiplier) || vatMultiplier <= 0) {
+      return null
+    }
+
+    const salePriceExcl = salePriceIncl / vatMultiplier
+    if (!Number.isFinite(salePriceExcl) || salePriceExcl <= 0) {
+      return null
+    }
+
+    const grossProfit = salePriceExcl - estimatedCostTotal
+    const grossMarginPercent = (grossProfit / salePriceExcl) * 100
+    const foodCostPercent = (estimatedCostTotal / salePriceExcl) * 100
+
+    if (
+      !Number.isFinite(grossProfit) ||
+      !Number.isFinite(grossMarginPercent) ||
+      !Number.isFinite(foodCostPercent)
+    ) {
+      return null
+    }
+
+    return {
+      sale_price_excl_vat: salePriceExcl,
+      gross_profit: grossProfit,
+      gross_margin_percent: grossMarginPercent,
+      food_cost_percent: foodCostPercent
+    }
+  }, [detail?.estimated_cost_total, formData.sale_price_incl_vat, formData.vat_rate, salePriceInput])
 
   function getCategoryNameById(categoryId) {
     if (categoryId === null || categoryId === undefined || categoryId === '') {
@@ -2051,13 +2098,15 @@ export default function Gerechten() {
                 <div className="modal-grid two-col calm-grid">
                   <label>
                     BTW %
-                    <input
-                      type="number"
-                      step="any"
+                    <select
                       value={formData.vat_rate}
-                      readOnly={isReadOnlyModal}
+                      disabled={isReadOnlyModal}
                       onChange={(event) => handleFormChange('vat_rate', event.target.value)}
-                    />
+                    >
+                      <option value="9">9</option>
+                      <option value="21">21</option>
+                      <option value="0">0</option>
+                    </select>
                   </label>
                   <label>
                     Kostprijs gerecht
@@ -2090,19 +2139,43 @@ export default function Gerechten() {
                   </label>
                   <label>
                     Verkoopprijs excl BTW
-                    <input type="text" value={formatCurrency(detail?.sale_price_excl_vat)} readOnly />
+                    <input
+                      type="text"
+                      value={formatCurrency(
+                        liveCalculation?.sale_price_excl_vat ?? detail?.sale_price_excl_vat
+                      )}
+                      readOnly
+                    />
                   </label>
                   <label>
                     Brutowinst
-                    <input type="text" value={formatCurrency(detail?.gross_profit)} readOnly />
+                    <input
+                      type="text"
+                      value={formatCurrency(
+                        liveCalculation?.gross_profit ?? detail?.gross_profit
+                      )}
+                      readOnly
+                    />
                   </label>
                   <label>
                     Brutowinst %
-                    <input type="text" value={formatPercent(detail?.gross_margin_percent)} readOnly />
+                    <input
+                      type="text"
+                      value={formatPercent(
+                        liveCalculation?.gross_margin_percent ?? detail?.gross_margin_percent
+                      )}
+                      readOnly
+                    />
                   </label>
                   <label>
                     Foodcost %
-                    <input type="text" value={formatPercent(detail?.food_cost_percent)} readOnly />
+                    <input
+                      type="text"
+                      value={formatPercent(
+                        liveCalculation?.food_cost_percent ?? detail?.food_cost_percent
+                      )}
+                      readOnly
+                    />
                   </label>
                 </div>
               </section>
