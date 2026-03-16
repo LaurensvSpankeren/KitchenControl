@@ -169,6 +169,74 @@ function resolvePhotoUrl(path) {
   return `${apiClient.getStatus().baseUrl}${value.startsWith('/') ? value : `/${value}`}`
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function getCurrentChefName() {
+  if (typeof window === 'undefined') {
+    return '-'
+  }
+
+  const candidateKeys = ['currentUser', 'user', 'kc_user', 'kitchencontrol_user']
+  for (const key of candidateKeys) {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) {
+      continue
+    }
+    try {
+      const parsed = JSON.parse(raw)
+      const name =
+        parsed?.name ||
+        parsed?.full_name ||
+        parsed?.fullName ||
+        parsed?.username ||
+        parsed?.email
+      if (name) {
+        return String(name)
+      }
+    } catch {
+      // Ignore malformed storage content and continue fallback chain.
+    }
+  }
+
+  return '-'
+}
+
+function getPrintBootstrapScript() {
+  return `
+    <script>
+      (function () {
+        let hasPrinted = false;
+        function triggerPrint() {
+          if (hasPrinted) {
+            return;
+          }
+          hasPrinted = true;
+          try { window.focus(); } catch (error) {}
+          window.print();
+        }
+
+        window.addEventListener('load', function () {
+          setTimeout(triggerPrint, 350);
+        });
+
+        setTimeout(triggerPrint, 1400);
+
+        const fallbackButton = document.getElementById('manual-print-btn');
+        if (fallbackButton) {
+          fallbackButton.addEventListener('click', triggerPrint);
+        }
+      })();
+    </script>
+  `
+}
+
 function mapDishToForm(dish) {
   return {
     name: dish.name || '',
@@ -1145,6 +1213,190 @@ export default function Gerechten() {
     }
   }
 
+  async function handlePrintRecipe() {
+    if (!selectedDishId) {
+      setErrorMessage('Sla eerst het gerecht op.')
+      return
+    }
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700')
+    if (!printWindow) {
+      setErrorMessage('Printvenster kon niet worden geopend.')
+      return
+    }
+
+    try {
+      const payload = await apiClient.getDishPrint(selectedDishId)
+      const chefName = getCurrentChefName()
+      const printDateTime = new Date().toLocaleString('nl-NL')
+      const categoryName = getCategoryNameById(payload.category_id)
+      const subcategoryName = getSubcategoryNameById(payload.subcategory_id)
+      const photoUrl = resolvePhotoUrl(payload.photo_path)
+
+      const lines = (payload.recipe_lines || [])
+        .map(
+          (line) =>
+            `<tr>
+              <td>${escapeHtml(line.item_name || '-')}</td>
+              <td>${escapeHtml(line.item_brand || '-')}</td>
+              <td>${escapeHtml(line.quantity ?? '-')}</td>
+              <td>${escapeHtml(line.unit || '-')}</td>
+              <td>${escapeHtml(formatCurrency(line.line_cost))}</td>
+              <td>${escapeHtml(formatPercent(line.line_cost_share_percent))}</td>
+            </tr>`
+        )
+        .join('')
+
+      const stepsHtml = (payload.recipe_steps || [])
+        .map((step) => `<li>${escapeHtml(step.instruction || '')}</li>`)
+        .join('')
+
+      const photoHtml = photoUrl ? `<img src="${escapeHtml(photoUrl)}" alt="Gerechtfoto" />` : ''
+      const photoBlockHtml = photoHtml ? `<div class="photo">${photoHtml}</div>` : ''
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Keukenrecept - ${escapeHtml(payload.name || '')}</title>
+            <style>
+              @page { size: A4; margin: 14mm; }
+              body { font-family: Arial, sans-serif; color: #111; margin: 0; }
+              .sheet { width: 100%; }
+              .header {
+                display: grid;
+                grid-template-columns: 1fr 130px;
+                gap: 14px;
+                align-items: start;
+                margin-bottom: 14px;
+              }
+              .title { font-size: 30px; font-weight: 700; margin: 0 0 8px; line-height: 1.1; }
+              .subtitle { font-size: 15px; margin: 0 0 10px; color: #333; }
+              .meta-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 4px 14px;
+                font-size: 12px;
+              }
+              .photo {
+                width: 130px;
+                height: 95px;
+                border: 1px solid #222;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+              }
+              .photo img { width: 100%; height: 100%; object-fit: cover; }
+              h2 { margin: 16px 0 8px; font-size: 16px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; }
+              th, td { border: 1px solid #d0d0d0; padding: 6px; text-align: left; vertical-align: top; }
+              th { background: #f5f5f5; font-weight: 600; }
+              ol { margin: 8px 0 0 20px; padding: 0; }
+              li { margin-bottom: 4px; line-height: 1.4; }
+              .note-block {
+                margin-top: 14px;
+                padding-top: 8px;
+                border-top: 1px solid #ccc;
+                font-size: 12px;
+                line-height: 1.5;
+              }
+              .print-fallback-wrap {
+                margin: 0 0 10px;
+                text-align: right;
+              }
+              .print-fallback-btn {
+                border: 1px solid #222;
+                background: #fff;
+                color: #111;
+                font-size: 12px;
+                padding: 5px 8px;
+                cursor: pointer;
+              }
+              @media print {
+                .print-fallback-wrap { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="sheet">
+              <div class="print-fallback-wrap">
+                <button id="manual-print-btn" class="print-fallback-btn" type="button">
+                  Klik hier als printen niet automatisch start
+                </button>
+              </div>
+              <div class="header">
+                <div>
+                  <h1 class="title">${escapeHtml(payload.name || '')}</h1>
+                  ${
+                    payload.menu_name
+                      ? `<div class="subtitle">${escapeHtml(payload.menu_name)}</div>`
+                      : ''
+                  }
+                  <div class="meta-grid">
+                    <div><strong>Categorie:</strong> ${escapeHtml(categoryName)}</div>
+                    <div><strong>Subcategorie:</strong> ${escapeHtml(subcategoryName)}</div>
+                    <div><strong>Chef:</strong> ${escapeHtml(chefName)}</div>
+                    <div><strong>Printdatum:</strong> ${escapeHtml(printDateTime)}</div>
+                    <div><strong>Kostprijs gerecht:</strong> ${escapeHtml(
+                      formatCurrency(payload.estimated_cost_total)
+                    )}</div>
+                    <div><strong>Verkoopprijs incl btw:</strong> ${escapeHtml(
+                      formatCurrency(payload.sale_price_incl_vat)
+                    )}</div>
+                    <div><strong>Verkoopprijs excl btw:</strong> ${escapeHtml(
+                      formatCurrency(payload.sale_price_excl_vat)
+                    )}</div>
+                    <div><strong>Brutowinst:</strong> ${escapeHtml(
+                      formatCurrency(payload.gross_profit)
+                    )}</div>
+                    <div><strong>Brutowinst %:</strong> ${escapeHtml(
+                      formatPercent(payload.gross_margin_percent)
+                    )}</div>
+                    <div><strong>Foodcost %:</strong> ${escapeHtml(
+                      formatPercent(payload.food_cost_percent)
+                    )}</div>
+                  </div>
+                </div>
+              ${photoBlockHtml}
+            </div>
+              <h2>Ingrediënten / receptregels</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Merk</th>
+                    <th>Hoeveelheid</th>
+                    <th>Eenheid</th>
+                    <th>Regelprijs</th>
+                    <th>% van kostprijs</th>
+                  </tr>
+                </thead>
+                <tbody>${lines || '<tr><td colspan="6">Geen receptregels</td></tr>'}</tbody>
+              </table>
+              <h2>Receptstappen</h2>
+              <ol>${stepsHtml || '<li>-</li>'}</ol>
+              <div class="note-block">
+                <strong>Allergenen:</strong> ${escapeHtml(
+                  payload.allergens_total || 'Geen brondata allergenen beschikbaar'
+                )}
+              </div>
+              <div class="note-block">
+                <strong>Keukenopmerking:</strong> ${escapeHtml(payload.kitchen_note || '-')}
+              </div>
+              <div class="note-block">
+                <strong>Opmaakadvies:</strong> ${escapeHtml(payload.plating_advice || '-')}
+              </div>
+            </div>
+            ${getPrintBootstrapScript()}
+          </body>
+        </html>
+      `)
+      printWindow.document.close()
+    } catch {
+      setErrorMessage('Printen mislukt.')
+    }
+  }
+
   const allergensText = detail?.allergens_total || 'Geen brondata allergenen beschikbaar'
   const resolvedPhotoPreviewUrl = resolvePhotoUrl(detail?.photo_path || formData.photo_path)
   const photoPreviewUrl = resolvedPhotoPreviewUrl
@@ -1850,6 +2102,11 @@ export default function Gerechten() {
 
             <div className="modal-actions sfp-actions">
               <div style={uiStyles.modalActionsRight}>
+                {selectedDishId ? (
+                  <button type="button" className="table-action-btn" onClick={handlePrintRecipe}>
+                    Print keukenrecept
+                  </button>
+                ) : null}
                 {!isSelectedArchived ? (
                   <>
                     {selectedDishId ? (

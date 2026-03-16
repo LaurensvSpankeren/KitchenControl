@@ -691,3 +691,30 @@ def get_dish_detail(dish_id: int, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(status_code=404, detail="Dish not found")
 
     return _build_dish_detail(db, item)
+
+
+@router.get("/api/dishes/{dish_id}/print", tags=["dishes"])
+def get_dish_print_payload(dish_id: int, db: Session = Depends(get_db)) -> dict:
+    item = db.query(Dish).filter(Dish.id == dish_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Dish not found")
+
+    detail = _build_dish_detail(db, item)
+    return {
+        "name": detail["name"],
+        "menu_name": detail["menu_name"],
+        "category_id": detail["category_id"],
+        "subcategory_id": detail["subcategory_id"],
+        "photo_path": detail["photo_path"],
+        "recipe_lines": detail["recipe_lines"],
+        "recipe_steps": detail["recipe_steps"],
+        "estimated_cost_total": detail["estimated_cost_total"],
+        "allergens_total": detail["allergens_total"],
+        "kitchen_note": detail["kitchen_note"],
+        "plating_advice": detail["plating_advice"],
+        "sale_price_incl_vat": detail["sale_price_incl_vat"],
+        "sale_price_excl_vat": detail["sale_price_excl_vat"],
+        "gross_profit": detail["gross_profit"],
+        "gross_margin_percent": detail["gross_margin_percent"],
+        "food_cost_percent": detail["food_cost_percent"],
+    }

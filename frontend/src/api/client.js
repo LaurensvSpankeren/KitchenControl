@@ -414,6 +414,13 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getDishPrint(id) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${id}/print`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch dish print payload: ${response.status}`)
+    }
+    return response.json()
+  },
   getStatus() {
     return {
       message: 'API placeholder: requests worden later toegevoegd.',
