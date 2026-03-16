@@ -16,6 +16,7 @@ from app.db.session import engine
 
 app = FastAPI(title="KitchenControl API")
 UPLOADS_DIR = Path("uploads")
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,7 +32,6 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
 
 
