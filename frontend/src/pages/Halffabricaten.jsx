@@ -1579,10 +1579,10 @@ export default function Halffabricaten() {
                                 </button>
                                 <button
                                   type="button"
-                                  style={{ ...uiStyles.rowMenuItem, color: '#d97706' }}
+                                  style={uiStyles.rowMenuItem}
                                   onClick={() => handleArchiveById(item.id)}
                                 >
-                                  🗄 Archiveren
+                                  <span style={{ color: '#d97706' }}>🗄</span> Archiveren
                                 </button>
                               </>
                             ) : (
