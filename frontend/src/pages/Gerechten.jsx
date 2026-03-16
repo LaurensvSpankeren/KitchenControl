@@ -202,6 +202,7 @@ export default function Gerechten() {
   const [formData, setFormData] = useState(initialForm)
   const [detail, setDetail] = useState(null)
   const [steps, setSteps] = useState(EMPTY_STEPS)
+  const [salePriceInput, setSalePriceInput] = useState('')
 
   const [ingredientSearch, setIngredientSearch] = useState('')
   const [selectedIngredient, setSelectedIngredient] = useState(null)
@@ -412,6 +413,14 @@ export default function Gerechten() {
     return () => window.clearTimeout(timer)
   }, [isModalOpen, shouldFocusNameAfterDuplicate])
 
+  useEffect(() => {
+    setSalePriceInput(
+      formData.sale_price_incl_vat === null || formData.sale_price_incl_vat === undefined
+        ? ''
+        : String(formData.sale_price_incl_vat)
+    )
+  }, [formData.sale_price_incl_vat])
+
   const allDishes = useMemo(() => [...dishes, ...archivedDishes], [dishes, archivedDishes])
 
   const categoryOptions = useMemo(
@@ -556,6 +565,23 @@ export default function Gerechten() {
     }
     setFormData((prev) => ({ ...prev, [field]: value }))
     setIsModalDirty(true)
+  }
+
+  function commitSalePriceInput() {
+    if (isReadOnlyModal) {
+      return
+    }
+    const nextValue = salePriceInput.trim()
+    const normalizedCurrent =
+      formData.sale_price_incl_vat === null || formData.sale_price_incl_vat === undefined
+        ? ''
+        : String(formData.sale_price_incl_vat)
+
+    if (nextValue === normalizedCurrent) {
+      return
+    }
+
+    handleFormChange('sale_price_incl_vat', nextValue)
   }
 
   function handleStepChange(index, value) {
@@ -1151,16 +1177,6 @@ export default function Gerechten() {
                     <span style={uiStyles.idFieldHint}>Tijdelijk subcategorie-ID tot categoriebeheer is toegevoegd.</span>
                   </label>
                   <label>
-                    Verkoopprijs incl BTW
-                    <input
-                      type="number"
-                      step="any"
-                      value={formData.sale_price_incl_vat}
-                      readOnly={isReadOnlyModal}
-                      onChange={(event) => handleFormChange('sale_price_incl_vat', event.target.value)}
-                    />
-                  </label>
-                  <label>
                     Menukaartnaam
                     <input
                       type="text"
@@ -1192,6 +1208,57 @@ export default function Gerechten() {
                       readOnly={isReadOnlyModal}
                       onChange={(event) => handleFormChange('plating_advice', event.target.value)}
                     />
+                  </label>
+                </div>
+              </section>
+
+              <section className="modal-section">
+                <h4>Calculatie</h4>
+                <div className="modal-grid two-col calm-grid">
+                  <label>
+                    Kostprijs gerecht
+                    <input type="text" value={formatCurrency(detail?.estimated_cost_total)} readOnly />
+                  </label>
+                  <label>
+                    Advies verkoopprijs excl BTW
+                    <input type="text" value={formatCurrency(detail?.suggested_price_excl_vat)} readOnly />
+                  </label>
+                  <label>
+                    Advies verkoopprijs incl BTW
+                    <input type="text" value={formatCurrency(detail?.suggested_price_incl_vat)} readOnly />
+                  </label>
+                  <label>
+                    Definitieve verkoopprijs incl BTW
+                    <input
+                      type="number"
+                      step="any"
+                      value={salePriceInput}
+                      readOnly={isReadOnlyModal}
+                      onChange={(event) => setSalePriceInput(event.target.value)}
+                      onBlur={commitSalePriceInput}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          commitSalePriceInput()
+                        }
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Verkoopprijs excl BTW
+                    <input type="text" value={formatCurrency(detail?.sale_price_excl_vat)} readOnly />
+                  </label>
+                  <label>
+                    Brutowinst
+                    <input type="text" value={formatCurrency(detail?.gross_profit)} readOnly />
+                  </label>
+                  <label>
+                    Brutowinst %
+                    <input type="text" value={formatPercent(detail?.gross_margin_percent)} readOnly />
+                  </label>
+                  <label>
+                    Foodcost %
+                    <input type="text" value={formatPercent(detail?.food_cost_percent)} readOnly />
                   </label>
                 </div>
               </section>
