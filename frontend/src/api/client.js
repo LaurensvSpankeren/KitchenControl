@@ -320,6 +320,54 @@ export const apiClient = {
     }
     return response.json()
   },
+  async addDishRecipeLine(dishId, payload) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${dishId}/recipe-lines`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to add dish recipe line: ${response.status}`)
+    }
+    return response.json()
+  },
+  async updateDishRecipeLine(dishId, recipeLineId, payload) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${dishId}/recipe-lines/${recipeLineId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to update dish recipe line: ${response.status}`)
+    }
+    return response.json()
+  },
+  async deleteDishRecipeLine(dishId, recipeLineId) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${dishId}/recipe-lines/${recipeLineId}`, {
+      method: 'DELETE'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to delete dish recipe line: ${response.status}`)
+    }
+    return response.json()
+  },
+  async saveDishRecipeSteps(dishId, payload) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${dishId}/recipe-steps`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to save dish recipe steps: ${response.status}`)
+    }
+    return response.json()
+  },
   getStatus() {
     return {
       message: 'API placeholder: requests worden later toegevoegd.',

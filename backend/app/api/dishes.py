@@ -350,6 +350,189 @@ def update_dish(dish_id: int, payload: dict, db: Session = Depends(get_db)) -> d
     return _serialize_dish(item)
 
 
+@router.post("/api/dishes/{dish_id}/recipe-lines", tags=["dishes"])
+def add_dish_recipe_line(dish_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
+    item_type = (payload.get("item_type") or "").strip()
+    if item_type not in {"ingredient", "semi_finished_product"}:
+        raise HTTPException(
+            status_code=400,
+            detail="item_type must be 'ingredient' or 'semi_finished_product'",
+        )
+
+    required_fields = ["item_type", "item_id", "quantity", "unit"]
+    missing_fields = [field for field in required_fields if payload.get(field) in (None, "")]
+    if missing_fields:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required fields: {', '.join(missing_fields)}",
+        )
+
+    parent = db.query(Dish).filter(Dish.id == dish_id).first()
+    if parent is None:
+        raise HTTPException(status_code=404, detail="Dish not found")
+
+    recipe_line = RecipeLine(
+        parent_type="dish",
+        parent_id=dish_id,
+        item_type=item_type,
+        item_id=int(payload["item_id"]),
+        quantity=payload["quantity"],
+        unit=payload["unit"],
+        sort_order=int(payload.get("sort_order", 0)),
+    )
+    db.add(recipe_line)
+    db.commit()
+    db.refresh(recipe_line)
+
+    return {
+        "id": recipe_line.id,
+        "parent_type": recipe_line.parent_type,
+        "parent_id": recipe_line.parent_id,
+        "item_type": recipe_line.item_type,
+        "item_id": recipe_line.item_id,
+        "quantity": float(recipe_line.quantity),
+        "unit": recipe_line.unit,
+        "sort_order": recipe_line.sort_order,
+        "created_at": recipe_line.created_at.isoformat() if recipe_line.created_at is not None else None,
+        "updated_at": recipe_line.updated_at.isoformat() if recipe_line.updated_at is not None else None,
+    }
+
+
+@router.put("/api/dishes/{dish_id}/recipe-lines/{recipe_line_id}", tags=["dishes"])
+def update_dish_recipe_line(
+    dish_id: int,
+    recipe_line_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+) -> dict:
+    parent = db.query(Dish).filter(Dish.id == dish_id).first()
+    if parent is None:
+        raise HTTPException(status_code=404, detail="Dish not found")
+
+    line = (
+        db.query(RecipeLine)
+        .filter(
+            RecipeLine.id == recipe_line_id,
+            RecipeLine.parent_type == "dish",
+            RecipeLine.parent_id == dish_id,
+        )
+        .first()
+    )
+    if line is None:
+        raise HTTPException(status_code=404, detail="Recipe line not found")
+
+    if payload.get("quantity") in (None, "") or not str(payload.get("unit", "")).strip():
+        raise HTTPException(status_code=400, detail="quantity and unit are required")
+
+    try:
+        line.quantity = float(payload["quantity"])
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid quantity") from exc
+
+    line.unit = str(payload["unit"]).strip()
+    if "sort_order" in payload and payload.get("sort_order") not in (None, ""):
+        try:
+            line.sort_order = int(payload["sort_order"])
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid sort_order") from exc
+
+    db.commit()
+    db.refresh(line)
+    return {
+        "id": line.id,
+        "parent_type": line.parent_type,
+        "parent_id": line.parent_id,
+        "item_type": line.item_type,
+        "item_id": line.item_id,
+        "quantity": float(line.quantity),
+        "unit": line.unit,
+        "sort_order": line.sort_order,
+        "created_at": line.created_at.isoformat() if line.created_at is not None else None,
+        "updated_at": line.updated_at.isoformat() if line.updated_at is not None else None,
+    }
+
+
+@router.delete("/api/dishes/{dish_id}/recipe-lines/{recipe_line_id}", tags=["dishes"])
+def delete_dish_recipe_line(
+    dish_id: int,
+    recipe_line_id: int,
+    db: Session = Depends(get_db),
+) -> dict:
+    parent = db.query(Dish).filter(Dish.id == dish_id).first()
+    if parent is None:
+        raise HTTPException(status_code=404, detail="Dish not found")
+
+    line = (
+        db.query(RecipeLine)
+        .filter(
+            RecipeLine.id == recipe_line_id,
+            RecipeLine.parent_type == "dish",
+            RecipeLine.parent_id == dish_id,
+        )
+        .first()
+    )
+    if line is None:
+        raise HTTPException(status_code=404, detail="Recipe line not found")
+
+    db.delete(line)
+    db.commit()
+    return {"status": "deleted", "recipe_line_id": recipe_line_id}
+
+
+@router.put("/api/dishes/{dish_id}/recipe-steps", tags=["dishes"])
+def replace_dish_recipe_steps(dish_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
+    item = db.query(Dish).filter(Dish.id == dish_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Dish not found")
+
+    steps_payload = payload.get("steps")
+    if not isinstance(steps_payload, list):
+        raise HTTPException(status_code=400, detail="steps must be a list")
+
+    (
+        db.query(RecipeStep)
+        .filter(
+            RecipeStep.parent_type == "dish",
+            RecipeStep.parent_id == dish_id,
+        )
+        .delete(synchronize_session=False)
+    )
+
+    for index, step in enumerate(steps_payload, start=1):
+        if not isinstance(step, dict):
+            continue
+        instruction = str(step.get("instruction") or "").strip()
+        if not instruction:
+            continue
+
+        step_number = step.get("step_number", index)
+        try:
+            step_number = int(step_number)
+        except (TypeError, ValueError):
+            step_number = index
+
+        recipe_step = RecipeStep(
+            parent_type="dish",
+            parent_id=dish_id,
+            step_number=step_number,
+            instruction=instruction,
+        )
+        db.add(recipe_step)
+
+    db.commit()
+
+    refreshed_steps = (
+        db.query(RecipeStep)
+        .filter(
+            RecipeStep.parent_type == "dish",
+            RecipeStep.parent_id == dish_id,
+        )
+        .order_by(RecipeStep.step_number.asc(), RecipeStep.id.asc())
+        .all()
+    )
+    return {"steps": _serialize_recipe_steps(refreshed_steps)}
+
+
 @router.put("/api/dishes/{dish_id}/archive", tags=["dishes"])
 def archive_dish(dish_id: int, db: Session = Depends(get_db)) -> dict:
     item = db.query(Dish).filter(Dish.id == dish_id).first()
