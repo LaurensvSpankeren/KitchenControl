@@ -386,7 +386,23 @@ export default function Halffabricaten() {
       background: '#f9fafb',
       marginTop: '0.9rem'
     },
-    rowActionsWrap: { display: 'inline-flex', alignItems: 'center', gap: '0.35rem', position: 'relative' },
+    actionCell: { display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    rowActionsWrap: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '6px',
+      position: 'relative'
+    },
+    rowActionButton: {
+      marginTop: 0,
+      minHeight: '30px',
+      height: '30px',
+      padding: '0.35rem 0.6rem',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
     rowMenuButton: {
       width: '30px',
       minWidth: '30px',
@@ -706,6 +722,22 @@ export default function Halffabricaten() {
     }
   }
 
+  async function handleRestoreById(productId) {
+    if (!productId) {
+      return
+    }
+
+    try {
+      await apiClient.restoreSemiFinishedProduct(productId)
+      await loadProducts()
+      await loadArchivedProducts()
+      setOpenActionsMenuId(null)
+      setPageMessage('Halffabricaat hersteld uit archief.')
+    } catch {
+      setErrorMessage('Herstellen mislukt.')
+    }
+  }
+
   async function handleDeleteProduct() {
     if (!selectedProductId || !isSelectedArchived) {
       return
@@ -720,6 +752,26 @@ export default function Halffabricaten() {
       await apiClient.deleteSemiFinishedProduct(selectedProductId)
       await loadArchivedProducts()
       setIsModalOpen(false)
+      setPageMessage('Halffabricaat verwijderd.')
+    } catch {
+      setErrorMessage('Verwijderen mislukt.')
+    }
+  }
+
+  async function handleDeleteById(productId) {
+    if (!productId) {
+      return
+    }
+
+    const confirmed = window.confirm('Weet je zeker dat je dit halffabricaat definitief wilt verwijderen?')
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await apiClient.deleteSemiFinishedProduct(productId)
+      await loadArchivedProducts()
+      setOpenActionsMenuId(null)
       setPageMessage('Halffabricaat verwijderd.')
     } catch {
       setErrorMessage('Verwijderen mislukt.')
@@ -1487,56 +1539,68 @@ export default function Halffabricaten() {
                     <td>{formatCurrency(item.estimated_cost_total)}</td>
                     <td>{formatYield(item.final_yield_amount, item.final_yield_unit)}</td>
                     <td>{item.allergens_total || 'Geen brondata allergenen beschikbaar'}</td>
-                    <td>
-                      {viewMode === 'active' ? (
-                        <div style={uiStyles.rowActionsWrap} ref={openActionsMenuId === item.id ? actionsMenuRef : null}>
-                          <button
-                            type="button"
-                            className="table-action-btn"
-                            onClick={() => openEditModal(item, viewMode)}
-                          >
-                            Openen
-                          </button>
-                          <button
-                            type="button"
-                            className="table-action-btn"
-                            aria-label="Meer acties"
-                            style={uiStyles.rowMenuButton}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              setOpenActionsMenuId((prev) => (prev === item.id ? null : item.id))
-                            }}
-                          >
-                            ⋯
-                          </button>
-                          {openActionsMenuId === item.id ? (
-                            <div style={uiStyles.rowMenu} onClick={(event) => event.stopPropagation()}>
-                              <button
-                                type="button"
-                                style={uiStyles.rowMenuItem}
-                                onClick={() => handleDuplicateProduct(item)}
-                              >
-                                ⧉ Dupliceren
-                              </button>
-                              <button
-                                type="button"
-                                style={uiStyles.rowMenuItem}
-                                onClick={() => handleArchiveById(item.id)}
-                              >
-                                🗄 Archiveren
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
+                    <td style={uiStyles.actionCell}>
+                      <div style={uiStyles.rowActionsWrap} ref={openActionsMenuId === item.id ? actionsMenuRef : null}>
                         <button
                           type="button"
                           className="table-action-btn"
+                          style={uiStyles.rowActionButton}
                           onClick={() => openEditModal(item, viewMode)}
                         >
                           Openen
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          className="table-action-btn"
+                          aria-label="Meer acties"
+                          style={uiStyles.rowMenuButton}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setOpenActionsMenuId((prev) => (prev === item.id ? null : item.id))
+                          }}
+                        >
+                          ⋯
+                        </button>
+                        {openActionsMenuId === item.id ? (
+                          <div style={uiStyles.rowMenu} onClick={(event) => event.stopPropagation()}>
+                            {viewMode === 'active' ? (
+                              <>
+                                <button
+                                  type="button"
+                                  style={uiStyles.rowMenuItem}
+                                  onClick={() => handleDuplicateProduct(item)}
+                                >
+                                  ⧉ Dupliceren
+                                </button>
+                                <button
+                                  type="button"
+                                  style={uiStyles.rowMenuItem}
+                                  onClick={() => handleArchiveById(item.id)}
+                                >
+                                  🗄 Archiveren
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  style={uiStyles.rowMenuItem}
+                                  onClick={() => handleRestoreById(item.id)}
+                                >
+                                  ♻️ Herstellen
+                                </button>
+                                <button
+                                  type="button"
+                                  style={uiStyles.rowMenuItem}
+                                  onClick={() => handleDeleteById(item.id)}
+                                >
+                                  🗑 Verwijderen
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
