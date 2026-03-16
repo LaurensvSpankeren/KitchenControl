@@ -237,6 +237,39 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getDishCategories() {
+    const response = await fetch(`${API_BASE_URL}/api/dish-categories`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch dish categories: ${response.status}`)
+    }
+    return response.json()
+  },
+  async createDishCategory(payload) {
+    const response = await fetch(`${API_BASE_URL}/api/dish-categories`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to create dish category: ${response.status}`)
+    }
+    return response.json()
+  },
+  async createDishSubcategory(categoryId, payload) {
+    const response = await fetch(`${API_BASE_URL}/api/dish-categories/${categoryId}/subcategories`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to create dish subcategory: ${response.status}`)
+    }
+    return response.json()
+  },
   async getDishes() {
     const response = await fetch(`${API_BASE_URL}/api/dishes`)
     if (!response.ok) {

@@ -191,6 +191,7 @@ export default function Gerechten() {
   const [archivedDishes, setArchivedDishes] = useState([])
   const [ingredients, setIngredients] = useState([])
   const [semiFinishedProducts, setSemiFinishedProducts] = useState([])
+  const [dishCategories, setDishCategories] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [subcategoryFilter, setSubcategoryFilter] = useState('')
@@ -216,6 +217,10 @@ export default function Gerechten() {
   const [editingLineId, setEditingLineId] = useState(null)
   const [editingLineQuantity, setEditingLineQuantity] = useState('')
   const [editingLineUnit, setEditingLineUnit] = useState('')
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [showNewSubcategoryInput, setShowNewSubcategoryInput] = useState(false)
+  const [newSubcategoryName, setNewSubcategoryName] = useState('')
 
   const [pageMessage, setPageMessage] = useState('')
   const [modalMessage, setModalMessage] = useState('')
@@ -297,8 +302,7 @@ export default function Gerechten() {
       background: '#fff',
       padding: '0.45rem 0.5rem'
     },
-    modalActionsRight: { display: 'flex', gap: '0.55rem', flexWrap: 'wrap' },
-    idFieldHint: { fontSize: '0.82rem', color: '#6b7280', marginTop: '0.2rem' }
+    modalActionsRight: { display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }
   }
 
   async function enrichDishesWithDetail(items) {
@@ -352,6 +356,15 @@ export default function Gerechten() {
     }
   }
 
+  async function loadDishCategories() {
+    try {
+      const data = await apiClient.getDishCategories()
+      setDishCategories(Array.isArray(data) ? data : [])
+    } catch {
+      setDishCategories([])
+    }
+  }
+
   async function loadDetail(dishId) {
     if (!dishId) {
       setDetail(null)
@@ -380,6 +393,7 @@ export default function Gerechten() {
     loadArchivedDishes()
     loadIngredients()
     loadSemiFinishedProducts()
+    loadDishCategories()
   }, [])
 
   useEffect(() => {
@@ -421,28 +435,71 @@ export default function Gerechten() {
     )
   }, [formData.sale_price_incl_vat])
 
-  const allDishes = useMemo(() => [...dishes, ...archivedDishes], [dishes, archivedDishes])
+  const categoryNameById = useMemo(() => {
+    const next = new Map()
+    dishCategories.forEach((category) => {
+      next.set(String(category.id), category.name)
+    })
+    return next
+  }, [dishCategories])
+
+  const subcategoryNameById = useMemo(() => {
+    const next = new Map()
+    dishCategories.forEach((category) => {
+      ;(category.subcategories || []).forEach((subcategory) => {
+        next.set(String(subcategory.id), subcategory.name)
+      })
+    })
+    return next
+  }, [dishCategories])
 
   const categoryOptions = useMemo(
     () =>
-      [...new Set(allDishes.map((item) => String(item.category_id ?? '')).filter(Boolean))].sort(
-        (a, b) => a.localeCompare(b, 'nl')
-      ),
-    [allDishes]
+      dishCategories
+        .map((category) => category.name)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, 'nl')),
+    [dishCategories]
   )
 
-  const subcategoryOptions = useMemo(
+  const filterSubcategoryOptions = useMemo(() => {
+    if (!categoryFilter) {
+      return []
+    }
+    const categoryRecord = dishCategories.find((category) => category.name === categoryFilter) || null
+    return (categoryRecord?.subcategories || [])
+      .map((subcategory) => subcategory.name)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'nl'))
+  }, [dishCategories, categoryFilter])
+
+  const selectedCategoryRecord = useMemo(
     () =>
-      [
-        ...new Set(
-          allDishes
-            .filter((item) => !categoryFilter || String(item.category_id ?? '') === categoryFilter)
-            .map((item) => String(item.subcategory_id ?? ''))
-            .filter(Boolean)
-        )
-      ].sort((a, b) => a.localeCompare(b, 'nl')),
-    [allDishes, categoryFilter]
+      dishCategories.find((category) => String(category.id) === String(formData.category_id || '')) ||
+      null,
+    [dishCategories, formData.category_id]
   )
+
+  const modalCategoryOptions = useMemo(() => dishCategories, [dishCategories])
+
+  const modalSubcategoryOptions = useMemo(
+    () => selectedCategoryRecord?.subcategories || [],
+    [selectedCategoryRecord]
+  )
+
+  function getCategoryNameById(categoryId) {
+    if (categoryId === null || categoryId === undefined || categoryId === '') {
+      return '-'
+    }
+    return categoryNameById.get(String(categoryId)) || String(categoryId)
+  }
+
+  function getSubcategoryNameById(subcategoryId) {
+    if (subcategoryId === null || subcategoryId === undefined || subcategoryId === '') {
+      return '-'
+    }
+    return subcategoryNameById.get(String(subcategoryId)) || String(subcategoryId)
+  }
 
   const visibleDishes = useMemo(() => {
     const source = viewMode === 'active' ? dishes : archivedDishes
@@ -450,10 +507,13 @@ export default function Gerechten() {
 
     return source
       .filter((item) => {
-        if (categoryFilter && String(item.category_id ?? '') !== categoryFilter) {
+        const categoryName = getCategoryNameById(item.category_id)
+        const subcategoryName = getSubcategoryNameById(item.subcategory_id)
+
+        if (categoryFilter && categoryName !== categoryFilter) {
           return false
         }
-        if (subcategoryFilter && String(item.subcategory_id ?? '') !== subcategoryFilter) {
+        if (subcategoryFilter && subcategoryName !== subcategoryFilter) {
           return false
         }
         if (!term) {
@@ -462,12 +522,14 @@ export default function Gerechten() {
         const haystacks = [
           String(item.name || ''),
           String(item.menu_name || ''),
-          String(item.menu_description || '')
+          String(item.menu_description || ''),
+          categoryName,
+          subcategoryName
         ]
         return haystacks.some((value) => value.toLowerCase().includes(term))
       })
       .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'nl'))
-  }, [viewMode, dishes, archivedDishes, searchTerm, categoryFilter, subcategoryFilter])
+  }, [viewMode, dishes, archivedDishes, searchTerm, categoryFilter, subcategoryFilter, dishCategories])
 
   const filteredIngredients = useMemo(() => {
     const term = ingredientSearch.trim().toLowerCase()
@@ -516,6 +578,10 @@ export default function Gerechten() {
     setEditingLineId(null)
     setEditingLineQuantity('')
     setEditingLineUnit('')
+    setShowNewCategoryInput(false)
+    setNewCategoryName('')
+    setShowNewSubcategoryInput(false)
+    setNewSubcategoryName('')
     setModalMessage('')
     setErrorMessage('')
     setIsModalDirty(false)
@@ -537,6 +603,10 @@ export default function Gerechten() {
     setEditingLineId(null)
     setEditingLineQuantity('')
     setEditingLineUnit('')
+    setShowNewCategoryInput(false)
+    setNewCategoryName('')
+    setShowNewSubcategoryInput(false)
+    setNewSubcategoryName('')
     setModalMessage('')
     setErrorMessage('')
     setIsModalDirty(false)
@@ -567,6 +637,18 @@ export default function Gerechten() {
     setIsModalDirty(true)
   }
 
+  function handleCategoryChange(value) {
+    if (isReadOnlyModal) {
+      return
+    }
+    setFormData((prev) => ({
+      ...prev,
+      category_id: value,
+      subcategory_id: ''
+    }))
+    setIsModalDirty(true)
+  }
+
   function commitSalePriceInput() {
     if (isReadOnlyModal) {
       return
@@ -582,6 +664,70 @@ export default function Gerechten() {
     }
 
     handleFormChange('sale_price_incl_vat', nextValue)
+  }
+
+  async function handleCreateDishCategory() {
+    if (isReadOnlyModal) {
+      return
+    }
+
+    const name = newCategoryName.trim()
+    if (!name) {
+      setErrorMessage('Vul eerst een categorienaam in.')
+      return
+    }
+
+    setErrorMessage('')
+    try {
+      const created = await apiClient.createDishCategory({ name })
+      await loadDishCategories()
+      setFormData((prev) => ({
+        ...prev,
+        category_id: String(created.id),
+        subcategory_id: ''
+      }))
+      setShowNewCategoryInput(false)
+      setNewCategoryName('')
+      setShowNewSubcategoryInput(false)
+      setNewSubcategoryName('')
+      setModalMessage('Categorie aangemaakt.')
+      setIsModalDirty(true)
+    } catch {
+      setErrorMessage('Categorie aanmaken mislukt.')
+    }
+  }
+
+  async function handleCreateDishSubcategory() {
+    if (isReadOnlyModal) {
+      return
+    }
+
+    if (!formData.category_id) {
+      setErrorMessage('Kies eerst een categorie.')
+      return
+    }
+
+    const name = newSubcategoryName.trim()
+    if (!name) {
+      setErrorMessage('Vul eerst een subcategorienaam in.')
+      return
+    }
+
+    setErrorMessage('')
+    try {
+      const created = await apiClient.createDishSubcategory(formData.category_id, { name })
+      await loadDishCategories()
+      setFormData((prev) => ({
+        ...prev,
+        subcategory_id: String(created.id)
+      }))
+      setShowNewSubcategoryInput(false)
+      setNewSubcategoryName('')
+      setModalMessage('Subcategorie aangemaakt.')
+      setIsModalDirty(true)
+    } catch {
+      setErrorMessage('Subcategorie aanmaken mislukt.')
+    }
   }
 
   function handleStepChange(index, value) {
@@ -997,7 +1143,7 @@ export default function Gerechten() {
             disabled={!categoryFilter}
           >
             <option value="">Alle subcategorieën</option>
-            {subcategoryOptions.map((option) => (
+            {filterSubcategoryOptions.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
@@ -1037,8 +1183,8 @@ export default function Gerechten() {
                 {visibleDishes.map((item) => (
                   <tr key={item.id}>
                     <td>{item.name}</td>
-                    <td>{formatCategoryValue(item.category_id)}</td>
-                    <td>{formatCategoryValue(item.subcategory_id)}</td>
+                    <td>{getCategoryNameById(item.category_id)}</td>
+                    <td>{getSubcategoryNameById(item.subcategory_id)}</td>
                     <td style={{ minWidth: '95px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                       {formatCurrency(item.estimated_cost_total)}
                     </td>
@@ -1156,25 +1302,85 @@ export default function Gerechten() {
                   </label>
                   <label>
                     Categorie
-                    <input
-                      type="number"
-                      step="1"
+                    <select
                       value={formData.category_id}
-                      readOnly={isReadOnlyModal}
-                      onChange={(event) => handleFormChange('category_id', event.target.value)}
-                    />
-                    <span style={uiStyles.idFieldHint}>Tijdelijk categorie-ID tot categoriebeheer is toegevoegd.</span>
+                      disabled={isReadOnlyModal}
+                      onChange={(event) => handleCategoryChange(event.target.value)}
+                    >
+                      <option value="">Kies een categorie</option>
+                      {modalCategoryOptions.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="table-action-btn"
+                      disabled={isReadOnlyModal}
+                      onClick={() => setShowNewCategoryInput((prev) => !prev)}
+                    >
+                      Nieuwe categorie
+                    </button>
+                    {showNewCategoryInput ? (
+                      <div className="recipe-line-inline">
+                        <input
+                          type="text"
+                          placeholder="Nieuwe categorie"
+                          value={newCategoryName}
+                          readOnly={isReadOnlyModal}
+                          onChange={(event) => setNewCategoryName(event.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCreateDishCategory}
+                          disabled={isReadOnlyModal}
+                        >
+                          Opslaan
+                        </button>
+                      </div>
+                    ) : null}
                   </label>
                   <label>
                     Subcategorie
-                    <input
-                      type="number"
-                      step="1"
+                    <select
                       value={formData.subcategory_id}
-                      readOnly={isReadOnlyModal}
                       onChange={(event) => handleFormChange('subcategory_id', event.target.value)}
-                    />
-                    <span style={uiStyles.idFieldHint}>Tijdelijk subcategorie-ID tot categoriebeheer is toegevoegd.</span>
+                      disabled={!formData.category_id || isReadOnlyModal}
+                    >
+                      <option value="">Kies een subcategorie</option>
+                      {modalSubcategoryOptions.map((subcategory) => (
+                        <option key={subcategory.id} value={subcategory.id}>
+                          {subcategory.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="table-action-btn"
+                      onClick={() => setShowNewSubcategoryInput((prev) => !prev)}
+                      disabled={!formData.category_id || isReadOnlyModal}
+                    >
+                      Nieuwe subcategorie
+                    </button>
+                    {showNewSubcategoryInput ? (
+                      <div className="recipe-line-inline">
+                        <input
+                          type="text"
+                          placeholder="Nieuwe subcategorie"
+                          value={newSubcategoryName}
+                          readOnly={isReadOnlyModal}
+                          onChange={(event) => setNewSubcategoryName(event.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCreateDishSubcategory}
+                          disabled={!formData.category_id || isReadOnlyModal}
+                        >
+                          Opslaan
+                        </button>
+                      </div>
+                    ) : null}
                   </label>
                   <label>
                     Menukaartnaam
