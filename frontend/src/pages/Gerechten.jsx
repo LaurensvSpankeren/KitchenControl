@@ -330,6 +330,22 @@ export default function Gerechten() {
       borderRadius: '8px',
       marginBottom: '0.5rem'
     },
+    photoPlaceholder: {
+      width: '100%',
+      maxWidth: '220px',
+      height: '140px',
+      border: '1px dashed #d1d5db',
+      borderRadius: '8px',
+      background: '#f9fafb',
+      color: '#6b7280',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      textAlign: 'center',
+      padding: '0.75rem',
+      boxSizing: 'border-box',
+      marginBottom: '0.5rem'
+    },
     recipeAddBlock: {
       border: '1px solid #e5e7eb',
       borderRadius: '8px',
@@ -1601,7 +1617,7 @@ export default function Gerechten() {
                         <img src={photoPreviewUrl} alt="Gerechtfoto preview" style={uiStyles.photoPreview} />
                       </div>
                     ) : (
-                      <p className="ingredient-selected-info">Nog geen foto geüpload.</p>
+                      <div style={uiStyles.photoPlaceholder}>Nog geen foto geüpload</div>
                     )}
                     <input
                       type="file"
@@ -1610,26 +1626,41 @@ export default function Gerechten() {
                       onChange={handleDishPhotoUpload}
                     />
                   </label>
-                  <label>
-                    Naam
-                    <input
-                      ref={nameInputRef}
-                      type="text"
-                      value={formData.name}
-                      readOnly={isReadOnlyModal}
-                      onChange={(event) => handleFormChange('name', event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    BTW %
-                    <input
-                      type="number"
-                      step="any"
-                      value={formData.vat_rate}
-                      readOnly={isReadOnlyModal}
-                      onChange={(event) => handleFormChange('vat_rate', event.target.value)}
-                    />
-                  </label>
+                  <div className="modal-grid one-col calm-grid">
+                    <label>
+                      Naam
+                      <input
+                        ref={nameInputRef}
+                        type="text"
+                        value={formData.name}
+                        readOnly={isReadOnlyModal}
+                        onChange={(event) => handleFormChange('name', event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Menukaartnaam
+                      <input
+                        type="text"
+                        value={formData.menu_name}
+                        readOnly={isReadOnlyModal}
+                        onChange={(event) => handleFormChange('menu_name', event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Menukaartomschrijving
+                      <textarea
+                        value={formData.menu_description}
+                        readOnly={isReadOnlyModal}
+                        onChange={(event) => handleFormChange('menu_description', event.target.value)}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section className="modal-section">
+                <h4>Indeling</h4>
+                <div className="modal-grid two-col calm-grid">
                   <label>
                     Categorie
                     <select
@@ -1712,45 +1743,322 @@ export default function Gerechten() {
                       </div>
                     ) : null}
                   </label>
-                  <label>
-                    Menukaartnaam
-                    <input
-                      type="text"
-                      value={formData.menu_name}
-                      readOnly={isReadOnlyModal}
-                      onChange={(event) => handleFormChange('menu_name', event.target.value)}
-                    />
-                  </label>
-                  <label className="full-width">
-                    Menukaartomschrijving
-                    <textarea
-                      value={formData.menu_description}
-                      readOnly={isReadOnlyModal}
-                      onChange={(event) => handleFormChange('menu_description', event.target.value)}
-                    />
-                  </label>
-                  <label className="full-width">
-                    Keukenopmerking
-                    <textarea
-                      value={formData.kitchen_note}
-                      readOnly={isReadOnlyModal}
-                      onChange={(event) => handleFormChange('kitchen_note', event.target.value)}
-                    />
-                  </label>
-                  <label className="full-width">
-                    Opmaakadvies
-                    <textarea
-                      value={formData.plating_advice}
-                      readOnly={isReadOnlyModal}
-                      onChange={(event) => handleFormChange('plating_advice', event.target.value)}
-                    />
-                  </label>
+                </div>
+              </section>
+
+              <section className="modal-section">
+                <h4>Receptuur</h4>
+                <div className="modal-grid one-col calm-grid">
+                  <div>
+                    <h5>Receptregels</h5>
+                    <div className="sfp-ingredient-add" style={uiStyles.recipeAddBlock}>
+                      <input
+                        type="text"
+                        placeholder="Zoek op naam, merk of artikelnummer"
+                        value={ingredientSearch}
+                        readOnly={isReadOnlyModal}
+                        onChange={(event) => setIngredientSearch(event.target.value)}
+                      />
+
+                      {ingredientSearch.trim() ? (
+                        filteredIngredients.length > 0 ? (
+                          <div className="ingredient-picker">
+                            {filteredIngredients.map((ingredient) => (
+                              <button
+                                key={ingredient.id}
+                                type="button"
+                                className={`ingredient-picker-item${selectedIngredient?.id === ingredient.id ? ' is-active' : ''}`}
+                                onClick={() => {
+                                  if (isReadOnlyModal) {
+                                    return
+                                  }
+                                  setSelectedIngredient(ingredient)
+                                  const options = getIngredientUnitOptions(ingredient)
+                                  setRecipeUnit(options[0] || 'gram')
+                                  setIsModalDirty(true)
+                                }}
+                                disabled={isReadOnlyModal}
+                              >
+                                <strong>
+                                  {ingredient.supplier_product_name}{' '}
+                                  {ingredient.supplier_brand ? `(${ingredient.supplier_brand})` : ''}
+                                </strong>
+                                <span className="ingredient-picker-meta">
+                                  #{ingredient.supplier_product_code || '-'} |{' '}
+                                  {formatCurrency(ingredient.supplier_price_ex_vat)} / verpakking
+                                  {formatPackageWeightLabel(ingredient)
+                                    ? ` | Gewicht: ${formatPackageWeightLabel(ingredient)}`
+                                    : ''}
+                                  {formatPackageVolumeLabel(ingredient)
+                                    ? ` | Inhoud: ${formatPackageVolumeLabel(ingredient)}`
+                                    : ''}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p>Geen ingrediënten gevonden.</p>
+                        )
+                      ) : null}
+
+                      <div className="recipe-line-inline">
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="Hoeveelheid"
+                          value={recipeQuantity}
+                          readOnly={isReadOnlyModal}
+                          onChange={(event) => {
+                            setRecipeQuantity(event.target.value)
+                            setIsModalDirty(true)
+                          }}
+                        />
+                        <select
+                          value={recipeUnit}
+                          onChange={(event) => {
+                            setRecipeUnit(event.target.value)
+                            setIsModalDirty(true)
+                          }}
+                          disabled={!selectedIngredient || selectedIngredientUnitOptions.length === 0 || isReadOnlyModal}
+                        >
+                          {!selectedIngredientUnitOptions.length ? (
+                            <option value="">Kies eerst ingrediënt</option>
+                          ) : null}
+                          {selectedIngredientUnitOptions.map((unit) => (
+                            <option key={unit} value={unit}>
+                              {unit}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {selectedIngredient ? (
+                        <p className="ingredient-selected-info">
+                          Gekozen: <strong>{selectedIngredient.supplier_product_name}</strong> | Merk:{' '}
+                          {selectedIngredient.supplier_brand || '-'} | Artikel:{' '}
+                          {selectedIngredient.supplier_product_code || '-'} | Rekeneenheid:{' '}
+                          {selectedIngredient.calculation_unit || '-'} | Aantal rekeneenheden:{' '}
+                          {formatCompactNumber(selectedIngredient.calculation_quantity_per_package, 4)}
+                        </p>
+                      ) : null}
+
+                      <button type="button" onClick={handleAddIngredientLine} disabled={isReadOnlyModal}>
+                        Toevoegen aan recept
+                      </button>
+                    </div>
+
+                    <div className="sfp-ingredient-add" style={uiStyles.recipeAddBlockSpaced}>
+                      <input
+                        type="text"
+                        placeholder="Zoek halffabricaat op naam"
+                        value={semiFinishedSearch}
+                        readOnly={isReadOnlyModal}
+                        onChange={(event) => setSemiFinishedSearch(event.target.value)}
+                      />
+
+                      {semiFinishedSearch.trim() ? (
+                        filteredSemiFinishedOptions.length > 0 ? (
+                          <div className="ingredient-picker">
+                            {filteredSemiFinishedOptions.map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                className={`ingredient-picker-item${selectedSemiFinishedRecipe?.id === item.id ? ' is-active' : ''}`}
+                                onClick={() => {
+                                  if (isReadOnlyModal) {
+                                    return
+                                  }
+                                  setSelectedSemiFinishedRecipe(item)
+                                  setSemiFinishedRecipeUnit(item.final_yield_unit || 'gram')
+                                  setIsModalDirty(true)
+                                }}
+                                disabled={isReadOnlyModal}
+                              >
+                                <strong>{item.name}</strong>
+                                <span className="ingredient-picker-meta">
+                                  Kostprijs: {formatCurrency(item.estimated_cost_total)} | Allergenen:{' '}
+                                  {item.allergens_total || '-'}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p>Geen halffabricaten gevonden.</p>
+                        )
+                      ) : null}
+
+                      <div className="recipe-line-inline">
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="Hoeveelheid"
+                          value={semiFinishedRecipeQuantity}
+                          readOnly={isReadOnlyModal}
+                          onChange={(event) => {
+                            setSemiFinishedRecipeQuantity(event.target.value)
+                            setIsModalDirty(true)
+                          }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Eenheid"
+                          value={semiFinishedRecipeUnit}
+                          readOnly={isReadOnlyModal}
+                          onChange={(event) => {
+                            setSemiFinishedRecipeUnit(event.target.value)
+                            setIsModalDirty(true)
+                          }}
+                        />
+                      </div>
+
+                      {selectedSemiFinishedRecipe ? (
+                        <p className="ingredient-selected-info">
+                          Gekozen halffabricaat: <strong>{selectedSemiFinishedRecipe.name}</strong> | Eenheid:{' '}
+                          {selectedSemiFinishedRecipe.final_yield_unit || '-'}
+                        </p>
+                      ) : null}
+
+                      <button type="button" onClick={handleAddSemiFinishedLine} disabled={isReadOnlyModal}>
+                        Halffabricaat toevoegen aan recept
+                      </button>
+                    </div>
+
+                    {detail?.recipe_lines?.length ? (
+                      <div className="table-scroll">
+                        <table className="recipe-lines-table">
+                          <thead>
+                            <tr>
+                              <th>Item</th>
+                              <th>Merk</th>
+                              <th>Hoeveelheid</th>
+                              <th>Eenheid</th>
+                              <th>Regelprijs</th>
+                              <th>% van kostprijs</th>
+                              <th>Allergenen</th>
+                              <th>Actie</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {detail.recipe_lines.map((line) => (
+                              <tr key={line.id}>
+                                <td>{line.item_name || `#${line.item_id}`}</td>
+                                <td>{line.item_brand || '-'}</td>
+                                <td>
+                                  {editingLineId === line.id ? (
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      className="line-edit-input"
+                                      value={editingLineQuantity}
+                                      readOnly={isReadOnlyModal}
+                                      onChange={(event) => {
+                                        setEditingLineQuantity(event.target.value)
+                                        setIsModalDirty(true)
+                                      }}
+                                    />
+                                  ) : (
+                                    line.quantity
+                                  )}
+                                </td>
+                                <td>
+                                  {editingLineId === line.id ? (
+                                    <input
+                                      type="text"
+                                      className="line-edit-input"
+                                      value={editingLineUnit}
+                                      readOnly
+                                    />
+                                  ) : (
+                                    line.unit
+                                  )}
+                                </td>
+                                <td>{formatCurrency(line.line_cost)}</td>
+                                <td>{formatPercent(line.line_cost_share_percent)}</td>
+                                <td>{line.allergens_summary || 'Geen brondata allergenen beschikbaar'}</td>
+                                <td>
+                                  <div className="line-actions">
+                                    {editingLineId === line.id ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          className="table-action-btn"
+                                          onClick={() => handleSaveEditedLine(line)}
+                                          disabled={isReadOnlyModal}
+                                        >
+                                          Opslaan
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="table-action-btn"
+                                          onClick={cancelEditLine}
+                                          disabled={isReadOnlyModal}
+                                        >
+                                          Annuleren
+                                        </button>
+                                      </>
+                                    ) : !isReadOnlyModal ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          className="table-action-btn"
+                                          onClick={() => startEditLine(line)}
+                                        >
+                                          Bewerken
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="table-action-btn"
+                                          onClick={() => handleDeleteLine(line)}
+                                        >
+                                          Verwijderen
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <span>-</span>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p>Nog geen receptregels.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <h5>Receptstappen</h5>
+                    <div className="modal-grid one-col calm-grid">
+                      {steps.map((step, index) => (
+                        <label key={`step-${index + 1}`}>
+                          Stap {index + 1}
+                          <textarea
+                            value={step}
+                            readOnly={isReadOnlyModal}
+                            onChange={(event) => handleStepChange(index, event.target.value)}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </section>
 
               <section className="modal-section">
                 <h4>Calculatie</h4>
                 <div className="modal-grid two-col calm-grid">
+                  <label>
+                    BTW %
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.vat_rate}
+                      readOnly={isReadOnlyModal}
+                      onChange={(event) => handleFormChange('vat_rate', event.target.value)}
+                    />
+                  </label>
                   <label>
                     Kostprijs gerecht
                     <input type="text" value={formatCurrency(detail?.estimated_cost_total)} readOnly />
@@ -1800,302 +2108,29 @@ export default function Gerechten() {
               </section>
 
               <section className="modal-section">
-                <h4>Recept</h4>
-                <div className="sfp-ingredient-add" style={uiStyles.recipeAddBlock}>
-                  <input
-                    type="text"
-                    placeholder="Zoek op naam, merk of artikelnummer"
-                    value={ingredientSearch}
-                    readOnly={isReadOnlyModal}
-                    onChange={(event) => setIngredientSearch(event.target.value)}
-                  />
-
-                  {ingredientSearch.trim() ? (
-                    filteredIngredients.length > 0 ? (
-                      <div className="ingredient-picker">
-                        {filteredIngredients.map((ingredient) => (
-                          <button
-                            key={ingredient.id}
-                            type="button"
-                            className={`ingredient-picker-item${selectedIngredient?.id === ingredient.id ? ' is-active' : ''}`}
-                            onClick={() => {
-                              if (isReadOnlyModal) {
-                                return
-                              }
-                              setSelectedIngredient(ingredient)
-                              const options = getIngredientUnitOptions(ingredient)
-                              setRecipeUnit(options[0] || 'gram')
-                              setIsModalDirty(true)
-                            }}
-                            disabled={isReadOnlyModal}
-                          >
-                            <strong>
-                              {ingredient.supplier_product_name}{' '}
-                              {ingredient.supplier_brand ? `(${ingredient.supplier_brand})` : ''}
-                            </strong>
-                            <span className="ingredient-picker-meta">
-                              #{ingredient.supplier_product_code || '-'} |{' '}
-                              {formatCurrency(ingredient.supplier_price_ex_vat)} / verpakking
-                              {formatPackageWeightLabel(ingredient)
-                                ? ` | Gewicht: ${formatPackageWeightLabel(ingredient)}`
-                                : ''}
-                              {formatPackageVolumeLabel(ingredient)
-                                ? ` | Inhoud: ${formatPackageVolumeLabel(ingredient)}`
-                                : ''}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p>Geen ingrediënten gevonden.</p>
-                    )
-                  ) : null}
-
-                  <div className="recipe-line-inline">
-                    <input
-                      type="number"
-                      step="any"
-                      placeholder="Hoeveelheid"
-                      value={recipeQuantity}
-                      readOnly={isReadOnlyModal}
-                      onChange={(event) => {
-                        setRecipeQuantity(event.target.value)
-                        setIsModalDirty(true)
-                      }}
-                    />
-                    <select
-                      value={recipeUnit}
-                      onChange={(event) => {
-                        setRecipeUnit(event.target.value)
-                        setIsModalDirty(true)
-                      }}
-                      disabled={!selectedIngredient || selectedIngredientUnitOptions.length === 0 || isReadOnlyModal}
-                    >
-                      {!selectedIngredientUnitOptions.length ? (
-                        <option value="">Kies eerst ingrediënt</option>
-                      ) : null}
-                      {selectedIngredientUnitOptions.map((unit) => (
-                        <option key={unit} value={unit}>
-                          {unit}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {selectedIngredient ? (
-                    <p className="ingredient-selected-info">
-                      Gekozen: <strong>{selectedIngredient.supplier_product_name}</strong> | Merk:{' '}
-                      {selectedIngredient.supplier_brand || '-'} | Artikel:{' '}
-                      {selectedIngredient.supplier_product_code || '-'} | Rekeneenheid:{' '}
-                      {selectedIngredient.calculation_unit || '-'} | Aantal rekeneenheden:{' '}
-                      {formatCompactNumber(selectedIngredient.calculation_quantity_per_package, 4)}
-                    </p>
-                  ) : null}
-
-                  <button type="button" onClick={handleAddIngredientLine} disabled={isReadOnlyModal}>
-                    Toevoegen aan recept
-                  </button>
-                </div>
-
-                <div className="sfp-ingredient-add" style={uiStyles.recipeAddBlockSpaced}>
-                  <input
-                    type="text"
-                    placeholder="Zoek halffabricaat op naam"
-                    value={semiFinishedSearch}
-                    readOnly={isReadOnlyModal}
-                    onChange={(event) => setSemiFinishedSearch(event.target.value)}
-                  />
-
-                  {semiFinishedSearch.trim() ? (
-                    filteredSemiFinishedOptions.length > 0 ? (
-                      <div className="ingredient-picker">
-                        {filteredSemiFinishedOptions.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className={`ingredient-picker-item${selectedSemiFinishedRecipe?.id === item.id ? ' is-active' : ''}`}
-                            onClick={() => {
-                              if (isReadOnlyModal) {
-                                return
-                              }
-                              setSelectedSemiFinishedRecipe(item)
-                              setSemiFinishedRecipeUnit(item.final_yield_unit || 'gram')
-                              setIsModalDirty(true)
-                            }}
-                            disabled={isReadOnlyModal}
-                          >
-                            <strong>{item.name}</strong>
-                            <span className="ingredient-picker-meta">
-                              Kostprijs: {formatCurrency(item.estimated_cost_total)} | Allergenen:{' '}
-                              {item.allergens_total || '-'}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p>Geen halffabricaten gevonden.</p>
-                    )
-                  ) : null}
-
-                  <div className="recipe-line-inline">
-                    <input
-                      type="number"
-                      step="any"
-                      placeholder="Hoeveelheid"
-                      value={semiFinishedRecipeQuantity}
-                      readOnly={isReadOnlyModal}
-                      onChange={(event) => {
-                        setSemiFinishedRecipeQuantity(event.target.value)
-                        setIsModalDirty(true)
-                      }}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Eenheid"
-                      value={semiFinishedRecipeUnit}
-                      readOnly={isReadOnlyModal}
-                      onChange={(event) => {
-                        setSemiFinishedRecipeUnit(event.target.value)
-                        setIsModalDirty(true)
-                      }}
-                    />
-                  </div>
-
-                  {selectedSemiFinishedRecipe ? (
-                    <p className="ingredient-selected-info">
-                      Gekozen halffabricaat: <strong>{selectedSemiFinishedRecipe.name}</strong> | Eenheid:{' '}
-                      {selectedSemiFinishedRecipe.final_yield_unit || '-'}
-                    </p>
-                  ) : null}
-
-                  <button type="button" onClick={handleAddSemiFinishedLine} disabled={isReadOnlyModal}>
-                    Halffabricaat toevoegen aan recept
-                  </button>
-                </div>
-
-                {detail?.recipe_lines?.length ? (
-                  <div className="table-scroll">
-                    <table className="recipe-lines-table">
-                      <thead>
-                        <tr>
-                          <th>Item</th>
-                          <th>Merk</th>
-                          <th>Hoeveelheid</th>
-                          <th>Eenheid</th>
-                          <th>Regelprijs</th>
-                          <th>% van kostprijs</th>
-                          <th>Allergenen</th>
-                          <th>Actie</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {detail.recipe_lines.map((line) => (
-                          <tr key={line.id}>
-                            <td>{line.item_name || `#${line.item_id}`}</td>
-                            <td>{line.item_brand || '-'}</td>
-                            <td>
-                              {editingLineId === line.id ? (
-                                <input
-                                  type="number"
-                                  step="any"
-                                  className="line-edit-input"
-                                  value={editingLineQuantity}
-                                  readOnly={isReadOnlyModal}
-                                  onChange={(event) => {
-                                    setEditingLineQuantity(event.target.value)
-                                    setIsModalDirty(true)
-                                  }}
-                                />
-                              ) : (
-                                line.quantity
-                              )}
-                            </td>
-                            <td>
-                              {editingLineId === line.id ? (
-                                <input
-                                  type="text"
-                                  className="line-edit-input"
-                                  value={editingLineUnit}
-                                  readOnly
-                                />
-                              ) : (
-                                line.unit
-                              )}
-                            </td>
-                            <td>{formatCurrency(line.line_cost)}</td>
-                            <td>{formatPercent(line.line_cost_share_percent)}</td>
-                            <td>{line.allergens_summary || 'Geen brondata allergenen beschikbaar'}</td>
-                            <td>
-                              <div className="line-actions">
-                                {editingLineId === line.id ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="table-action-btn"
-                                      onClick={() => handleSaveEditedLine(line)}
-                                      disabled={isReadOnlyModal}
-                                    >
-                                      Opslaan
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="table-action-btn"
-                                      onClick={cancelEditLine}
-                                      disabled={isReadOnlyModal}
-                                    >
-                                      Annuleren
-                                    </button>
-                                  </>
-                                ) : !isReadOnlyModal ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="table-action-btn"
-                                      onClick={() => startEditLine(line)}
-                                    >
-                                      Bewerken
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="table-action-btn"
-                                      onClick={() => handleDeleteLine(line)}
-                                    >
-                                      Verwijderen
-                                    </button>
-                                  </>
-                                ) : (
-                                  <span>-</span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p>Nog geen receptregels.</p>
-                )}
-              </section>
-
-              <section className="modal-section">
-                <h4>Receptstappen</h4>
+                <h4>Notities</h4>
                 <div className="modal-grid one-col calm-grid">
-                  {steps.map((step, index) => (
-                    <label key={`step-${index + 1}`}>
-                      Stap {index + 1}
-                      <textarea
-                        value={step}
-                        readOnly={isReadOnlyModal}
-                        onChange={(event) => handleStepChange(index, event.target.value)}
-                      />
-                    </label>
-                  ))}
+                  <label>
+                    Keukenopmerking
+                    <textarea
+                      value={formData.kitchen_note}
+                      readOnly={isReadOnlyModal}
+                      onChange={(event) => handleFormChange('kitchen_note', event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Opmaakadvies
+                    <textarea
+                      value={formData.plating_advice}
+                      readOnly={isReadOnlyModal}
+                      onChange={(event) => handleFormChange('plating_advice', event.target.value)}
+                    />
+                  </label>
                 </div>
               </section>
 
               <section className="modal-section">
-                <h4>Allergenen broninformatie</h4>
+                <h4>Allergenen</h4>
                 <p>{allergensText}</p>
               </section>
             </div>
