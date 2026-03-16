@@ -386,7 +386,12 @@ export default function Halffabricaten() {
       background: '#f9fafb',
       marginTop: '0.9rem'
     },
-    actionCell: { display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    actionCell: {
+      verticalAlign: 'middle',
+      paddingTop: '12px',
+      paddingBottom: '12px',
+      textAlign: 'center'
+    },
     rowActionsWrap: {
       display: 'inline-flex',
       alignItems: 'center',
@@ -1574,7 +1579,7 @@ export default function Halffabricaten() {
                                 </button>
                                 <button
                                   type="button"
-                                  style={uiStyles.rowMenuItem}
+                                  style={{ ...uiStyles.rowMenuItem, color: '#d97706' }}
                                   onClick={() => handleArchiveById(item.id)}
                                 >
                                   🗄 Archiveren
