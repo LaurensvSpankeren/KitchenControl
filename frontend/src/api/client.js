@@ -237,6 +237,89 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getDishes() {
+    const response = await fetch(`${API_BASE_URL}/api/dishes`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch dishes: ${response.status}`)
+    }
+    return response.json()
+  },
+  async getArchivedDishes() {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/archived`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch archived dishes: ${response.status}`)
+    }
+    return response.json()
+  },
+  async getDishDetail(id) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${id}`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch dish detail: ${response.status}`)
+    }
+    return response.json()
+  },
+  async createDish(payload) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to create dish: ${response.status}`)
+    }
+    return response.json()
+  },
+  async updateDish(id, payload) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to update dish: ${response.status}`)
+    }
+    return response.json()
+  },
+  async duplicateDish(id) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${id}/duplicate`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to duplicate dish: ${response.status}`)
+    }
+    return response.json()
+  },
+  async archiveDish(id) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${id}/archive`, {
+      method: 'PUT'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to archive dish: ${response.status}`)
+    }
+    return response.json()
+  },
+  async restoreDish(id) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${id}/restore`, {
+      method: 'PUT'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to restore dish: ${response.status}`)
+    }
+    return response.json()
+  },
+  async deleteDish(id) {
+    const response = await fetch(`${API_BASE_URL}/api/dishes/${id}`, {
+      method: 'DELETE'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to delete dish: ${response.status}`)
+    }
+    return response.json()
+  },
   getStatus() {
     return {
       message: 'API placeholder: requests worden later toegevoegd.',
