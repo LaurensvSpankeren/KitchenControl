@@ -1529,7 +1529,9 @@ export default function Halffabricaten() {
                   <th>Naam</th>
                   <th>Categorie</th>
                   <th>Subcategorie</th>
-                  <th>Inslag</th>
+                  <th style={{ minWidth: '95px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    Inslag
+                  </th>
                   <th>Eindgewicht/eindinhoud</th>
                   <th>Allergenen</th>
                   <th>Actie</th>
@@ -1541,7 +1543,9 @@ export default function Halffabricaten() {
                     <td>{item.name}</td>
                     <td>{item.category || '-'}</td>
                     <td>{item.subcategory || '-'}</td>
-                    <td>{formatCurrency(item.estimated_cost_total)}</td>
+                    <td style={{ minWidth: '95px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      {formatCurrency(item.estimated_cost_total)}
+                    </td>
                     <td>{formatYield(item.final_yield_amount, item.final_yield_unit)}</td>
                     <td>{item.allergens_total || 'Geen brondata allergenen beschikbaar'}</td>
                     <td style={uiStyles.actionCell}>
