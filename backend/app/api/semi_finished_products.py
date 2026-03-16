@@ -189,6 +189,22 @@ def _serialize_recipe_steps(steps: list[RecipeStep]) -> list[dict]:
     ]
 
 
+def _build_duplicate_name(db: Session, original_name: str) -> str:
+    base_name = (original_name or "").strip() or "Halffabricaat"
+    candidate = f"{base_name} kopie"
+    exists = db.query(SemiFinishedProduct.id).filter(SemiFinishedProduct.name == candidate).first()
+    if exists is None:
+        return candidate
+
+    index = 2
+    while True:
+        candidate = f"{base_name} kopie {index}"
+        exists = db.query(SemiFinishedProduct.id).filter(SemiFinishedProduct.name == candidate).first()
+        if exists is None:
+            return candidate
+        index += 1
+
+
 def _to_calculation_quantity(line: RecipeLine, ingredient: Ingredient) -> Decimal:
     quantity = Decimal(line.quantity)
     line_unit = _normalize_unit(line.unit)
@@ -722,6 +738,87 @@ def restore_semi_finished_product(
     db.commit()
     db.refresh(item)
     return _serialize_semi_finished_product(item)
+
+
+@router.post(
+    "/api/semi-finished-products/{semi_finished_product_id}/duplicate",
+    tags=["semi-finished-products"],
+)
+def duplicate_semi_finished_product(
+    semi_finished_product_id: int, db: Session = Depends(get_db)
+) -> dict:
+    original = (
+        db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
+    )
+    if original is None:
+        raise HTTPException(status_code=404, detail="Semi finished product not found")
+
+    duplicate = SemiFinishedProduct(
+        name=_build_duplicate_name(db, original.name),
+        description=original.description,
+        category=original.category,
+        subcategory=original.subcategory,
+        photo_url=original.photo_url,
+        yield_percent=original.yield_percent,
+        waste_percent=original.waste_percent,
+        final_yield_amount=original.final_yield_amount,
+        final_yield_unit=original.final_yield_unit,
+        shelf_life_days=original.shelf_life_days,
+        shelf_life_after_preparation_days=original.shelf_life_after_preparation_days,
+        storage_fridge_days=original.storage_fridge_days,
+        storage_freezer_days=original.storage_freezer_days,
+        storage_notes=original.storage_notes,
+        storage_advice=original.storage_advice,
+        preparation_notes=original.preparation_notes,
+        is_archived=False,
+    )
+    db.add(duplicate)
+    db.flush()
+
+    original_lines = (
+        db.query(RecipeLine)
+        .filter(
+            RecipeLine.parent_type == "semi_finished_product",
+            RecipeLine.parent_id == semi_finished_product_id,
+        )
+        .order_by(RecipeLine.sort_order.asc(), RecipeLine.id.asc())
+        .all()
+    )
+    for line in original_lines:
+        db.add(
+            RecipeLine(
+                parent_type="semi_finished_product",
+                parent_id=duplicate.id,
+                item_type=line.item_type,
+                item_id=line.item_id,
+                quantity=line.quantity,
+                unit=line.unit,
+                sort_order=line.sort_order,
+            )
+        )
+
+    original_steps = (
+        db.query(RecipeStep)
+        .filter(
+            RecipeStep.parent_type == "semi_finished_product",
+            RecipeStep.parent_id == semi_finished_product_id,
+        )
+        .order_by(RecipeStep.step_number.asc(), RecipeStep.id.asc())
+        .all()
+    )
+    for step in original_steps:
+        db.add(
+            RecipeStep(
+                parent_type="semi_finished_product",
+                parent_id=duplicate.id,
+                step_number=step.step_number,
+                instruction=step.instruction,
+            )
+        )
+
+    db.commit()
+    db.refresh(duplicate)
+    return _serialize_semi_finished_product(duplicate)
 
 
 @router.delete("/api/semi-finished-products/{semi_finished_product_id}", tags=["semi-finished-products"])

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { apiClient } from '../api/client'
 
@@ -354,6 +354,10 @@ export default function Halffabricaten() {
   const [labelUseFreezer, setLabelUseFreezer] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isModalDirty, setIsModalDirty] = useState(false)
+  const [openActionsMenuId, setOpenActionsMenuId] = useState(null)
+  const [shouldFocusNameAfterDuplicate, setShouldFocusNameAfterDuplicate] = useState(false)
+  const actionsMenuRef = useRef(null)
+  const nameInputRef = useRef(null)
   const isReadOnlyModal = isSelectedArchived
   const uiStyles = {
     viewModeSwitch: { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' },
@@ -381,6 +385,38 @@ export default function Halffabricaten() {
       padding: '0.65rem',
       background: '#f9fafb',
       marginTop: '0.9rem'
+    },
+    rowActionsWrap: { display: 'inline-flex', alignItems: 'center', gap: '0.35rem', position: 'relative' },
+    rowMenuButton: {
+      width: '30px',
+      minWidth: '30px',
+      height: '30px',
+      marginTop: 0,
+      padding: 0,
+      lineHeight: 1,
+      fontSize: '1rem'
+    },
+    rowMenu: {
+      position: 'absolute',
+      top: '100%',
+      right: 0,
+      zIndex: 15,
+      marginTop: '0.2rem',
+      border: '1px solid #d1d5db',
+      borderRadius: '8px',
+      background: '#fff',
+      boxShadow: '0 6px 14px rgba(17,24,39,0.12)',
+      minWidth: '140px',
+      padding: '0.25rem'
+    },
+    rowMenuItem: {
+      width: '100%',
+      marginTop: 0,
+      textAlign: 'left',
+      border: '1px solid transparent',
+      borderRadius: '6px',
+      background: '#fff',
+      padding: '0.45rem 0.5rem'
     },
     modalActionsLeft: { display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginRight: 'auto' },
     modalActionsRight: { display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }
@@ -451,6 +487,37 @@ export default function Halffabricaten() {
     loadIngredients()
     loadSemiFinishedCategories()
   }, [])
+
+  useEffect(() => {
+    if (!openActionsMenuId) {
+      return
+    }
+
+    function handleOutsideClick(event) {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
+        setOpenActionsMenuId(null)
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+    }
+  }, [openActionsMenuId])
+
+  useEffect(() => {
+    if (!isModalOpen || !shouldFocusNameAfterDuplicate) {
+      return
+    }
+    const timer = window.setTimeout(() => {
+      if (nameInputRef.current) {
+        nameInputRef.current.focus()
+        nameInputRef.current.select()
+      }
+      setShouldFocusNameAfterDuplicate(false)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [isModalOpen, shouldFocusNameAfterDuplicate])
 
   const categoryOptions = useMemo(
     () =>
@@ -619,24 +686,7 @@ export default function Halffabricaten() {
   }
 
   async function handleArchiveProduct() {
-    if (!selectedProductId) {
-      return
-    }
-    const confirmed = window.confirm('Weet je zeker dat je dit halffabricaat wilt archiveren?')
-    if (!confirmed) {
-      return
-    }
-
-    try {
-      await apiClient.archiveSemiFinishedProduct(selectedProductId)
-      await loadProducts()
-      await loadArchivedProducts()
-      setIsModalOpen(false)
-      setViewMode('active')
-      setPageMessage('Halffabricaat gearchiveerd.')
-    } catch {
-      setErrorMessage('Archiveren mislukt.')
-    }
+    await handleArchiveById(selectedProductId, { closeModalAfter: true })
   }
 
   async function handleRestoreProduct() {
@@ -673,6 +723,45 @@ export default function Halffabricaten() {
       setPageMessage('Halffabricaat verwijderd.')
     } catch {
       setErrorMessage('Verwijderen mislukt.')
+    }
+  }
+
+  async function handleArchiveById(productId, options = {}) {
+    if (!productId) {
+      return
+    }
+    const confirmed = window.confirm('Weet je zeker dat je dit halffabricaat wilt archiveren?')
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await apiClient.archiveSemiFinishedProduct(productId)
+      await loadProducts()
+      await loadArchivedProducts()
+      setOpenActionsMenuId(null)
+      if (options.closeModalAfter) {
+        setIsModalOpen(false)
+        setViewMode('active')
+      }
+      setPageMessage('Halffabricaat gearchiveerd.')
+    } catch {
+      setErrorMessage('Archiveren mislukt.')
+    }
+  }
+
+  async function handleDuplicateProduct(item) {
+    try {
+      const duplicate = await apiClient.duplicateSemiFinishedProduct(item.id)
+      await loadProducts()
+      await loadArchivedProducts()
+      setOpenActionsMenuId(null)
+      setViewMode('active')
+      setPageMessage('Halffabricaat gedupliceerd.')
+      setShouldFocusNameAfterDuplicate(true)
+      await openEditModal(duplicate, 'active')
+    } catch {
+      setErrorMessage('Dupliceren mislukt.')
     }
   }
 
@@ -1399,13 +1488,55 @@ export default function Halffabricaten() {
                     <td>{formatYield(item.final_yield_amount, item.final_yield_unit)}</td>
                     <td>{item.allergens_total || 'Geen brondata allergenen beschikbaar'}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="table-action-btn"
-                        onClick={() => openEditModal(item, viewMode)}
-                      >
-                        Openen
-                      </button>
+                      {viewMode === 'active' ? (
+                        <div style={uiStyles.rowActionsWrap} ref={openActionsMenuId === item.id ? actionsMenuRef : null}>
+                          <button
+                            type="button"
+                            className="table-action-btn"
+                            onClick={() => openEditModal(item, viewMode)}
+                          >
+                            Openen
+                          </button>
+                          <button
+                            type="button"
+                            className="table-action-btn"
+                            aria-label="Meer acties"
+                            style={uiStyles.rowMenuButton}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setOpenActionsMenuId((prev) => (prev === item.id ? null : item.id))
+                            }}
+                          >
+                            ⋯
+                          </button>
+                          {openActionsMenuId === item.id ? (
+                            <div style={uiStyles.rowMenu} onClick={(event) => event.stopPropagation()}>
+                              <button
+                                type="button"
+                                style={uiStyles.rowMenuItem}
+                                onClick={() => handleDuplicateProduct(item)}
+                              >
+                                ⧉ Dupliceren
+                              </button>
+                              <button
+                                type="button"
+                                style={uiStyles.rowMenuItem}
+                                onClick={() => handleArchiveById(item.id)}
+                              >
+                                🗄 Archiveren
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="table-action-btn"
+                          onClick={() => openEditModal(item, viewMode)}
+                        >
+                          Openen
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1468,6 +1599,7 @@ export default function Halffabricaten() {
                   <label>
                     Naam
                     <input
+                      ref={nameInputRef}
                       type="text"
                       value={formData.name}
                       readOnly={isReadOnlyModal}

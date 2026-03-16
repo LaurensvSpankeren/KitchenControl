@@ -79,6 +79,15 @@ export const apiClient = {
     }
     return response.json()
   },
+  async duplicateSemiFinishedProduct(id) {
+    const response = await fetch(`${API_BASE_URL}/api/semi-finished-products/${id}/duplicate`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to duplicate semi-finished product: ${response.status}`)
+    }
+    return response.json()
+  },
   async deleteSemiFinishedProduct(id) {
     const response = await fetch(`${API_BASE_URL}/api/semi-finished-products/${id}`, {
       method: 'DELETE'
