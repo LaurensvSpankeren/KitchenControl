@@ -604,6 +604,11 @@ export default function Gerechten() {
       salePriceInput.trim() !== ''
         ? salePriceInput.trim()
         : String(formData.sale_price_incl_vat ?? '').trim()
+
+    if (currentSalePriceInput === '') {
+      return null
+    }
+
     const salePriceIncl = Number(currentSalePriceInput)
 
     if (
