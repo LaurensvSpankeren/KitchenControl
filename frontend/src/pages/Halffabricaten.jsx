@@ -439,6 +439,22 @@ export default function Halffabricaten() {
       background: '#fff',
       padding: '0.45rem 0.5rem'
     },
+    labelForm: { display: 'grid', gap: '0.75rem' },
+    labelFieldRow: {
+      display: 'grid',
+      gridTemplateColumns: '140px minmax(0, 1fr)',
+      alignItems: 'center',
+      gap: '0.75rem'
+    },
+    labelFieldCaption: { fontWeight: 600, color: '#111827' },
+    labelCheckboxRow: {
+      display: 'grid',
+      gridTemplateColumns: '140px minmax(0, 1fr)',
+      alignItems: 'center',
+      gap: '0.75rem'
+    },
+    labelCheckboxWrap: { display: 'flex', alignItems: 'center', gap: '0.6rem' },
+    labelActions: { display: 'flex', justifyContent: 'flex-end', gap: '0.55rem', flexWrap: 'wrap' },
     modalActionsLeft: { display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginRight: 'auto' },
     modalActionsRight: { display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }
   }
@@ -1168,6 +1184,20 @@ export default function Halffabricaten() {
     setIsLabelModalOpen(true)
   }
 
+  async function openLabelModalForProduct(product, sourceView = 'active') {
+    setSelectedProductId(product.id)
+    setFormData(mapProductToForm(product))
+    setIsSelectedArchived(sourceView === 'archived' || !!product.is_archived)
+    setLabelProductionDate(formatDateForInput(new Date()))
+    setLabelUseFridge(true)
+    setLabelUseFreezer(false)
+    setErrorMessage('')
+    setModalMessage('')
+    setOpenActionsMenuId(null)
+    setIsLabelModalOpen(true)
+    await loadDetail(product.id)
+  }
+
   function handlePrintLabel() {
     const productName = formData.name || detail?.name || ''
     const fridgeDate = labelUseFridge
@@ -1580,6 +1610,13 @@ export default function Halffabricaten() {
                                   onClick={() => handleDuplicateProduct(item)}
                                 >
                                   ⧉ Dupliceren
+                                </button>
+                                <button
+                                  type="button"
+                                  style={uiStyles.rowMenuItem}
+                                  onClick={() => openLabelModalForProduct(item, viewMode)}
+                                >
+                                  🏷 Dagetiket
                                 </button>
                                 <button
                                   type="button"
@@ -2168,38 +2205,44 @@ export default function Halffabricaten() {
               <h3>Print dagetiket</h3>
             </div>
             <div className="modal-body">
-              <div className="modal-grid one-col calm-grid">
-                <label>
-                  Productnaam
+              <div style={uiStyles.labelForm}>
+                <div style={uiStyles.labelFieldRow}>
+                  <div style={uiStyles.labelFieldCaption}>Productnaam</div>
                   <input type="text" value={formData.name || detail?.name || ''} readOnly />
-                </label>
-                <label>
-                  Productiedatum
+                </div>
+                <div style={uiStyles.labelFieldRow}>
+                  <div style={uiStyles.labelFieldCaption}>Productiedatum</div>
                   <input
                     type="date"
                     value={labelProductionDate}
                     onChange={(event) => setLabelProductionDate(event.target.value)}
                   />
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={labelUseFridge}
-                    onChange={(event) => setLabelUseFridge(event.target.checked)}
-                  />
-                  Opslaan in koelkast
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={labelUseFreezer}
-                    onChange={(event) => setLabelUseFreezer(event.target.checked)}
-                  />
-                  Opslaan in vriezer
-                </label>
+                </div>
+                <div style={uiStyles.labelCheckboxRow}>
+                  <div style={uiStyles.labelFieldCaption}>Bewaaradvies</div>
+                  <label style={uiStyles.labelCheckboxWrap}>
+                    <input
+                      type="checkbox"
+                      checked={labelUseFridge}
+                      onChange={(event) => setLabelUseFridge(event.target.checked)}
+                    />
+                    <span>Opslaan in koelkast</span>
+                  </label>
+                </div>
+                <div style={uiStyles.labelCheckboxRow}>
+                  <div />
+                  <label style={uiStyles.labelCheckboxWrap}>
+                    <input
+                      type="checkbox"
+                      checked={labelUseFreezer}
+                      onChange={(event) => setLabelUseFreezer(event.target.checked)}
+                    />
+                    <span>Opslaan in vriezer</span>
+                  </label>
+                </div>
               </div>
             </div>
-            <div className="modal-actions">
+            <div className="modal-actions" style={uiStyles.labelActions}>
               <button type="button" className="secondary-btn" onClick={() => setIsLabelModalOpen(false)}>
                 Annuleren
               </button>
