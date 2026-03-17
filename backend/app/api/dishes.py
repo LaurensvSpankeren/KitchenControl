@@ -299,6 +299,13 @@ def _build_dish_detail(db: Session, item: Dish) -> dict:
     suggested_price_excl_vat = None
     suggested_price_incl_vat = None
 
+    if estimated_cost_total is not None and item.vat_rate is not None:
+        vat_multiplier = Decimal("1") + (Decimal(item.vat_rate) / Decimal("100"))
+        if vat_multiplier != 0:
+            suggested_price_excl_vat_decimal = estimated_cost_total_decimal / Decimal("0.30")
+            suggested_price_excl_vat = float(suggested_price_excl_vat_decimal)
+            suggested_price_incl_vat = float(suggested_price_excl_vat_decimal * vat_multiplier)
+
     if (
         estimated_cost_total is not None
         and item.sale_price_incl_vat is not None
@@ -319,10 +326,6 @@ def _build_dish_detail(db: Session, item: Dish) -> dict:
                 food_cost_percent = float(
                     (estimated_cost_total_decimal / sale_price_excl_vat_decimal) * Decimal("100")
                 )
-
-            suggested_price_excl_vat_decimal = estimated_cost_total_decimal / Decimal("0.30")
-            suggested_price_excl_vat = float(suggested_price_excl_vat_decimal)
-            suggested_price_incl_vat = float(suggested_price_excl_vat_decimal * vat_multiplier)
 
     response = _serialize_dish(item)
     response["recipe_lines"] = serialized_lines
