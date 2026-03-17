@@ -2118,10 +2118,6 @@ export default function Gerechten() {
                     <input type="text" value={formatCurrency(detail?.estimated_cost_total)} readOnly />
                   </label>
                   <label>
-                    Advies verkoopprijs excl BTW
-                    <input type="text" value={formatCurrency(detail?.suggested_price_excl_vat)} readOnly />
-                  </label>
-                  <label>
                     Advies verkoopprijs incl BTW
                     <input type="text" value={formatCurrency(detail?.suggested_price_incl_vat)} readOnly />
                   </label>
@@ -2141,6 +2137,10 @@ export default function Gerechten() {
                         }
                       }}
                     />
+                  </label>
+                  <label>
+                    Advies verkoopprijs excl BTW
+                    <input type="text" value={formatCurrency(detail?.suggested_price_excl_vat)} readOnly />
                   </label>
                   <label>
                     Verkoopprijs excl BTW
