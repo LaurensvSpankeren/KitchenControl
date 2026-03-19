@@ -1,9 +1,12 @@
 import csv
 import re
+from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from app.models.ingredient import Ingredient
+from app.models.ingredient_price_history import IngredientPriceHistory
 
 ALLERGEN_COLUMN_MAP = {
     "Zwaveldioxide en sulfieten": "zwaveldioxide en sulfieten",
@@ -516,6 +519,40 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 )
                 db.add(ingredient)
                 created += 1
+
+            db.flush()
+
+            history_base_unit = calc_unit or ingredient.base_unit
+            history_conversion_factor = (
+                Decimal(str(calc_quantity))
+                if calc_quantity is not None
+                else Decimal(str(ingredient.conversion_factor_to_base))
+                if ingredient.conversion_factor_to_base is not None
+                else None
+            )
+            history_supplier_price = (
+                Decimal(str(supplier_price_ex_vat)) if supplier_price_ex_vat is not None else None
+            )
+            history_base_price = None
+            if (
+                history_supplier_price is not None
+                and history_conversion_factor is not None
+                and history_conversion_factor != 0
+            ):
+                history_base_price = history_supplier_price / history_conversion_factor
+
+            db.add(
+                IngredientPriceHistory(
+                    ingredient_id=ingredient.id,
+                    supplier_product_code=supplier_product_code,
+                    supplier_product_name=supplier_product_name or ingredient.supplier_product_name,
+                    supplier_price_ex_vat=history_supplier_price,
+                    base_price_per_unit_ex_vat=history_base_price,
+                    base_unit=history_base_unit,
+                    supplier_vat_rate=Decimal(str(supplier_vat_rate)) if supplier_vat_rate is not None else None,
+                    recorded_at=datetime.now(timezone.utc),
+                )
+            )
 
     db.commit()
 

@@ -7,6 +7,7 @@ from app.models import (  # noqa: E402,F401
     DishCategory,
     DishSubcategory,
     Ingredient,
+    IngredientPriceHistory,
     RecipeLine,
     RecipeStep,
     SemiFinishedCategory,
