@@ -271,6 +271,16 @@ def _extract_package_volume(row: dict) -> tuple[float | None, str | None]:
             return text_amount, text_unit
         return None, None
 
+    if unit in {"liter", "ml"} and text_amount is not None and text_unit in {"liter", "ml"}:
+        normalized_amount = _normalize_volume_to_ml(amount, unit)
+        normalized_text_amount = _normalize_volume_to_ml(text_amount, text_unit)
+        if (
+            normalized_amount is not None
+            and normalized_text_amount is not None
+            and abs(normalized_amount - normalized_text_amount) > AMOUNT_MATCH_EPSILON
+        ):
+            return text_amount, text_unit
+
     if (
         unit is None
         and text_amount is not None
