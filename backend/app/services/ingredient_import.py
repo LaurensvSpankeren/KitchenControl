@@ -1,11 +1,15 @@
 import csv
+import json
 import re
 from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.models.ingredient import Ingredient
+from app.models.ingredient_import_batch import IngredientImportBatch
+from app.models.ingredient_import_issue import IngredientImportIssue
 from app.models.ingredient_price_history import IngredientPriceHistory
 
 ALLERGEN_COLUMN_MAP = {
@@ -402,9 +406,32 @@ def _extract_supplier_allergens(row: dict) -> str | None:
     return " | ".join(dict.fromkeys(allergens))
 
 
+def _values_differ(current_value, imported_value) -> bool:
+    if current_value is None and imported_value is None:
+        return False
+    if current_value is None or imported_value is None:
+        return True
+    if isinstance(current_value, (int, float, Decimal)) and isinstance(
+        imported_value, (int, float, Decimal)
+    ):
+        return Decimal(str(current_value)) != Decimal(str(imported_value))
+    return current_value != imported_value
+
+
 def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
     created = 0
     updated = 0
+    batch = IngredientImportBatch(
+        source_filename=Path(file_path).name,
+        started_at=datetime.now(timezone.utc),
+        status="running",
+        total_rows=0,
+        created_count=0,
+        updated_count=0,
+        issue_count=0,
+    )
+    db.add(batch)
+    db.flush()
 
     with open(file_path, newline="", encoding="utf-8") as csv_file:
         reader = csv.DictReader(csv_file, delimiter=";")
@@ -447,11 +474,95 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
             if not supplier_product_code:
                 continue
 
+            batch.total_rows += 1
+
             ingredient = (
                 db.query(Ingredient)
                 .filter(Ingredient.supplier_product_code == supplier_product_code)
                 .first()
             )
+
+            issues_to_create: list[IngredientImportIssue] = []
+
+            if ingredient:
+                current_name = (ingredient.supplier_product_name or "").strip()
+                imported_name = supplier_product_name.strip()
+                if imported_name and imported_name != current_name:
+                    issues_to_create.append(
+                        IngredientImportIssue(
+                            import_batch_id=batch.id,
+                            ingredient_id=ingredient.id,
+                            supplier_product_code=supplier_product_code,
+                            supplier_product_name=supplier_product_name or None,
+                            issue_type="name_mismatch",
+                            status="open",
+                            payload_json=json.dumps(
+                                {
+                                    "current_name": ingredient.supplier_product_name,
+                                    "imported_name": supplier_product_name,
+                                }
+                            ),
+                        )
+                    )
+
+                packaging_changes = {}
+                packaging_fields = {
+                    "units_per_package": (ingredient.units_per_package, units_per_package),
+                    "net_content_amount": (ingredient.net_content_amount, net_content_amount),
+                    "net_content_unit": (ingredient.net_content_unit, net_content_unit),
+                    "package_weight_amount": (ingredient.package_weight_amount, package_weight_amount),
+                    "package_weight_unit": (ingredient.package_weight_unit, package_weight_unit),
+                    "package_volume_amount": (ingredient.package_volume_amount, package_volume_amount),
+                    "package_volume_unit": (ingredient.package_volume_unit, package_volume_unit),
+                    "calculation_quantity_per_package": (
+                        ingredient.calculation_quantity_per_package,
+                        calc_quantity,
+                    ),
+                    "calculation_unit": (ingredient.calculation_unit, calc_unit),
+                }
+                for field_name, (current_value, imported_value) in packaging_fields.items():
+                    if _values_differ(current_value, imported_value):
+                        packaging_changes[field_name] = {
+                            "current": str(current_value) if current_value is not None else None,
+                            "imported": str(imported_value) if imported_value is not None else None,
+                        }
+                if packaging_changes:
+                    issues_to_create.append(
+                        IngredientImportIssue(
+                            import_batch_id=batch.id,
+                            ingredient_id=ingredient.id,
+                            supplier_product_code=supplier_product_code,
+                            supplier_product_name=supplier_product_name or None,
+                            issue_type="packaging_changed",
+                            status="open",
+                            payload_json=json.dumps(packaging_changes),
+                        )
+                    )
+
+            if supplier_price_ex_vat is None or calc_quantity is None or calc_quantity == 0:
+                issues_to_create.append(
+                    IngredientImportIssue(
+                        import_batch_id=batch.id,
+                        ingredient_id=ingredient.id if ingredient else None,
+                        supplier_product_code=supplier_product_code,
+                        supplier_product_name=supplier_product_name or None,
+                        issue_type="base_price_unreliable",
+                        status="open",
+                        payload_json=json.dumps(
+                            {
+                                "supplier_price_ex_vat": (
+                                    str(supplier_price_ex_vat) if supplier_price_ex_vat is not None else None
+                                ),
+                                "calc_quantity": str(calc_quantity) if calc_quantity is not None else None,
+                                "calc_unit": calc_unit,
+                            }
+                        ),
+                    )
+                )
+
+            for issue in issues_to_create:
+                db.add(issue)
+            batch.issue_count += len(issues_to_create)
 
             if ingredient:
                 ingredient.supplier_product_name = supplier_product_name or ingredient.supplier_product_name
@@ -487,6 +598,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                     ingredient.secondary_unit = secondary_unit
                     ingredient.secondary_unit_factor = secondary_unit_factor
                 updated += 1
+                batch.updated_count += 1
             else:
                 base_unit = calc_unit or supplier_unit or "st"
                 ingredient = Ingredient(
@@ -519,6 +631,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 )
                 db.add(ingredient)
                 created += 1
+                batch.created_count += 1
 
             db.flush()
 
@@ -554,6 +667,8 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 )
             )
 
+    batch.completed_at = datetime.now(timezone.utc)
+    batch.status = "completed"
     db.commit()
 
     return {"created": created, "updated": updated}
