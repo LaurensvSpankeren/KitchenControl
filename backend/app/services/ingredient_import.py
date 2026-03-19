@@ -341,6 +341,10 @@ def _derive_dual_unit_values(
 
 
 def _extract_net_content(row: dict) -> tuple[float | None, str | None]:
+    volume_amount, volume_unit = _extract_package_volume(row)
+    if volume_amount is not None and volume_unit in {"liter", "ml"}:
+        return volume_amount, volume_unit
+
     amount = _parse_number(row.get("Netto inhoud"))
     amount_source = "netto_inhoud" if amount is not None else None
     if amount == 0:
