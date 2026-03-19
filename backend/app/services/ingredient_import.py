@@ -510,15 +510,6 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                     "units_per_package": (ingredient.units_per_package, units_per_package),
                     "net_content_amount": (ingredient.net_content_amount, net_content_amount),
                     "net_content_unit": (ingredient.net_content_unit, net_content_unit),
-                    "package_weight_amount": (ingredient.package_weight_amount, package_weight_amount),
-                    "package_weight_unit": (ingredient.package_weight_unit, package_weight_unit),
-                    "package_volume_amount": (ingredient.package_volume_amount, package_volume_amount),
-                    "package_volume_unit": (ingredient.package_volume_unit, package_volume_unit),
-                    "calculation_quantity_per_package": (
-                        ingredient.calculation_quantity_per_package,
-                        calc_quantity,
-                    ),
-                    "calculation_unit": (ingredient.calculation_unit, calc_unit),
                 }
                 for field_name, (current_value, imported_value) in packaging_fields.items():
                     if _values_differ(current_value, imported_value):
@@ -539,7 +530,20 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                         )
                     )
 
-            if supplier_price_ex_vat is None or calc_quantity is None or calc_quantity == 0:
+            has_existing_conversion_factor = (
+                ingredient is not None
+                and ingredient.conversion_factor_to_base is not None
+                and ingredient.conversion_factor_to_base != 0
+            )
+            has_new_calc_quantity = calc_quantity is not None and calc_quantity != 0
+            should_flag_base_price_unreliable = supplier_price_ex_vat is None
+            if ingredient:
+                if not has_new_calc_quantity and not has_existing_conversion_factor:
+                    should_flag_base_price_unreliable = True
+            elif not has_new_calc_quantity:
+                should_flag_base_price_unreliable = True
+
+            if should_flag_base_price_unreliable:
                 issues_to_create.append(
                     IngredientImportIssue(
                         import_batch_id=batch.id,
