@@ -433,6 +433,28 @@ def _values_differ(current_value, imported_value) -> bool:
     return current_value != imported_value
 
 
+def _serialize_import_value(value):
+    return str(value) if value is not None else None
+
+
+def _build_duplicate_fingerprint(parsed_row: dict) -> dict:
+    return {
+        "supplier_product_code": parsed_row["supplier_product_code"],
+        "supplier_product_name": parsed_row["supplier_product_name"] or None,
+        "supplier_price_ex_vat": _serialize_import_value(parsed_row["supplier_price_ex_vat"]),
+        "supplier_vat_rate": _serialize_import_value(parsed_row["supplier_vat_rate"]),
+        "supplier_unit": parsed_row["supplier_unit"] or None,
+        "units_per_package": _serialize_import_value(parsed_row["units_per_package"]),
+        "net_content_amount": _serialize_import_value(parsed_row["net_content_amount"]),
+        "net_content_unit": parsed_row["net_content_unit"] or None,
+        "package_weight_amount": _serialize_import_value(parsed_row["package_weight_amount"]),
+        "package_weight_unit": parsed_row["package_weight_unit"] or None,
+        "package_volume_amount": _serialize_import_value(parsed_row["package_volume_amount"]),
+        "package_volume_unit": parsed_row["package_volume_unit"] or None,
+        "supplier_pack_description": parsed_row["supplier_pack_description"] or None,
+    }
+
+
 def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
     created = 0
     updated = 0
@@ -450,6 +472,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
 
     with open(file_path, newline="", encoding="utf-8") as csv_file:
         reader = csv.DictReader(csv_file, delimiter=";")
+        parsed_rows: list[dict] = []
 
         for row in reader:
             supplier_product_code = (row.get("Artikelnummer") or "").strip()
@@ -489,202 +512,293 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
             if not supplier_product_code:
                 continue
 
-            batch.total_rows += 1
-
-            ingredient = (
-                db.query(Ingredient)
-                .filter(Ingredient.supplier_product_code == supplier_product_code)
-                .first()
-            )
-
-            issues_to_create: list[IngredientImportIssue] = []
-
-            if ingredient:
-                current_name = (ingredient.supplier_product_name or "").strip()
-                imported_name = supplier_product_name.strip()
-                if imported_name and imported_name != current_name:
-                    issues_to_create.append(
-                        IngredientImportIssue(
-                            import_batch_id=batch.id,
-                            ingredient_id=ingredient.id,
-                            supplier_product_code=supplier_product_code,
-                            supplier_product_name=supplier_product_name or None,
-                            issue_type="name_mismatch",
-                            status="open",
-                            payload_json=json.dumps(
-                                {
-                                    "current_name": ingredient.supplier_product_name,
-                                    "imported_name": supplier_product_name,
-                                }
-                            ),
-                        )
-                    )
-
-                packaging_changes = {}
-                packaging_fields = {
-                    "units_per_package": (ingredient.units_per_package, units_per_package),
-                    "net_content_amount": (ingredient.net_content_amount, net_content_amount),
-                    "net_content_unit": (ingredient.net_content_unit, net_content_unit),
+            parsed_rows.append(
+                {
+                    "supplier_product_code": supplier_product_code,
+                    "supplier_product_name": supplier_product_name,
+                    "supplier_unit": supplier_unit,
+                    "supplier_price_ex_vat": supplier_price_ex_vat,
+                    "supplier_vat_rate": supplier_vat_rate,
+                    "supplier_allergens_raw": supplier_allergens_raw,
+                    "supplier_brand": supplier_brand,
+                    "category": category,
+                    "packaging_type": packaging_type,
+                    "units_per_package": units_per_package,
+                    "net_content_amount": net_content_amount,
+                    "net_content_unit": net_content_unit,
+                    "package_weight_amount": package_weight_amount,
+                    "package_weight_unit": package_weight_unit,
+                    "package_volume_amount": package_volume_amount,
+                    "package_volume_unit": package_volume_unit,
+                    "supplier_pack_description": supplier_pack_description,
+                    "calc_unit": calc_unit,
+                    "calc_quantity": calc_quantity,
+                    "preferred_unit": preferred_unit,
+                    "secondary_unit": secondary_unit,
+                    "secondary_unit_factor": secondary_unit_factor,
                 }
-                for field_name, (current_value, imported_value) in packaging_fields.items():
-                    if _values_differ(current_value, imported_value):
-                        packaging_changes[field_name] = {
-                            "current": str(current_value) if current_value is not None else None,
-                            "imported": str(imported_value) if imported_value is not None else None,
-                        }
-                if packaging_changes:
-                    issues_to_create.append(
-                        IngredientImportIssue(
-                            import_batch_id=batch.id,
-                            ingredient_id=ingredient.id,
-                            supplier_product_code=supplier_product_code,
-                            supplier_product_name=supplier_product_name or None,
-                            issue_type="packaging_changed",
-                            status="open",
-                            payload_json=json.dumps(packaging_changes),
-                        )
-                    )
-
-            has_existing_conversion_factor = (
-                ingredient is not None
-                and ingredient.conversion_factor_to_base is not None
-                and ingredient.conversion_factor_to_base != 0
             )
-            has_new_calc_quantity = calc_quantity is not None and calc_quantity != 0
-            should_flag_base_price_unreliable = supplier_price_ex_vat is None
-            if ingredient:
-                if not has_new_calc_quantity and not has_existing_conversion_factor:
-                    should_flag_base_price_unreliable = True
-            elif not has_new_calc_quantity:
-                should_flag_base_price_unreliable = True
 
-            if should_flag_base_price_unreliable:
+    batch.total_rows = len(parsed_rows)
+
+    grouped_rows: dict[str, list[dict]] = {}
+    for parsed_row in parsed_rows:
+        grouped_rows.setdefault(parsed_row["supplier_product_code"], []).append(parsed_row)
+
+    effective_rows: list[dict] = []
+    for supplier_product_code, grouped in grouped_rows.items():
+        if len(grouped) == 1:
+            effective_rows.append(grouped[0])
+            continue
+
+        variants_by_key: dict[tuple, dict] = {}
+        for parsed_row in grouped:
+            fingerprint = _build_duplicate_fingerprint(parsed_row)
+            variants_by_key[tuple(fingerprint.items())] = fingerprint
+
+        if len(variants_by_key) == 1:
+            effective_rows.append(grouped[0])
+            continue
+
+        db.add(
+            IngredientImportIssue(
+                import_batch_id=batch.id,
+                ingredient_id=None,
+                supplier_product_code=supplier_product_code,
+                supplier_product_name=next(
+                    (row["supplier_product_name"] for row in grouped if row["supplier_product_name"]),
+                    None,
+                ),
+                issue_type="duplicate_conflict_in_file",
+                status="open",
+                payload_json=json.dumps(
+                    {
+                        "duplicate_count": len(grouped),
+                        "variants": list(variants_by_key.values()),
+                    }
+                ),
+            )
+        )
+        batch.issue_count += 1
+
+    for parsed_row in effective_rows:
+        supplier_product_code = parsed_row["supplier_product_code"]
+        supplier_product_name = parsed_row["supplier_product_name"]
+        supplier_unit = parsed_row["supplier_unit"]
+        supplier_price_ex_vat = parsed_row["supplier_price_ex_vat"]
+        supplier_vat_rate = parsed_row["supplier_vat_rate"]
+        supplier_allergens_raw = parsed_row["supplier_allergens_raw"]
+        supplier_brand = parsed_row["supplier_brand"]
+        category = parsed_row["category"]
+        packaging_type = parsed_row["packaging_type"]
+        units_per_package = parsed_row["units_per_package"]
+        net_content_amount = parsed_row["net_content_amount"]
+        net_content_unit = parsed_row["net_content_unit"]
+        package_weight_amount = parsed_row["package_weight_amount"]
+        package_weight_unit = parsed_row["package_weight_unit"]
+        package_volume_amount = parsed_row["package_volume_amount"]
+        package_volume_unit = parsed_row["package_volume_unit"]
+        supplier_pack_description = parsed_row["supplier_pack_description"]
+        calc_unit = parsed_row["calc_unit"]
+        calc_quantity = parsed_row["calc_quantity"]
+        preferred_unit = parsed_row["preferred_unit"]
+        secondary_unit = parsed_row["secondary_unit"]
+        secondary_unit_factor = parsed_row["secondary_unit_factor"]
+
+        ingredient = (
+            db.query(Ingredient)
+            .filter(Ingredient.supplier_product_code == supplier_product_code)
+            .first()
+        )
+
+        issues_to_create: list[IngredientImportIssue] = []
+
+        if ingredient:
+            current_name = (ingredient.supplier_product_name or "").strip()
+            imported_name = supplier_product_name.strip()
+            if imported_name and imported_name != current_name:
                 issues_to_create.append(
                     IngredientImportIssue(
                         import_batch_id=batch.id,
-                        ingredient_id=ingredient.id if ingredient else None,
+                        ingredient_id=ingredient.id,
                         supplier_product_code=supplier_product_code,
                         supplier_product_name=supplier_product_name or None,
-                        issue_type="base_price_unreliable",
+                        issue_type="name_mismatch",
                         status="open",
                         payload_json=json.dumps(
                             {
-                                "supplier_price_ex_vat": (
-                                    str(supplier_price_ex_vat) if supplier_price_ex_vat is not None else None
-                                ),
-                                "calc_quantity": str(calc_quantity) if calc_quantity is not None else None,
-                                "calc_unit": calc_unit,
+                                "current_name": ingredient.supplier_product_name,
+                                "imported_name": supplier_product_name,
                             }
                         ),
                     )
                 )
 
-            for issue in issues_to_create:
-                db.add(issue)
-            batch.issue_count += len(issues_to_create)
-
-            if ingredient:
-                ingredient.supplier_product_name = supplier_product_name or ingredient.supplier_product_name
-                ingredient.supplier_unit = supplier_unit or ingredient.supplier_unit
-                ingredient.supplier_price_ex_vat = supplier_price_ex_vat
-                ingredient.supplier_vat_rate = supplier_vat_rate
-                ingredient.supplier_allergens_raw = supplier_allergens_raw
-                ingredient.supplier_brand = supplier_brand
-                ingredient.category = category
-                ingredient.supplier_pack_description = supplier_pack_description
-                ingredient.packaging_type = packaging_type
-                ingredient.units_per_package = units_per_package
-                ingredient.net_content_amount = net_content_amount
-                ingredient.net_content_unit = net_content_unit
-                ingredient.supplier_net_content = net_content_amount
-                ingredient.package_weight_amount = package_weight_amount
-                ingredient.package_weight_unit = package_weight_unit
-                ingredient.package_volume_amount = package_volume_amount
-                ingredient.package_volume_unit = package_volume_unit
-                if calc_unit is not None and calc_quantity is not None:
-                    ingredient.calculation_unit = calc_unit
-                    ingredient.calculation_quantity_per_package = calc_quantity
-                    ingredient.conversion_factor_to_base = calc_quantity
-                if (
-                    preferred_unit is not None
-                    and secondary_unit is not None
-                    and secondary_unit_factor is not None
-                    and ingredient.preferred_unit is None
-                    and ingredient.secondary_unit is None
-                    and ingredient.secondary_unit_factor is None
-                ):
-                    ingredient.preferred_unit = preferred_unit
-                    ingredient.secondary_unit = secondary_unit
-                    ingredient.secondary_unit_factor = secondary_unit_factor
-                updated += 1
-                batch.updated_count += 1
-            else:
-                base_unit = calc_unit or supplier_unit or "st"
-                ingredient = Ingredient(
-                    supplier_name="Bidfood",
-                    supplier_product_code=supplier_product_code,
-                    supplier_product_name=supplier_product_name or supplier_product_code,
-                    supplier_brand=supplier_brand,
-                    supplier_unit=supplier_unit or "st",
-                    supplier_pack_description=supplier_pack_description,
-                    supplier_net_content=net_content_amount,
-                    packaging_type=packaging_type,
-                    units_per_package=units_per_package,
-                    net_content_amount=net_content_amount,
-                    net_content_unit=net_content_unit,
-                    package_weight_amount=package_weight_amount,
-                    package_weight_unit=package_weight_unit,
-                    package_volume_amount=package_volume_amount,
-                    package_volume_unit=package_volume_unit,
-                    calculation_unit=calc_unit,
-                    calculation_quantity_per_package=calc_quantity,
-                    preferred_unit=preferred_unit,
-                    secondary_unit=secondary_unit,
-                    secondary_unit_factor=secondary_unit_factor,
-                    supplier_price_ex_vat=supplier_price_ex_vat,
-                    supplier_vat_rate=supplier_vat_rate,
-                    supplier_allergens_raw=supplier_allergens_raw,
-                    category=category,
-                    base_unit=base_unit,
-                    conversion_factor_to_base=calc_quantity if calc_quantity is not None else 1,
+            packaging_changes = {}
+            packaging_fields = {
+                "units_per_package": (ingredient.units_per_package, units_per_package),
+                "net_content_amount": (ingredient.net_content_amount, net_content_amount),
+                "net_content_unit": (ingredient.net_content_unit, net_content_unit),
+            }
+            for field_name, (current_value, imported_value) in packaging_fields.items():
+                if _values_differ(current_value, imported_value):
+                    packaging_changes[field_name] = {
+                        "current": str(current_value) if current_value is not None else None,
+                        "imported": str(imported_value) if imported_value is not None else None,
+                    }
+            if packaging_changes:
+                issues_to_create.append(
+                    IngredientImportIssue(
+                        import_batch_id=batch.id,
+                        ingredient_id=ingredient.id,
+                        supplier_product_code=supplier_product_code,
+                        supplier_product_name=supplier_product_name or None,
+                        issue_type="packaging_changed",
+                        status="open",
+                        payload_json=json.dumps(packaging_changes),
+                    )
                 )
-                db.add(ingredient)
-                created += 1
-                batch.created_count += 1
 
-            db.flush()
+        has_existing_conversion_factor = (
+            ingredient is not None
+            and ingredient.conversion_factor_to_base is not None
+            and ingredient.conversion_factor_to_base != 0
+        )
+        has_new_calc_quantity = calc_quantity is not None and calc_quantity != 0
+        should_flag_base_price_unreliable = supplier_price_ex_vat is None
+        if ingredient:
+            if not has_new_calc_quantity and not has_existing_conversion_factor:
+                should_flag_base_price_unreliable = True
+        elif not has_new_calc_quantity:
+            should_flag_base_price_unreliable = True
 
-            history_base_unit = calc_unit or ingredient.base_unit
-            history_conversion_factor = (
-                Decimal(str(calc_quantity))
-                if calc_quantity is not None
-                else Decimal(str(ingredient.conversion_factor_to_base))
-                if ingredient.conversion_factor_to_base is not None
-                else None
+        if should_flag_base_price_unreliable:
+            issues_to_create.append(
+                IngredientImportIssue(
+                    import_batch_id=batch.id,
+                    ingredient_id=ingredient.id if ingredient else None,
+                    supplier_product_code=supplier_product_code,
+                    supplier_product_name=supplier_product_name or None,
+                    issue_type="base_price_unreliable",
+                    status="open",
+                    payload_json=json.dumps(
+                        {
+                            "supplier_price_ex_vat": (
+                                str(supplier_price_ex_vat) if supplier_price_ex_vat is not None else None
+                            ),
+                            "calc_quantity": str(calc_quantity) if calc_quantity is not None else None,
+                            "calc_unit": calc_unit,
+                        }
+                    ),
+                )
             )
-            history_supplier_price = (
-                Decimal(str(supplier_price_ex_vat)) if supplier_price_ex_vat is not None else None
-            )
-            history_base_price = None
+
+        for issue in issues_to_create:
+            db.add(issue)
+        batch.issue_count += len(issues_to_create)
+
+        if ingredient:
+            ingredient.supplier_product_name = supplier_product_name or ingredient.supplier_product_name
+            ingredient.supplier_unit = supplier_unit or ingredient.supplier_unit
+            ingredient.supplier_price_ex_vat = supplier_price_ex_vat
+            ingredient.supplier_vat_rate = supplier_vat_rate
+            ingredient.supplier_allergens_raw = supplier_allergens_raw
+            ingredient.supplier_brand = supplier_brand
+            ingredient.category = category
+            ingredient.supplier_pack_description = supplier_pack_description
+            ingredient.packaging_type = packaging_type
+            ingredient.units_per_package = units_per_package
+            ingredient.net_content_amount = net_content_amount
+            ingredient.net_content_unit = net_content_unit
+            ingredient.supplier_net_content = net_content_amount
+            ingredient.package_weight_amount = package_weight_amount
+            ingredient.package_weight_unit = package_weight_unit
+            ingredient.package_volume_amount = package_volume_amount
+            ingredient.package_volume_unit = package_volume_unit
+            if calc_unit is not None and calc_quantity is not None:
+                ingredient.calculation_unit = calc_unit
+                ingredient.calculation_quantity_per_package = calc_quantity
+                ingredient.conversion_factor_to_base = calc_quantity
             if (
-                history_supplier_price is not None
-                and history_conversion_factor is not None
-                and history_conversion_factor != 0
+                preferred_unit is not None
+                and secondary_unit is not None
+                and secondary_unit_factor is not None
+                and ingredient.preferred_unit is None
+                and ingredient.secondary_unit is None
+                and ingredient.secondary_unit_factor is None
             ):
-                history_base_price = history_supplier_price / history_conversion_factor
-
-            db.add(
-                IngredientPriceHistory(
-                    ingredient_id=ingredient.id,
-                    supplier_product_code=supplier_product_code,
-                    supplier_product_name=supplier_product_name or ingredient.supplier_product_name,
-                    supplier_price_ex_vat=history_supplier_price,
-                    base_price_per_unit_ex_vat=history_base_price,
-                    base_unit=history_base_unit,
-                    supplier_vat_rate=Decimal(str(supplier_vat_rate)) if supplier_vat_rate is not None else None,
-                    recorded_at=datetime.now(timezone.utc),
-                )
+                ingredient.preferred_unit = preferred_unit
+                ingredient.secondary_unit = secondary_unit
+                ingredient.secondary_unit_factor = secondary_unit_factor
+            updated += 1
+            batch.updated_count += 1
+        else:
+            base_unit = calc_unit or supplier_unit or "st"
+            ingredient = Ingredient(
+                supplier_name="Bidfood",
+                supplier_product_code=supplier_product_code,
+                supplier_product_name=supplier_product_name or supplier_product_code,
+                supplier_brand=supplier_brand,
+                supplier_unit=supplier_unit or "st",
+                supplier_pack_description=supplier_pack_description,
+                supplier_net_content=net_content_amount,
+                packaging_type=packaging_type,
+                units_per_package=units_per_package,
+                net_content_amount=net_content_amount,
+                net_content_unit=net_content_unit,
+                package_weight_amount=package_weight_amount,
+                package_weight_unit=package_weight_unit,
+                package_volume_amount=package_volume_amount,
+                package_volume_unit=package_volume_unit,
+                calculation_unit=calc_unit,
+                calculation_quantity_per_package=calc_quantity,
+                preferred_unit=preferred_unit,
+                secondary_unit=secondary_unit,
+                secondary_unit_factor=secondary_unit_factor,
+                supplier_price_ex_vat=supplier_price_ex_vat,
+                supplier_vat_rate=supplier_vat_rate,
+                supplier_allergens_raw=supplier_allergens_raw,
+                category=category,
+                base_unit=base_unit,
+                conversion_factor_to_base=calc_quantity if calc_quantity is not None else 1,
             )
+            db.add(ingredient)
+            created += 1
+            batch.created_count += 1
+
+        db.flush()
+
+        history_base_unit = calc_unit or ingredient.base_unit
+        history_conversion_factor = (
+            Decimal(str(calc_quantity))
+            if calc_quantity is not None
+            else Decimal(str(ingredient.conversion_factor_to_base))
+            if ingredient.conversion_factor_to_base is not None
+            else None
+        )
+        history_supplier_price = (
+            Decimal(str(supplier_price_ex_vat)) if supplier_price_ex_vat is not None else None
+        )
+        history_base_price = None
+        if (
+            history_supplier_price is not None
+            and history_conversion_factor is not None
+            and history_conversion_factor != 0
+        ):
+            history_base_price = history_supplier_price / history_conversion_factor
+
+        db.add(
+            IngredientPriceHistory(
+                ingredient_id=ingredient.id,
+                supplier_product_code=supplier_product_code,
+                supplier_product_name=supplier_product_name or ingredient.supplier_product_name,
+                supplier_price_ex_vat=history_supplier_price,
+                base_price_per_unit_ex_vat=history_base_price,
+                base_unit=history_base_unit,
+                supplier_vat_rate=Decimal(str(supplier_vat_rate)) if supplier_vat_rate is not None else None,
+                recorded_at=datetime.now(timezone.utc),
+            )
+        )
 
     batch.completed_at = datetime.now(timezone.utc)
     batch.status = "completed"
