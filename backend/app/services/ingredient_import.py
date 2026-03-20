@@ -261,6 +261,7 @@ def _extract_package_volume(row: dict) -> tuple[float | None, str | None]:
     amount = _parse_number(row.get("Netto inhoud"))
     unit = _extract_explicit_volume_unit(row)
     text_amount, text_unit = _extract_amount_and_unit_from_text(row.get("Omschrijving inhoud artikel"))
+    effective_unit = unit if unit in {"liter", "ml"} else text_unit if text_unit in {"liter", "ml"} else None
 
     if amount == 0:
         amount = None
@@ -271,8 +272,8 @@ def _extract_package_volume(row: dict) -> tuple[float | None, str | None]:
             return text_amount, text_unit
         return None, None
 
-    if unit in {"liter", "ml"} and text_amount is not None and text_unit in {"liter", "ml"}:
-        normalized_amount = _normalize_volume_to_ml(amount, unit)
+    if effective_unit in {"liter", "ml"} and text_amount is not None and text_unit in {"liter", "ml"}:
+        normalized_amount = _normalize_volume_to_ml(amount, effective_unit)
         normalized_text_amount = _normalize_volume_to_ml(text_amount, text_unit)
         if (
             normalized_amount is not None
@@ -295,7 +296,7 @@ def _extract_package_volume(row: dict) -> tuple[float | None, str | None]:
     ):
         unit = text_unit
 
-    return amount, unit
+    return amount, effective_unit or unit
 
 
 def _derive_calculation_values(
