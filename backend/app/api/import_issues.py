@@ -25,6 +25,30 @@ def _serialize_issue(issue: IngredientImportIssue) -> dict:
     }
 
 
+@router.get("/api/import-issues", tags=["import-issues"])
+def list_import_issues(
+    status: str | None = None,
+    issue_type: str | None = None,
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    query = db.query(IngredientImportIssue)
+    if status:
+        query = query.filter(IngredientImportIssue.status == status)
+    if issue_type:
+        query = query.filter(IngredientImportIssue.issue_type == issue_type)
+
+    issues = query.order_by(IngredientImportIssue.created_at.desc()).all()
+    return [_serialize_issue(issue) for issue in issues]
+
+
+@router.get("/api/import-issues/{issue_id}", tags=["import-issues"])
+def get_import_issue(issue_id: int, db: Session = Depends(get_db)) -> dict:
+    issue = db.query(IngredientImportIssue).filter(IngredientImportIssue.id == issue_id).first()
+    if issue is None:
+        raise HTTPException(status_code=404, detail="Import issue not found")
+    return _serialize_issue(issue)
+
+
 @router.post("/api/import-issues/{issue_id}/resolve", tags=["import-issues"])
 def resolve_import_issue(issue_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
     try:
