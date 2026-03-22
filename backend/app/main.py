@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.health import router as health_router
+from app.api.import_issues import router as import_issues_router
 from app.api.dish_categories import router as dish_categories_router
 from app.api.dishes import router as dishes_router
 from app.api.imports import router as imports_router
@@ -41,6 +42,7 @@ def root() -> dict[str, str]:
 
 
 app.include_router(health_router)
+app.include_router(import_issues_router)
 app.include_router(dish_categories_router)
 app.include_router(dishes_router)
 app.include_router(ingredients_router)

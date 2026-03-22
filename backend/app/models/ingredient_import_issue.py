@@ -21,6 +21,8 @@ class IngredientImportIssue(Base):
     issue_type: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="open", server_default="open")
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolution_action: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    resolution_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
