@@ -103,15 +103,19 @@ export default function Importbeheer() {
       return
     }
 
+    const issueId = selectedIssueId
     setIsResolving(true)
     setIssueError('')
     setIssuesMessage('')
 
     try {
-      const resolved = await apiClient.resolveImportIssue(selectedIssueId, { action, payload })
-      setSelectedIssue(resolved)
+      await apiClient.resolveImportIssue(issueId, { action, payload })
+      setIssues((currentIssues) => currentIssues.filter((issue) => issue.id !== issueId))
+      if (selectedIssueId === issueId) {
+        setSelectedIssueId(null)
+        setSelectedIssue(null)
+      }
       setIssuesMessage('Keuze opgeslagen.')
-      await loadIssues()
     } catch {
       setIssueError('Issue opslaan mislukt.')
     } finally {
