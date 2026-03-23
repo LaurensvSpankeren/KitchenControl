@@ -261,6 +261,18 @@ function formatPackageWeightLabel(ingredient) {
   return `${formatCompactNumber(amount, 4).replace(/,?0+$/, '')} ${unit}`
 }
 
+function formatCalculationContentLabel(ingredient) {
+  if (!ingredient) {
+    return null
+  }
+  const amount = Number(ingredient.calculation_quantity_per_package)
+  const unit = normalizeUnit(ingredient.calculation_unit)
+  if (Number.isNaN(amount) || !unit) {
+    return null
+  }
+  return `${formatCompactNumber(amount, 4).replace(/,?0+$/, '')} ${unit}`
+}
+
 function formatPackageVolumeLabel(ingredient) {
   if (!ingredient) {
     return null
@@ -1830,11 +1842,11 @@ export default function Halffabricaten() {
                             <span className="ingredient-picker-meta">
                               #{ingredient.supplier_product_code || '-'} |{' '}
                               {formatCurrency(ingredient.supplier_price_ex_vat)} / verpakking
-                              {formatPackageWeightLabel(ingredient)
-                                ? ` | Gewicht: ${formatPackageWeightLabel(ingredient)}`
+                              {formatCalculationContentLabel(ingredient)
+                                ? ` | Inhoud: ${formatCalculationContentLabel(ingredient)}`
                                 : ''}
                               {formatPackageVolumeLabel(ingredient)
-                                ? ` | Inhoud: ${formatPackageVolumeLabel(ingredient)}`
+                                ? ` | Volume: ${formatPackageVolumeLabel(ingredient)}`
                                 : ''}
                             </span>
                           </button>
@@ -1882,11 +1894,11 @@ export default function Halffabricaten() {
                       {selectedIngredient.supplier_product_code || '-'} | Rekeneenheid:{' '}
                       {selectedIngredient.calculation_unit || '-'} | Aantal rekeneenheden:{' '}
                       {formatCompactNumber(selectedIngredient.calculation_quantity_per_package, 4)}
-                      {formatPackageWeightLabel(selectedIngredient)
-                        ? ` | Gewicht: ${formatPackageWeightLabel(selectedIngredient)}`
+                      {formatCalculationContentLabel(selectedIngredient)
+                        ? ` | Inhoud: ${formatCalculationContentLabel(selectedIngredient)}`
                         : ''}
                       {formatPackageVolumeLabel(selectedIngredient)
-                        ? ` | Inhoud: ${formatPackageVolumeLabel(selectedIngredient)}`
+                        ? ` | Volume: ${formatPackageVolumeLabel(selectedIngredient)}`
                         : ''}
                       {' | '}Keuze: {selectedIngredientUnitOptions.join(' / ') || '-'}
                     </p>
