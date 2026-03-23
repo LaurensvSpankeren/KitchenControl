@@ -222,7 +222,10 @@ def _serialize_ingredient(ingredient: Ingredient) -> dict:
 @router.get("/api/ingredients", tags=["ingredients"])
 def list_ingredients(db: Session = Depends(get_db)) -> list[dict]:
     ingredients = (
-        db.query(Ingredient).order_by(Ingredient.supplier_product_name.asc()).all()
+        db.query(Ingredient)
+        .filter(Ingredient.is_archived.is_(False))
+        .order_by(Ingredient.supplier_product_name.asc())
+        .all()
     )
     return [_serialize_ingredient(ingredient) for ingredient in ingredients]
 
