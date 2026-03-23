@@ -352,18 +352,22 @@ def create_manual_ingredient(payload: dict, db: Session = Depends(get_db)) -> di
             detail=f"Missing required fields: {', '.join(missing_fields)}",
         )
 
+    now = datetime.now(timezone.utc)
     normalized_payload = dict(payload)
     if not normalized_payload.get("supplier_product_code"):
-        normalized_payload["supplier_product_code"] = (
-            f"MANUAL-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
-        )
+        normalized_payload["supplier_product_code"] = f"MANUAL-{now.strftime('%Y%m%d%H%M%S%f')}"
+    normalized_payload["source_type"] = "manual"
+    normalized_payload["awaiting_import_match"] = True
 
     ingredient_data = _parse_payload_values(normalized_payload)
     ingredient_data["source_type"] = "manual"
-    ingredient_data["manual_created_at"] = datetime.now(timezone.utc)
+    ingredient_data["manual_created_at"] = now
     ingredient_data["awaiting_import_match"] = True
 
     ingredient = Ingredient(**ingredient_data)
+    ingredient.source_type = "manual"
+    ingredient.manual_created_at = now
+    ingredient.awaiting_import_match = True
     db.add(ingredient)
     db.commit()
     db.refresh(ingredient)
