@@ -84,6 +84,53 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getManualIngredientsForReview() {
+    const response = await fetch(`${API_BASE_URL}/api/manual-ingredients/review`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch manual ingredients for review: ${response.status}`)
+    }
+    return response.json()
+  },
+  async reviewManualIngredient(id) {
+    const response = await fetch(`${API_BASE_URL}/api/manual-ingredients/${id}/review`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to review manual ingredient: ${response.status}`)
+    }
+    return response.json()
+  },
+  async archiveManualIngredient(id) {
+    const response = await fetch(`${API_BASE_URL}/api/manual-ingredients/${id}/archive`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to archive manual ingredient: ${response.status}`)
+    }
+    return response.json()
+  },
+  async deleteManualIngredient(id) {
+    const response = await fetch(`${API_BASE_URL}/api/manual-ingredients/${id}`, {
+      method: 'DELETE'
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to delete manual ingredient: ${response.status}`)
+    }
+    return response.json()
+  },
+  async linkManualIngredientToImport(id) {
+    const response = await fetch(`${API_BASE_URL}/api/manual-ingredients/${id}/link-import`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to link manual ingredient: ${response.status}`)
+    }
+    return response.json()
+  },
   async getSemiFinishedProducts() {
     const response = await fetch(`${API_BASE_URL}/api/semi-finished-products`)
     if (!response.ok) {

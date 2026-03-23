@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.ingredient import Ingredient
 from app.models.recipe_line import RecipeLine
+from app.services.ingredient_import_match_service import detect_import_match_for_manual_ingredient
+from app.services.manual_ingredient_link_service import link_manual_ingredient_to_import
 
 router = APIRouter()
 
@@ -268,6 +270,14 @@ def _serialize_ingredient(ingredient: Ingredient) -> dict:
     }
 
 
+def _serialize_ingredient_with_match(db: Session, ingredient: Ingredient) -> dict:
+    data = _serialize_ingredient(ingredient)
+    data.update({"match_status": "none", "matched_import_ingredient_id": None})
+    if ingredient.source_type == "manual":
+        data.update(detect_import_match_for_manual_ingredient(db, ingredient))
+    return data
+
+
 @router.get("/api/ingredients", tags=["ingredients"])
 def list_ingredients(db: Session = Depends(get_db)) -> list[dict]:
     ingredients = (
@@ -398,7 +408,7 @@ def list_manual_ingredients_for_review(db: Session = Depends(get_db)) -> list[di
         )
         .all()
     )
-    return [_serialize_ingredient(ingredient) for ingredient in ingredients]
+    return [_serialize_ingredient_with_match(db, ingredient) for ingredient in ingredients]
 
 
 @router.delete("/api/manual-ingredients/{ingredient_id}", tags=["ingredients"])
@@ -438,7 +448,7 @@ def archive_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db))
     ingredient.archived_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(ingredient)
-    return _serialize_ingredient(ingredient)
+    return _serialize_ingredient_with_match(db, ingredient)
 
 
 @router.post("/api/manual-ingredients/{ingredient_id}/review", tags=["ingredients"])
@@ -452,4 +462,14 @@ def review_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) 
     ingredient.last_manual_review_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(ingredient)
-    return _serialize_ingredient(ingredient)
+    return _serialize_ingredient_with_match(db, ingredient)
+
+
+@router.post("/api/manual-ingredients/{ingredient_id}/link-import", tags=["ingredients"])
+def link_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+    try:
+        return link_manual_ingredient_to_import(db, ingredient_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
