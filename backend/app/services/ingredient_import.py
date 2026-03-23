@@ -536,6 +536,25 @@ def _find_existing_ingredient_for_variant(
         if ingredient is not None:
             return ingredient
 
+    legacy_candidates = (
+        db.query(Ingredient)
+        .filter(
+            Ingredient.supplier_product_code == supplier_product_code,
+            Ingredient.supplier_sales_unit_code.is_(None),
+            Ingredient.supplier_sales_unit_name.is_(None),
+        )
+        .all()
+    )
+    if legacy_candidates:
+        legacy_unit_matches = []
+        match_value = supplier_sales_unit_name or supplier_sales_unit_code
+        if match_value:
+            for ingredient in legacy_candidates:
+                if (ingredient.supplier_unit or "").strip() == match_value:
+                    legacy_unit_matches.append(ingredient)
+        if len(legacy_unit_matches) == 1:
+            return legacy_unit_matches[0]
+
     if supplier_sales_unit_code is None and supplier_sales_unit_name is None:
         return (
             db.query(Ingredient)
