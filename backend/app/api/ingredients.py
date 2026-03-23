@@ -77,6 +77,10 @@ def _parse_payload_values(payload: dict) -> dict:
 
     optional_string_fields = [
         "supplier_brand",
+        "supplier_sales_unit_code",
+        "supplier_sales_unit_name",
+        "supplier_standard_unit_code",
+        "supplier_standard_unit_name",
         "supplier_pack_description",
         "packaging_type",
         "net_content_unit",
@@ -95,6 +99,7 @@ def _parse_payload_values(payload: dict) -> dict:
 
     optional_numeric_fields = [
         "supplier_net_content",
+        "supplier_sales_factor",
         "units_per_package",
         "net_content_amount",
         "package_weight_amount",
@@ -140,6 +145,13 @@ def _serialize_ingredient(ingredient: Ingredient) -> dict:
         "supplier_product_code": ingredient.supplier_product_code,
         "supplier_product_name": ingredient.supplier_product_name,
         "supplier_brand": ingredient.supplier_brand,
+        "supplier_sales_unit_code": ingredient.supplier_sales_unit_code,
+        "supplier_sales_unit_name": ingredient.supplier_sales_unit_name,
+        "supplier_standard_unit_code": ingredient.supplier_standard_unit_code,
+        "supplier_standard_unit_name": ingredient.supplier_standard_unit_name,
+        "supplier_sales_factor": float(ingredient.supplier_sales_factor)
+        if ingredient.supplier_sales_factor is not None
+        else None,
         "supplier_pack_description": ingredient.supplier_pack_description,
         "supplier_unit": ingredient.supplier_unit,
         "supplier_net_content": float(ingredient.supplier_net_content)

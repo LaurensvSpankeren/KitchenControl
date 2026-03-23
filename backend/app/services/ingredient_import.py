@@ -58,6 +58,8 @@ NEGATIVE_ALLERGEN_VALUES = {
 }
 
 PIECE_HINT_TERMS = ("stuk", "stuks", " st ", "x", "rol", "rollen", "brood", "portie")
+SUBPACKAGE_UNIT_TERMS = ("zak", "stuk", "stuks", "rol", "rollen", "portie", "bak", "tray")
+SUBPACKAGE_UNIT_CODES = {"ZK", "ST", "RL", "TR", "BK"}
 AMOUNT_MATCH_EPSILON = 1e-6
 
 
@@ -437,10 +439,22 @@ def _serialize_import_value(value):
     return str(value) if value is not None else None
 
 
+def _clean_optional_string(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
 def _build_duplicate_fingerprint(parsed_row: dict) -> dict:
     return {
         "supplier_product_code": parsed_row["supplier_product_code"],
         "supplier_product_name": parsed_row["supplier_product_name"] or None,
+        "supplier_sales_unit_code": parsed_row["supplier_sales_unit_code"] or None,
+        "supplier_sales_unit_name": parsed_row["supplier_sales_unit_name"] or None,
+        "supplier_standard_unit_code": parsed_row["supplier_standard_unit_code"] or None,
+        "supplier_standard_unit_name": parsed_row["supplier_standard_unit_name"] or None,
+        "supplier_sales_factor": _serialize_import_value(parsed_row["supplier_sales_factor"]),
         "supplier_price_ex_vat": _serialize_import_value(parsed_row["supplier_price_ex_vat"]),
         "supplier_vat_rate": _serialize_import_value(parsed_row["supplier_vat_rate"]),
         "supplier_unit": parsed_row["supplier_unit"] or None,
@@ -453,6 +467,83 @@ def _build_duplicate_fingerprint(parsed_row: dict) -> dict:
         "package_volume_unit": parsed_row["package_volume_unit"] or None,
         "supplier_pack_description": parsed_row["supplier_pack_description"] or None,
     }
+
+
+def _build_variant_group_key(parsed_row: dict) -> tuple[str, str | None, str | None]:
+    return (
+        parsed_row["supplier_product_code"],
+        parsed_row["supplier_sales_unit_code"] or None,
+        parsed_row["supplier_sales_unit_name"] or None,
+    )
+
+
+def _derive_sales_variant_structure(
+    calc_unit: str | None,
+    calc_quantity: float | None,
+    supplier_sales_factor: float | None,
+    supplier_standard_unit_code: str | None,
+    supplier_standard_unit_name: str | None,
+) -> tuple[float | None, str | None, str | None, float | None]:
+    normalized_calc_unit = _normalize_unit(calc_unit)
+    if normalized_calc_unit not in {"gram", "ml"} or calc_quantity is None or calc_quantity <= 0:
+        return None, None, None, None
+
+    if supplier_sales_factor is None or supplier_sales_factor <= 1:
+        return None, None, None, None
+
+    standard_unit_code = (supplier_standard_unit_code or "").strip().upper()
+    standard_unit_name = (supplier_standard_unit_name or "").strip().lower()
+    if (
+        standard_unit_code not in SUBPACKAGE_UNIT_CODES
+        and not any(term in standard_unit_name for term in SUBPACKAGE_UNIT_TERMS)
+    ):
+        return None, None, None, None
+
+    secondary_unit_factor = calc_quantity / supplier_sales_factor
+    if secondary_unit_factor <= 0:
+        return None, None, None, None
+
+    return supplier_sales_factor, "stuk", normalized_calc_unit, secondary_unit_factor
+
+
+def _find_existing_ingredient_for_variant(
+    db: Session,
+    supplier_product_code: str,
+    supplier_sales_unit_code: str | None,
+    supplier_sales_unit_name: str | None,
+):
+    if supplier_sales_unit_code:
+        ingredient = (
+            db.query(Ingredient)
+            .filter(
+                Ingredient.supplier_product_code == supplier_product_code,
+                Ingredient.supplier_sales_unit_code == supplier_sales_unit_code,
+            )
+            .first()
+        )
+        if ingredient is not None:
+            return ingredient
+
+    if supplier_sales_unit_name:
+        ingredient = (
+            db.query(Ingredient)
+            .filter(
+                Ingredient.supplier_product_code == supplier_product_code,
+                Ingredient.supplier_sales_unit_name == supplier_sales_unit_name,
+            )
+            .first()
+        )
+        if ingredient is not None:
+            return ingredient
+
+    if supplier_sales_unit_code is None and supplier_sales_unit_name is None:
+        return (
+            db.query(Ingredient)
+            .filter(Ingredient.supplier_product_code == supplier_product_code)
+            .first()
+        )
+
+    return None
 
 
 def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
@@ -477,10 +568,14 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
         for row in reader:
             supplier_product_code = (row.get("Artikelnummer") or "").strip()
             supplier_product_name = (row.get("Omschrijving artikel") or "").strip()
-            supplier_unit = (
-                (row.get("Omschrijving verkoopeenheid") or "").strip()
-                or (row.get("Verkoopeenheid") or "").strip()
+            supplier_sales_unit_code = _clean_optional_string(row.get("Verkoopeenheid"))
+            supplier_sales_unit_name = _clean_optional_string(row.get("Omschrijving verkoopeenheid"))
+            supplier_standard_unit_code = _clean_optional_string(row.get("Standaard eenheid"))
+            supplier_standard_unit_name = _clean_optional_string(
+                row.get("Omschrijving standaardeenheid")
             )
+            supplier_sales_factor = _parse_number(row.get("Verkoopfaktor"))
+            supplier_unit = supplier_sales_unit_name or supplier_sales_unit_code or ""
             supplier_price_ex_vat = _parse_number(
                 row.get("Nettoprijs artikel (incl. klantconditie)")
             )
@@ -508,6 +603,31 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 supplier_unit,
                 supplier_pack_description,
             )
+            (
+                derived_units_per_package,
+                derived_preferred_unit,
+                derived_secondary_unit,
+                derived_secondary_unit_factor,
+            ) = _derive_sales_variant_structure(
+                calc_unit,
+                calc_quantity,
+                supplier_sales_factor,
+                supplier_standard_unit_code,
+                supplier_standard_unit_name,
+            )
+            if units_per_package is None and derived_units_per_package is not None:
+                units_per_package = derived_units_per_package
+            if (
+                preferred_unit is None
+                and secondary_unit is None
+                and secondary_unit_factor is None
+                and derived_preferred_unit is not None
+                and derived_secondary_unit is not None
+                and derived_secondary_unit_factor is not None
+            ):
+                preferred_unit = derived_preferred_unit
+                secondary_unit = derived_secondary_unit
+                secondary_unit_factor = derived_secondary_unit_factor
 
             if not supplier_product_code:
                 continue
@@ -516,6 +636,11 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 {
                     "supplier_product_code": supplier_product_code,
                     "supplier_product_name": supplier_product_name,
+                    "supplier_sales_unit_code": supplier_sales_unit_code,
+                    "supplier_sales_unit_name": supplier_sales_unit_name,
+                    "supplier_standard_unit_code": supplier_standard_unit_code,
+                    "supplier_standard_unit_name": supplier_standard_unit_name,
+                    "supplier_sales_factor": supplier_sales_factor,
                     "supplier_unit": supplier_unit,
                     "supplier_price_ex_vat": supplier_price_ex_vat,
                     "supplier_vat_rate": supplier_vat_rate,
@@ -541,12 +666,13 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
 
     batch.total_rows = len(parsed_rows)
 
-    grouped_rows: dict[str, list[dict]] = {}
+    grouped_rows: dict[tuple[str, str | None, str | None], list[dict]] = {}
     for parsed_row in parsed_rows:
-        grouped_rows.setdefault(parsed_row["supplier_product_code"], []).append(parsed_row)
+        grouped_rows.setdefault(_build_variant_group_key(parsed_row), []).append(parsed_row)
 
     effective_rows: list[dict] = []
-    for supplier_product_code, grouped in grouped_rows.items():
+    for _, grouped in grouped_rows.items():
+        supplier_product_code = grouped[0]["supplier_product_code"]
         if len(grouped) == 1:
             effective_rows.append(grouped[0])
             continue
@@ -584,6 +710,11 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
     for parsed_row in effective_rows:
         supplier_product_code = parsed_row["supplier_product_code"]
         supplier_product_name = parsed_row["supplier_product_name"]
+        supplier_sales_unit_code = parsed_row["supplier_sales_unit_code"]
+        supplier_sales_unit_name = parsed_row["supplier_sales_unit_name"]
+        supplier_standard_unit_code = parsed_row["supplier_standard_unit_code"]
+        supplier_standard_unit_name = parsed_row["supplier_standard_unit_name"]
+        supplier_sales_factor = parsed_row["supplier_sales_factor"]
         supplier_unit = parsed_row["supplier_unit"]
         supplier_price_ex_vat = parsed_row["supplier_price_ex_vat"]
         supplier_vat_rate = parsed_row["supplier_vat_rate"]
@@ -605,10 +736,11 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
         secondary_unit = parsed_row["secondary_unit"]
         secondary_unit_factor = parsed_row["secondary_unit_factor"]
 
-        ingredient = (
-            db.query(Ingredient)
-            .filter(Ingredient.supplier_product_code == supplier_product_code)
-            .first()
+        ingredient = _find_existing_ingredient_for_variant(
+            db,
+            supplier_product_code,
+            supplier_sales_unit_code,
+            supplier_sales_unit_name,
         )
 
         issues_to_create: list[IngredientImportIssue] = []
@@ -699,6 +831,11 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
 
         if ingredient:
             ingredient.supplier_product_name = supplier_product_name or ingredient.supplier_product_name
+            ingredient.supplier_sales_unit_code = supplier_sales_unit_code
+            ingredient.supplier_sales_unit_name = supplier_sales_unit_name
+            ingredient.supplier_standard_unit_code = supplier_standard_unit_code
+            ingredient.supplier_standard_unit_name = supplier_standard_unit_name
+            ingredient.supplier_sales_factor = supplier_sales_factor
             ingredient.supplier_unit = supplier_unit or ingredient.supplier_unit
             ingredient.supplier_price_ex_vat = supplier_price_ex_vat
             ingredient.supplier_vat_rate = supplier_vat_rate
@@ -739,6 +876,11 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 supplier_product_code=supplier_product_code,
                 supplier_product_name=supplier_product_name or supplier_product_code,
                 supplier_brand=supplier_brand,
+                supplier_sales_unit_code=supplier_sales_unit_code,
+                supplier_sales_unit_name=supplier_sales_unit_name,
+                supplier_standard_unit_code=supplier_standard_unit_code,
+                supplier_standard_unit_name=supplier_standard_unit_name,
+                supplier_sales_factor=supplier_sales_factor,
                 supplier_unit=supplier_unit or "st",
                 supplier_pack_description=supplier_pack_description,
                 supplier_net_content=net_content_amount,
