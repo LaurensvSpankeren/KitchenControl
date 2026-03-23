@@ -40,6 +40,16 @@ def _legacy_matches_new_variant(legacy: Ingredient, variant: Ingredient) -> bool
     return True
 
 
+def _legacy_matches_new_variant_by_unit_only(legacy: Ingredient, variant: Ingredient) -> bool:
+    legacy_unit = _clean_string(legacy.supplier_unit)
+    variant_unit = _clean_string(variant.supplier_sales_unit_name) or _clean_string(
+        variant.supplier_sales_unit_code
+    )
+    if legacy_unit is None or variant_unit is None:
+        return False
+    return legacy_unit == variant_unit
+
+
 def archive_legacy_variant_duplicates(db: Session) -> dict:
     scanned = 0
     archived = 0
@@ -84,10 +94,19 @@ def archive_legacy_variant_duplicates(db: Session) -> dict:
         matches_by_legacy: dict[int, list[Ingredient]] = {}
         for legacy in legacy_rows:
             scanned += 1
-            matches_by_legacy[legacy.id] = [
+            strict_matches = [
                 variant
                 for variant in variant_rows
                 if _legacy_matches_new_variant(legacy, variant)
+            ]
+            if strict_matches:
+                matches_by_legacy[legacy.id] = strict_matches
+                continue
+
+            matches_by_legacy[legacy.id] = [
+                variant
+                for variant in variant_rows
+                if _legacy_matches_new_variant_by_unit_only(legacy, variant)
             ]
 
         for legacy in legacy_rows:
