@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.ingredient_import_issue import IngredientImportIssue
 from app.services.ingredient_import_issue_service import resolve_issue
+from app.services.ingredient_variant_cleanup_service import archive_legacy_variant_duplicates
 
 router = APIRouter()
 
@@ -64,3 +65,8 @@ def resolve_import_issue(issue_id: int, payload: dict, db: Session = Depends(get
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return _serialize_issue(issue)
+
+
+@router.post("/api/import-issues/cleanup-legacy-variants", tags=["import-issues"])
+def cleanup_legacy_variant_duplicates(db: Session = Depends(get_db)) -> dict:
+    return archive_legacy_variant_duplicates(db)
