@@ -1,8 +1,12 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.ingredient import Ingredient
+from app.models.recipe_line import RecipeLine
 
 router = APIRouter()
 
@@ -18,6 +22,25 @@ def _parse_optional_float(payload: dict, field_name: str) -> float | None:
             status_code=400,
             detail=f"Invalid numeric value for field: {field_name}",
         ) from exc
+
+
+def _parse_optional_bool(payload: dict, field_name: str) -> bool | None:
+    if field_name not in payload:
+        return None
+    value = payload.get(field_name)
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "1", "yes", "ja"}:
+        return True
+    if normalized in {"false", "0", "no", "nee"}:
+        return False
+    raise HTTPException(
+        status_code=400,
+        detail=f"Invalid boolean value for field: {field_name}",
+    )
 
 
 def _normalize_unit(value: str | None) -> str | None:
@@ -86,9 +109,12 @@ def _parse_payload_values(payload: dict) -> dict:
         "net_content_unit",
         "package_weight_unit",
         "package_volume_unit",
+        "calculation_unit",
         "preferred_unit",
         "secondary_unit",
         "category",
+        "source_type",
+        "manual_note",
         "internal_notes",
         "internal_allergens_extra",
         "cross_contamination_notes",
@@ -104,6 +130,7 @@ def _parse_payload_values(payload: dict) -> dict:
         "net_content_amount",
         "package_weight_amount",
         "package_volume_amount",
+        "calculation_quantity_per_package",
         "supplier_price_ex_vat",
         "supplier_vat_rate",
         "secondary_unit_factor",
@@ -115,6 +142,12 @@ def _parse_payload_values(payload: dict) -> dict:
         if field in payload:
             data[field] = _parse_optional_float(payload, field)
 
+    optional_boolean_fields = ["awaiting_import_match"]
+    for field in optional_boolean_fields:
+        value = _parse_optional_bool(payload, field)
+        if value is not None:
+            data[field] = value
+
     if "net_content_amount" not in data and data.get("supplier_net_content") is not None:
         data["net_content_amount"] = data["supplier_net_content"]
 
@@ -125,15 +158,22 @@ def _parse_payload_values(payload: dict) -> dict:
     if normalized_net_unit is not None:
         data["net_content_unit"] = normalized_net_unit
 
-    calc_unit, calc_quantity = _derive_calculation_values(
-        data.get("net_content_unit"),
-        data.get("net_content_amount"),
-        data.get("units_per_package"),
-    )
-    if calc_unit is not None and calc_quantity is not None:
-        data["calculation_unit"] = calc_unit
-        data["calculation_quantity_per_package"] = calc_quantity
-        data["conversion_factor_to_base"] = calc_quantity
+    manual_calc_unit = _normalize_unit(data.get("calculation_unit"))
+    manual_calc_quantity = data.get("calculation_quantity_per_package")
+    if manual_calc_unit is not None and manual_calc_quantity is not None:
+        data["calculation_unit"] = manual_calc_unit
+        data["calculation_quantity_per_package"] = manual_calc_quantity
+        data["conversion_factor_to_base"] = manual_calc_quantity
+    else:
+        calc_unit, calc_quantity = _derive_calculation_values(
+            data.get("net_content_unit"),
+            data.get("net_content_amount"),
+            data.get("units_per_package"),
+        )
+        if calc_unit is not None and calc_quantity is not None:
+            data["calculation_unit"] = calc_unit
+            data["calculation_quantity_per_package"] = calc_quantity
+            data["conversion_factor_to_base"] = calc_quantity
 
     return data
 
@@ -192,6 +232,15 @@ def _serialize_ingredient(ingredient: Ingredient) -> dict:
         "supplier_last_imported_at": ingredient.supplier_last_imported_at.isoformat()
         if ingredient.supplier_last_imported_at is not None
         else None,
+        "source_type": ingredient.source_type,
+        "manual_created_at": ingredient.manual_created_at.isoformat()
+        if ingredient.manual_created_at is not None
+        else None,
+        "last_manual_review_at": ingredient.last_manual_review_at.isoformat()
+        if ingredient.last_manual_review_at is not None
+        else None,
+        "manual_note": ingredient.manual_note,
+        "awaiting_import_match": ingredient.awaiting_import_match,
         "internal_name": ingredient.internal_name,
         "category": ingredient.category,
         "internal_notes": ingredient.internal_notes,
@@ -280,6 +329,123 @@ def update_ingredient(ingredient_id: int, payload: dict, db: Session = Depends(g
     for field, value in ingredient_data.items():
         setattr(ingredient, field, value)
 
+    db.commit()
+    db.refresh(ingredient)
+    return _serialize_ingredient(ingredient)
+
+
+@router.post("/api/manual-ingredients", tags=["ingredients"])
+def create_manual_ingredient(payload: dict, db: Session = Depends(get_db)) -> dict:
+    required_fields = [
+        "supplier_name",
+        "supplier_product_name",
+        "supplier_price_ex_vat",
+        "supplier_unit",
+        "calculation_unit",
+        "calculation_quantity_per_package",
+        "base_unit",
+    ]
+    missing_fields = [field for field in required_fields if payload.get(field) in (None, "")]
+    if missing_fields:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required fields: {', '.join(missing_fields)}",
+        )
+
+    normalized_payload = dict(payload)
+    if not normalized_payload.get("supplier_product_code"):
+        normalized_payload["supplier_product_code"] = (
+            f"MANUAL-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+        )
+
+    ingredient_data = _parse_payload_values(normalized_payload)
+    ingredient_data["source_type"] = "manual"
+    ingredient_data["manual_created_at"] = datetime.now(timezone.utc)
+    ingredient_data["awaiting_import_match"] = True
+
+    ingredient = Ingredient(**ingredient_data)
+    db.add(ingredient)
+    db.commit()
+    db.refresh(ingredient)
+    return _serialize_ingredient(ingredient)
+
+
+@router.get("/api/manual-ingredients/review", tags=["ingredients"])
+def list_manual_ingredients_for_review(db: Session = Depends(get_db)) -> list[dict]:
+    threshold = datetime.now(timezone.utc) - timedelta(days=45)
+    ingredients = (
+        db.query(Ingredient)
+        .filter(
+            Ingredient.source_type == "manual",
+            Ingredient.is_archived.is_(False),
+            Ingredient.awaiting_import_match.is_(True),
+            or_(
+                (Ingredient.last_manual_review_at.is_not(None) & (Ingredient.last_manual_review_at <= threshold)),
+                (
+                    Ingredient.last_manual_review_at.is_(None)
+                    & Ingredient.manual_created_at.is_not(None)
+                    & (Ingredient.manual_created_at <= threshold)
+                ),
+            ),
+        )
+        .order_by(
+            Ingredient.last_manual_review_at.asc().nullsfirst(),
+            Ingredient.manual_created_at.asc().nullsfirst(),
+        )
+        .all()
+    )
+    return [_serialize_ingredient(ingredient) for ingredient in ingredients]
+
+
+@router.delete("/api/manual-ingredients/{ingredient_id}", tags=["ingredients"])
+def delete_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+    ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    if ingredient.source_type != "manual":
+        raise HTTPException(status_code=400, detail="Only manual ingredients can be deleted via this endpoint")
+
+    is_used = (
+        db.query(RecipeLine.id)
+        .filter(RecipeLine.item_type == "ingredient", RecipeLine.item_id == ingredient.id)
+        .first()
+        is not None
+    )
+    if is_used:
+        raise HTTPException(
+            status_code=400,
+            detail="Ingredient is still used in recepten of halffabricaten en kan niet worden verwijderd.",
+        )
+
+    db.delete(ingredient)
+    db.commit()
+    return {"deleted": True, "ingredient_id": ingredient_id}
+
+
+@router.post("/api/manual-ingredients/{ingredient_id}/archive", tags=["ingredients"])
+def archive_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+    ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    if ingredient.source_type != "manual":
+        raise HTTPException(status_code=400, detail="Only manual ingredients can be archived via this endpoint")
+
+    ingredient.is_archived = True
+    ingredient.archived_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(ingredient)
+    return _serialize_ingredient(ingredient)
+
+
+@router.post("/api/manual-ingredients/{ingredient_id}/review", tags=["ingredients"])
+def review_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+    ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    if ingredient.source_type != "manual":
+        raise HTTPException(status_code=400, detail="Only manual ingredients can be reviewed via this endpoint")
+
+    ingredient.last_manual_review_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(ingredient)
     return _serialize_ingredient(ingredient)
