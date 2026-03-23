@@ -25,7 +25,7 @@ def resolve_issue(
 
     issue.resolution_action = normalized_action
     issue.resolution_payload = json.dumps(payload) if payload is not None else None
-    issue.status = "resolved"
+    issue.status = "ignored" if normalized_action == "ignore" else "resolved"
     issue.resolved_at = datetime.now(timezone.utc)
 
     db.commit()

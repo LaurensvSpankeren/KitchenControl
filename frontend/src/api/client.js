@@ -47,6 +47,43 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getImportIssues(params = {}) {
+    const searchParams = new URLSearchParams()
+    if (params.status) {
+      searchParams.set('status', params.status)
+    }
+    if (params.issue_type) {
+      searchParams.set('issue_type', params.issue_type)
+    }
+    const query = searchParams.toString()
+    const response = await fetch(
+      `${API_BASE_URL}/api/import-issues${query ? `?${query}` : ''}`
+    )
+    if (!response.ok) {
+      throw new Error(`Failed to fetch import issues: ${response.status}`)
+    }
+    return response.json()
+  },
+  async getImportIssue(id) {
+    const response = await fetch(`${API_BASE_URL}/api/import-issues/${id}`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch import issue: ${response.status}`)
+    }
+    return response.json()
+  },
+  async resolveImportIssue(id, payload) {
+    const response = await fetch(`${API_BASE_URL}/api/import-issues/${id}/resolve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to resolve import issue: ${response.status}`)
+    }
+    return response.json()
+  },
   async getSemiFinishedProducts() {
     const response = await fetch(`${API_BASE_URL}/api/semi-finished-products`)
     if (!response.ok) {
