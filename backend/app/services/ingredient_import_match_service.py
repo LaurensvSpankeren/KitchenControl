@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.models.ingredient import Ingredient
 
+AMOUNT_MATCH_EPSILON = 1e-9
+
 
 UNIT_NORMALIZATION = {
     "gr": "gram",
@@ -43,9 +45,17 @@ def _product_names_look_similar(left: str | None, right: str | None) -> bool:
     return left_clean in right_clean or right_clean in left_clean
 
 
+def _amounts_equal(left, right) -> bool:
+    if left is None or right is None:
+        return True
+    return abs(float(left) - float(right)) <= AMOUNT_MATCH_EPSILON
+
+
 def _strong_unit_match(manual_ingredient: Ingredient, import_ingredient: Ingredient) -> bool:
+    manual_supplier_unit = _clean_text(manual_ingredient.supplier_unit)
     manual_unit_code = _clean_text(manual_ingredient.supplier_sales_unit_code)
     manual_unit_name = _clean_text(manual_ingredient.supplier_sales_unit_name)
+    import_supplier_unit = _clean_text(import_ingredient.supplier_unit)
     import_unit_code = _clean_text(import_ingredient.supplier_sales_unit_code)
     import_unit_name = _clean_text(import_ingredient.supplier_sales_unit_name)
 
@@ -59,7 +69,33 @@ def _strong_unit_match(manual_ingredient: Ingredient, import_ingredient: Ingredi
         and import_unit_name is not None
         and manual_unit_name == import_unit_name
     )
-    return code_matches or name_matches
+    supplier_name_matches = (
+        manual_supplier_unit is not None
+        and import_unit_name is not None
+        and manual_supplier_unit == import_unit_name
+    )
+    supplier_unit_matches = (
+        manual_supplier_unit is not None
+        and import_supplier_unit is not None
+        and manual_supplier_unit == import_supplier_unit
+    )
+    return code_matches or name_matches or supplier_name_matches or supplier_unit_matches
+
+
+def _strong_calculation_match(manual_ingredient: Ingredient, import_ingredient: Ingredient) -> bool:
+    manual_calc_unit = _normalize_unit(manual_ingredient.calculation_unit)
+    import_calc_unit = _normalize_unit(import_ingredient.calculation_unit)
+    if (
+        manual_calc_unit is not None
+        and import_calc_unit is not None
+        and manual_calc_unit != import_calc_unit
+    ):
+        return False
+
+    return _amounts_equal(
+        manual_ingredient.calculation_quantity_per_package,
+        import_ingredient.calculation_quantity_per_package,
+    )
 
 
 def _possible_unit_match(manual_ingredient: Ingredient, import_ingredient: Ingredient) -> bool:
@@ -106,6 +142,7 @@ def detect_import_match_for_manual_ingredient(db: Session, manual_ingredient: In
         for ingredient in candidates
         if ingredient.supplier_product_code == manual_ingredient.supplier_product_code
         and _strong_unit_match(manual_ingredient, ingredient)
+        and _strong_calculation_match(manual_ingredient, ingredient)
     ]
     if len(strong_matches) == 1:
         return {

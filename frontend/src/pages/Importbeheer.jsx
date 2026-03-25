@@ -223,7 +223,6 @@ export default function Importbeheer() {
     }
 
     const targetMatchIngredient = manualMatchIngredients.find((ingredient) => ingredient.id === ingredientId)
-    const targetReviewIngredient = manualIngredients.find((ingredient) => ingredient.id === ingredientId)
     const isMatchAction = Boolean(targetMatchIngredient)
     const setMessage = isMatchAction ? setManualMatchMessage : setManualReviewMessage
     const setError = isMatchAction ? setManualMatchError : setManualReviewError
@@ -249,12 +248,7 @@ export default function Importbeheer() {
         )
       }
 
-      setManualIngredients((currentIngredients) =>
-        currentIngredients.filter((ingredient) => ingredient.id !== ingredientId)
-      )
-      setManualMatchIngredients((currentIngredients) =>
-        currentIngredients.filter((ingredient) => ingredient.id !== ingredientId)
-      )
+      await Promise.all([loadManualIngredients(), loadManualMatchIngredients()])
     } catch (error) {
       setError(error?.message || 'Actie op handmatig ingrediënt mislukt.')
     } finally {
