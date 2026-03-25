@@ -727,6 +727,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
         batch.issue_count += 1
 
     for parsed_row in effective_rows:
+        import_timestamp = datetime.now(timezone.utc)
         supplier_product_code = parsed_row["supplier_product_code"]
         supplier_product_name = parsed_row["supplier_product_name"]
         supplier_sales_unit_code = parsed_row["supplier_sales_unit_code"]
@@ -871,6 +872,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
             ingredient.package_weight_unit = package_weight_unit
             ingredient.package_volume_amount = package_volume_amount
             ingredient.package_volume_unit = package_volume_unit
+            ingredient.supplier_last_imported_at = import_timestamp
             if calc_unit is not None and calc_quantity is not None:
                 ingredient.calculation_unit = calc_unit
                 ingredient.calculation_quantity_per_package = calc_quantity
@@ -919,6 +921,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 supplier_price_ex_vat=supplier_price_ex_vat,
                 supplier_vat_rate=supplier_vat_rate,
                 supplier_allergens_raw=supplier_allergens_raw,
+                supplier_last_imported_at=import_timestamp,
                 category=category,
                 base_unit=base_unit,
                 conversion_factor_to_base=calc_quantity if calc_quantity is not None else 1,
