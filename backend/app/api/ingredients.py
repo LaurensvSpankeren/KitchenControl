@@ -289,6 +289,14 @@ def list_ingredients(db: Session = Depends(get_db)) -> list[dict]:
     return [_serialize_ingredient(ingredient) for ingredient in ingredients]
 
 
+@router.get("/api/ingredients/{ingredient_id}", tags=["ingredients"])
+def get_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+    ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    return _serialize_ingredient(ingredient)
+
+
 @router.post("/api/ingredients", tags=["ingredients"])
 def create_ingredient(payload: dict, db: Session = Depends(get_db)) -> dict:
     required_fields = [

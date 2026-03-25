@@ -269,10 +269,7 @@ export default function Importbeheer() {
     setIsLoadingMatchPreview(true)
     setManualMatchError('')
     try {
-      const ingredients = await apiClient.getIngredients()
-      const matchedIngredient = Array.isArray(ingredients)
-        ? ingredients.find((item) => item.id === ingredient.matched_import_ingredient_id)
-        : null
+      const matchedIngredient = await apiClient.getIngredient(ingredient.matched_import_ingredient_id)
 
       if (!matchedIngredient) {
         setManualMatchError('Gekoppeld importingrediënt kon niet worden geladen.')
