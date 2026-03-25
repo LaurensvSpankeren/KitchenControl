@@ -75,8 +75,10 @@ export default function Importbeheer() {
   const [isResolving, setIsResolving] = useState(false)
   const [manualIngredients, setManualIngredients] = useState([])
   const [manualMatchIngredients, setManualMatchIngredients] = useState([])
-  const [manualMessage, setManualMessage] = useState('')
-  const [manualError, setManualError] = useState('')
+  const [manualMatchMessage, setManualMatchMessage] = useState('')
+  const [manualMatchError, setManualMatchError] = useState('')
+  const [manualReviewMessage, setManualReviewMessage] = useState('')
+  const [manualReviewError, setManualReviewError] = useState('')
   const [isLoadingManualIngredients, setIsLoadingManualIngredients] = useState(false)
   const [isLoadingManualMatchIngredients, setIsLoadingManualMatchIngredients] = useState(false)
   const [activeManualActionId, setActiveManualActionId] = useState(null)
@@ -107,12 +109,12 @@ export default function Importbeheer() {
 
   async function loadManualIngredients() {
     setIsLoadingManualIngredients(true)
-    setManualError('')
+    setManualReviewError('')
     try {
       const data = await apiClient.getManualIngredientsForReview()
       setManualIngredients(Array.isArray(data) ? data : [])
     } catch {
-      setManualError('Handmatige ingrediënten laden mislukt.')
+      setManualReviewError('Handmatige ingrediënten laden mislukt.')
       setManualIngredients([])
     } finally {
       setIsLoadingManualIngredients(false)
@@ -121,12 +123,12 @@ export default function Importbeheer() {
 
   async function loadManualMatchIngredients() {
     setIsLoadingManualMatchIngredients(true)
-    setManualError('')
+    setManualMatchError('')
     try {
       const data = await apiClient.getManualIngredientsWithMatches()
       setManualMatchIngredients(Array.isArray(data) ? data : [])
     } catch {
-      setManualError('Handmatige ingrediënten met importmatch laden mislukt.')
+      setManualMatchError('Handmatige ingrediënten met importmatch laden mislukt.')
       setManualMatchIngredients([])
     } finally {
       setIsLoadingManualMatchIngredients(false)
@@ -201,23 +203,29 @@ export default function Importbeheer() {
       return
     }
 
+    const targetMatchIngredient = manualMatchIngredients.find((ingredient) => ingredient.id === ingredientId)
+    const targetReviewIngredient = manualIngredients.find((ingredient) => ingredient.id === ingredientId)
+    const isMatchAction = Boolean(targetMatchIngredient)
+    const setMessage = isMatchAction ? setManualMatchMessage : setManualReviewMessage
+    const setError = isMatchAction ? setManualMatchError : setManualReviewError
+
     setActiveManualActionId(ingredientId)
-    setManualError('')
-    setManualMessage('')
+    setError('')
+    setMessage('')
 
     try {
       if (action === 'review') {
         await apiClient.reviewManualIngredient(ingredientId)
-        setManualMessage('Handmatig ingrediënt gemarkeerd als reviewed.')
+        setMessage('Handmatig ingrediënt gemarkeerd als reviewed.')
       } else if (action === 'archive') {
         await apiClient.archiveManualIngredient(ingredientId)
-        setManualMessage('Handmatig ingrediënt gearchiveerd.')
+        setMessage('Handmatig ingrediënt gearchiveerd.')
       } else if (action === 'delete') {
         await apiClient.deleteManualIngredient(ingredientId)
-        setManualMessage('Handmatig ingrediënt verwijderd.')
+        setMessage('Handmatig ingrediënt verwijderd.')
       } else if (action === 'link-import') {
         const result = await apiClient.linkManualIngredientToImport(ingredientId)
-        setManualMessage(
+        setMessage(
           `Handmatig ingrediënt gekoppeld aan import (#${result.import_ingredient_id}).`
         )
       }
@@ -229,7 +237,7 @@ export default function Importbeheer() {
         currentIngredients.filter((ingredient) => ingredient.id !== ingredientId)
       )
     } catch (error) {
-      setManualError(error?.message || 'Actie op handmatig ingrediënt mislukt.')
+      setError(error?.message || 'Actie op handmatig ingrediënt mislukt.')
     } finally {
       setActiveManualActionId(null)
     }
@@ -303,8 +311,8 @@ export default function Importbeheer() {
       <section className="card">
         <h3>Handmatige ingrediënten met importmatch</h3>
         <p>Hier zie je alle actieve handmatige leveranciersingrediënten die nog wachten op importmatch.</p>
-        {manualMessage ? <p className="form-info inline-message">{manualMessage}</p> : null}
-        {manualError ? <p>{manualError}</p> : null}
+        {manualMatchMessage ? <p className="form-info inline-message">{manualMatchMessage}</p> : null}
+        {manualMatchError ? <p>{manualMatchError}</p> : null}
         {isLoadingManualMatchIngredients ? (
           <p>Handmatige ingrediënten met importmatch laden...</p>
         ) : manualMatchIngredients.length === 0 ? (
@@ -390,8 +398,8 @@ export default function Importbeheer() {
       <section className="card">
         <h3>Handmatige ingrediënten ter controle</h3>
         <p>Hier zie je handmatige leveranciersingrediënten die 45 dagen of ouder zijn en aandacht nodig hebben.</p>
-        {manualMessage ? <p className="form-info inline-message">{manualMessage}</p> : null}
-        {manualError ? <p>{manualError}</p> : null}
+        {manualReviewMessage ? <p className="form-info inline-message">{manualReviewMessage}</p> : null}
+        {manualReviewError ? <p>{manualReviewError}</p> : null}
         {isLoadingManualIngredients ? (
           <p>Handmatige ingrediënten laden...</p>
         ) : manualIngredients.length === 0 ? (
