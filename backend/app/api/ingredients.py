@@ -426,6 +426,28 @@ def list_manual_ingredients_with_matches(db: Session = Depends(get_db)) -> list[
     return [_serialize_ingredient_with_match(db, ingredient) for ingredient in ingredients]
 
 
+@router.get("/api/import-ingredients/stale", tags=["ingredients"])
+def list_stale_import_ingredients(db: Session = Depends(get_db)) -> list[dict]:
+    threshold = datetime.now(timezone.utc) - timedelta(days=45)
+    ingredients = (
+        db.query(Ingredient)
+        .filter(
+            Ingredient.source_type == "import",
+            Ingredient.is_archived.is_(False),
+            or_(
+                Ingredient.supplier_last_imported_at.is_(None),
+                Ingredient.supplier_last_imported_at <= threshold,
+            ),
+        )
+        .order_by(
+            Ingredient.supplier_last_imported_at.asc().nullsfirst(),
+            Ingredient.supplier_product_name.asc(),
+        )
+        .all()
+    )
+    return [_serialize_ingredient(ingredient) for ingredient in ingredients]
+
+
 @router.delete("/api/manual-ingredients/{ingredient_id}", tags=["ingredients"])
 def delete_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
@@ -433,6 +455,31 @@ def delete_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) 
         raise HTTPException(status_code=404, detail="Ingredient not found")
     if ingredient.source_type != "manual":
         raise HTTPException(status_code=400, detail="Only manual ingredients can be deleted via this endpoint")
+
+    is_used = (
+        db.query(RecipeLine.id)
+        .filter(RecipeLine.item_type == "ingredient", RecipeLine.item_id == ingredient.id)
+        .first()
+        is not None
+    )
+    if is_used:
+        raise HTTPException(
+            status_code=400,
+            detail="Ingredient is still used in recepten of halffabricaten en kan niet worden verwijderd.",
+        )
+
+    db.delete(ingredient)
+    db.commit()
+    return {"deleted": True, "ingredient_id": ingredient_id}
+
+
+@router.delete("/api/import-ingredients/{ingredient_id}", tags=["ingredients"])
+def delete_import_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+    ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    if ingredient.source_type != "import":
+        raise HTTPException(status_code=400, detail="Only import ingredients can be deleted via this endpoint")
 
     is_used = (
         db.query(RecipeLine.id)
@@ -464,6 +511,21 @@ def archive_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db))
     db.commit()
     db.refresh(ingredient)
     return _serialize_ingredient_with_match(db, ingredient)
+
+
+@router.post("/api/import-ingredients/{ingredient_id}/archive", tags=["ingredients"])
+def archive_import_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+    ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    if ingredient.source_type != "import":
+        raise HTTPException(status_code=400, detail="Only import ingredients can be archived via this endpoint")
+
+    ingredient.is_archived = True
+    ingredient.archived_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(ingredient)
+    return _serialize_ingredient(ingredient)
 
 
 @router.post("/api/manual-ingredients/{ingredient_id}/review", tags=["ingredients"])

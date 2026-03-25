@@ -111,6 +111,13 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getStaleImportIngredients() {
+    const response = await fetch(`${API_BASE_URL}/api/import-ingredients/stale`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch stale import ingredients: ${response.status}`)
+    }
+    return response.json()
+  },
   async reviewManualIngredient(id) {
     const response = await fetch(`${API_BASE_URL}/api/manual-ingredients/${id}/review`, {
       method: 'POST'
@@ -148,6 +155,26 @@ export const apiClient = {
     if (!response.ok) {
       const errorData = await response.json().catch(() => null)
       throw new Error(errorData?.detail || `Failed to link manual ingredient: ${response.status}`)
+    }
+    return response.json()
+  },
+  async archiveImportIngredient(id) {
+    const response = await fetch(`${API_BASE_URL}/api/import-ingredients/${id}/archive`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to archive import ingredient: ${response.status}`)
+    }
+    return response.json()
+  },
+  async deleteImportIngredient(id) {
+    const response = await fetch(`${API_BASE_URL}/api/import-ingredients/${id}`, {
+      method: 'DELETE'
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to delete import ingredient: ${response.status}`)
     }
     return response.json()
   },
