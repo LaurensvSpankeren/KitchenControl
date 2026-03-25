@@ -74,9 +74,11 @@ export default function Importbeheer() {
   const [isLoadingIssues, setIsLoadingIssues] = useState(false)
   const [isResolving, setIsResolving] = useState(false)
   const [manualIngredients, setManualIngredients] = useState([])
+  const [manualMatchIngredients, setManualMatchIngredients] = useState([])
   const [manualMessage, setManualMessage] = useState('')
   const [manualError, setManualError] = useState('')
   const [isLoadingManualIngredients, setIsLoadingManualIngredients] = useState(false)
+  const [isLoadingManualMatchIngredients, setIsLoadingManualMatchIngredients] = useState(false)
   const [activeManualActionId, setActiveManualActionId] = useState(null)
 
   const duplicateIssues = useMemo(
@@ -114,6 +116,20 @@ export default function Importbeheer() {
       setManualIngredients([])
     } finally {
       setIsLoadingManualIngredients(false)
+    }
+  }
+
+  async function loadManualMatchIngredients() {
+    setIsLoadingManualMatchIngredients(true)
+    setManualError('')
+    try {
+      const data = await apiClient.getManualIngredientsWithMatches()
+      setManualMatchIngredients(Array.isArray(data) ? data : [])
+    } catch {
+      setManualError('Handmatige ingrediënten met importmatch laden mislukt.')
+      setManualMatchIngredients([])
+    } finally {
+      setIsLoadingManualMatchIngredients(false)
     }
   }
 
@@ -209,6 +225,9 @@ export default function Importbeheer() {
       setManualIngredients((currentIngredients) =>
         currentIngredients.filter((ingredient) => ingredient.id !== ingredientId)
       )
+      setManualMatchIngredients((currentIngredients) =>
+        currentIngredients.filter((ingredient) => ingredient.id !== ingredientId)
+      )
     } catch (error) {
       setManualError(error?.message || 'Actie op handmatig ingrediënt mislukt.')
     } finally {
@@ -219,6 +238,7 @@ export default function Importbeheer() {
   useEffect(() => {
     loadIssues()
     loadManualIngredients()
+    loadManualMatchIngredients()
   }, [])
 
   return (
@@ -274,6 +294,93 @@ export default function Importbeheer() {
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="card">
+        <h3>Handmatige ingrediënten met importmatch</h3>
+        <p>Hier zie je alle actieve handmatige leveranciersingrediënten die nog wachten op importmatch.</p>
+        {manualMessage ? <p className="form-info inline-message">{manualMessage}</p> : null}
+        {manualError ? <p>{manualError}</p> : null}
+        {isLoadingManualMatchIngredients ? (
+          <p>Handmatige ingrediënten met importmatch laden...</p>
+        ) : manualMatchIngredients.length === 0 ? (
+          <p>Geen handmatige ingrediënten met importmatch gevonden.</p>
+        ) : (
+          <div className="table-scroll">
+            <table className="ingredients-table">
+              <thead>
+                <tr>
+                  <th>Leverancier</th>
+                  <th>Product</th>
+                  <th>Artikelcode</th>
+                  <th>Prijs</th>
+                  <th>Eenheid</th>
+                  <th>Rekeneenheid</th>
+                  <th>Aantal</th>
+                  <th>Import match</th>
+                  <th>Notitie</th>
+                  <th>Acties</th>
+                </tr>
+              </thead>
+              <tbody>
+                {manualMatchIngredients.map((ingredient) => {
+                  const isBusy = activeManualActionId === ingredient.id
+                  return (
+                    <tr key={ingredient.id}>
+                      <td>{ingredient.supplier_name || '-'}</td>
+                      <td>{ingredient.supplier_product_name || '-'}</td>
+                      <td>{ingredient.supplier_product_code || '-'}</td>
+                      <td>{formatCurrency(ingredient.supplier_price_ex_vat)}</td>
+                      <td>{ingredient.supplier_unit || '-'}</td>
+                      <td>{ingredient.calculation_unit || '-'}</td>
+                      <td>{formatNumber(ingredient.calculation_quantity_per_package)}</td>
+                      <td>{formatImportMatch(ingredient)}</td>
+                      <td>{ingredient.manual_note || '-'}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
+                            disabled={isBusy}
+                          >
+                            Reviewen
+                          </button>
+                          {ingredient.match_status === 'strong' ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleManualIngredientAction(ingredient.id, 'link-import')
+                              }
+                              disabled={isBusy}
+                            >
+                              Koppel aan import
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={() => handleManualIngredientAction(ingredient.id, 'archive')}
+                            disabled={isBusy}
+                          >
+                            Archiveren
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={() => handleManualIngredientAction(ingredient.id, 'delete')}
+                            disabled={isBusy}
+                          >
+                            Verwijderen
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

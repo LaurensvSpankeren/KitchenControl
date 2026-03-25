@@ -411,6 +411,21 @@ def list_manual_ingredients_for_review(db: Session = Depends(get_db)) -> list[di
     return [_serialize_ingredient_with_match(db, ingredient) for ingredient in ingredients]
 
 
+@router.get("/api/manual-ingredients/matches", tags=["ingredients"])
+def list_manual_ingredients_with_matches(db: Session = Depends(get_db)) -> list[dict]:
+    ingredients = (
+        db.query(Ingredient)
+        .filter(
+            Ingredient.source_type == "manual",
+            Ingredient.is_archived.is_(False),
+            Ingredient.awaiting_import_match.is_(True),
+        )
+        .order_by(Ingredient.supplier_name.asc(), Ingredient.supplier_product_name.asc())
+        .all()
+    )
+    return [_serialize_ingredient_with_match(db, ingredient) for ingredient in ingredients]
+
+
 @router.delete("/api/manual-ingredients/{ingredient_id}", tags=["ingredients"])
 def delete_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()

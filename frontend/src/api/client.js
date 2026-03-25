@@ -104,6 +104,13 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getManualIngredientsWithMatches() {
+    const response = await fetch(`${API_BASE_URL}/api/manual-ingredients/matches`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch manual ingredients with matches: ${response.status}`)
+    }
+    return response.json()
+  },
   async reviewManualIngredient(id) {
     const response = await fetch(`${API_BASE_URL}/api/manual-ingredients/${id}/review`, {
       method: 'POST'
