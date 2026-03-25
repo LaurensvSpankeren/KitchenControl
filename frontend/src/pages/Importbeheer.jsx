@@ -87,6 +87,9 @@ export default function Importbeheer() {
   const [isLoadingManualMatchIngredients, setIsLoadingManualMatchIngredients] = useState(false)
   const [activeManualActionId, setActiveManualActionId] = useState(null)
   const [activeStaleImportActionId, setActiveStaleImportActionId] = useState(null)
+  const [selectedManualMatchIngredient, setSelectedManualMatchIngredient] = useState(null)
+  const [selectedImportMatchIngredient, setSelectedImportMatchIngredient] = useState(null)
+  const [isLoadingMatchPreview, setIsLoadingMatchPreview] = useState(false)
 
   const duplicateIssues = useMemo(
     () => issues.filter((issue) => issue.issue_type === 'duplicate_conflict_in_file'),
@@ -246,6 +249,8 @@ export default function Importbeheer() {
         setMessage(
           `Handmatig ingrediënt gekoppeld aan import (#${result.import_ingredient_id}).`
         )
+        setSelectedManualMatchIngredient(null)
+        setSelectedImportMatchIngredient(null)
       }
 
       await Promise.all([loadManualIngredients(), loadManualMatchIngredients()])
@@ -254,6 +259,41 @@ export default function Importbeheer() {
     } finally {
       setActiveManualActionId(null)
     }
+  }
+
+  async function handleOpenMatchPreview(ingredient) {
+    if (!ingredient?.matched_import_ingredient_id || isLoadingMatchPreview) {
+      return
+    }
+
+    setIsLoadingMatchPreview(true)
+    setManualMatchError('')
+    try {
+      const ingredients = await apiClient.getIngredients()
+      const matchedIngredient = Array.isArray(ingredients)
+        ? ingredients.find((item) => item.id === ingredient.matched_import_ingredient_id)
+        : null
+
+      if (!matchedIngredient) {
+        setManualMatchError('Gekoppeld importingrediënt kon niet worden geladen.')
+        return
+      }
+
+      setSelectedManualMatchIngredient(ingredient)
+      setSelectedImportMatchIngredient(matchedIngredient)
+    } catch {
+      setManualMatchError('Matchvoorbeeld laden mislukt.')
+    } finally {
+      setIsLoadingMatchPreview(false)
+    }
+  }
+
+  function closeMatchPreview() {
+    if (activeManualActionId || isLoadingMatchPreview) {
+      return
+    }
+    setSelectedManualMatchIngredient(null)
+    setSelectedImportMatchIngredient(null)
   }
 
   async function handleStaleImportIngredientAction(ingredientId, action) {
@@ -469,12 +509,10 @@ export default function Importbeheer() {
                           {ingredient.match_status === 'strong' ? (
                             <button
                               type="button"
-                              onClick={() =>
-                                handleManualIngredientAction(ingredient.id, 'link-import')
-                              }
-                              disabled={isBusy}
+                              onClick={() => handleOpenMatchPreview(ingredient)}
+                              disabled={isBusy || isLoadingMatchPreview}
                             >
-                              Koppel aan import
+                              Bekijk match
                             </button>
                           ) : null}
                           <button
@@ -596,6 +634,134 @@ export default function Importbeheer() {
           </div>
         )}
       </section>
+
+      {selectedManualMatchIngredient && selectedImportMatchIngredient ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-card modal-wide">
+            <div className="modal-header">
+              <h3>Importmatch bekijken</h3>
+            </div>
+
+            <div className="modal-body">
+              <div className="modal-grid two-col calm-grid">
+                <div>
+                  <h4>Handmatig ingrediënt</h4>
+                  <div className="modal-grid one-col calm-grid">
+                    <label>
+                      Leverancier
+                      <input type="text" value={selectedManualMatchIngredient.supplier_name || ''} readOnly />
+                    </label>
+                    <label>
+                      Product
+                      <input
+                        type="text"
+                        value={selectedManualMatchIngredient.supplier_product_name || ''}
+                        readOnly
+                      />
+                    </label>
+                    <label>
+                      Artikelcode
+                      <input
+                        type="text"
+                        value={selectedManualMatchIngredient.supplier_product_code || ''}
+                        readOnly
+                      />
+                    </label>
+                    <label>
+                      Prijs
+                      <input
+                        type="text"
+                        value={formatCurrency(selectedManualMatchIngredient.supplier_price_ex_vat)}
+                        readOnly
+                      />
+                    </label>
+                    <label>
+                      Eenheid
+                      <input type="text" value={selectedManualMatchIngredient.supplier_unit || ''} readOnly />
+                    </label>
+                    <label>
+                      Rekeneenheid
+                      <input
+                        type="text"
+                        value={
+                          selectedManualMatchIngredient.calculation_unit ||
+                          selectedManualMatchIngredient.calculation_quantity_per_package
+                            ? `${selectedManualMatchIngredient.calculation_quantity_per_package || ''} ${selectedManualMatchIngredient.calculation_unit || ''}`.trim()
+                            : ''
+                        }
+                        readOnly
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <h4>Importingrediënt</h4>
+                  <div className="modal-grid one-col calm-grid">
+                    <label>
+                      Leverancier
+                      <input type="text" value={selectedImportMatchIngredient.supplier_name || ''} readOnly />
+                    </label>
+                    <label>
+                      Product
+                      <input type="text" value={selectedImportMatchIngredient.supplier_product_name || ''} readOnly />
+                    </label>
+                    <label>
+                      Artikelcode
+                      <input type="text" value={selectedImportMatchIngredient.supplier_product_code || ''} readOnly />
+                    </label>
+                    <label>
+                      Prijs
+                      <input
+                        type="text"
+                        value={formatCurrency(selectedImportMatchIngredient.supplier_price_ex_vat)}
+                        readOnly
+                      />
+                    </label>
+                    <label>
+                      Eenheid
+                      <input type="text" value={selectedImportMatchIngredient.supplier_unit || ''} readOnly />
+                    </label>
+                    <label>
+                      Rekeneenheid
+                      <input
+                        type="text"
+                        value={
+                          selectedImportMatchIngredient.calculation_unit ||
+                          selectedImportMatchIngredient.calculation_quantity_per_package
+                            ? `${selectedImportMatchIngredient.calculation_quantity_per_package || ''} ${selectedImportMatchIngredient.calculation_unit || ''}`.trim()
+                            : ''
+                        }
+                        readOnly
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                onClick={() =>
+                  handleManualIngredientAction(selectedManualMatchIngredient.id, 'link-import')
+                }
+                disabled={activeManualActionId === selectedManualMatchIngredient.id}
+              >
+                Ja, koppel aan import
+              </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={closeMatchPreview}
+                disabled={activeManualActionId === selectedManualMatchIngredient.id}
+              >
+                Sluiten
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {selectedIssue ? (
         <section className="card">
