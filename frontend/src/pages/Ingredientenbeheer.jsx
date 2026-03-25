@@ -394,7 +394,7 @@ export default function Ingredientenbeheer() {
       if (editingIngredientId) {
         await apiClient.updateIngredient(editingIngredientId, payload)
       } else {
-        await apiClient.createIngredient(payload)
+        await apiClient.createManualIngredient(payload)
       }
 
       await loadIngredients()

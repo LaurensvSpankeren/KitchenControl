@@ -21,6 +21,19 @@ export const apiClient = {
     }
     return response.json()
   },
+  async createManualIngredient(payload) {
+    const response = await fetch(`${API_BASE_URL}/api/manual-ingredients`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to create manual ingredient: ${response.status}`)
+    }
+    return response.json()
+  },
   async updateIngredient(id, payload) {
     const response = await fetch(`${API_BASE_URL}/api/ingredients/${id}`, {
       method: 'PUT',
