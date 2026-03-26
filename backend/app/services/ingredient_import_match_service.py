@@ -172,8 +172,6 @@ def detect_import_match_for_manual_ingredient(db: Session, manual_ingredient: In
             "match_status": "strong",
             "matched_import_ingredient_id": strong_matches[0].id,
         }
-    if len(strong_matches) > 1:
-        return {"match_status": "possible", "matched_import_ingredient_id": None}
 
     possible_matches = []
     for ingredient in candidates:
