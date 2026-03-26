@@ -186,7 +186,7 @@ def detect_import_match_for_manual_ingredient(db: Session, manual_ingredient: In
         has_calculation_match = _possible_calculation_match(manual_ingredient, ingredient)
         has_supporting_match = has_unit_match or has_calculation_match
 
-        if has_code_match:
+        if has_code_match and (has_name_match or has_supporting_match):
             possible_matches.append(ingredient)
             continue
 
@@ -197,3 +197,80 @@ def detect_import_match_for_manual_ingredient(db: Session, manual_ingredient: In
         return {"match_status": "possible", "matched_import_ingredient_id": None}
 
     return {"match_status": "none", "matched_import_ingredient_id": None}
+
+
+def build_import_match_debug_for_manual_ingredient(db: Session, manual_ingredient: Ingredient) -> dict:
+    normalized_supplier_name = _clean_text(manual_ingredient.supplier_name)
+    candidates = []
+    if normalized_supplier_name is not None:
+        candidates = (
+            db.query(Ingredient)
+            .filter(
+                Ingredient.source_type == "import",
+                Ingredient.is_archived.is_(False),
+                func.lower(func.trim(Ingredient.supplier_name)) == normalized_supplier_name,
+            )
+            .order_by(Ingredient.id.asc())
+            .all()
+        )
+
+    candidate_debug = []
+    for ingredient in candidates:
+        has_code_match = ingredient.supplier_product_code == manual_ingredient.supplier_product_code
+        has_name_match = _product_names_look_similar(
+            manual_ingredient.supplier_product_name,
+            ingredient.supplier_product_name,
+        )
+        has_unit_match = _possible_unit_match(manual_ingredient, ingredient)
+        has_calculation_match = _possible_calculation_match(manual_ingredient, ingredient)
+        strong_unit_match = _strong_unit_match(manual_ingredient, ingredient)
+        strong_calculation_match = _strong_calculation_match(manual_ingredient, ingredient)
+        would_be_strong = has_code_match and (
+            has_name_match or strong_unit_match or strong_calculation_match
+        )
+        would_be_possible = (
+            (has_code_match and (has_name_match or has_unit_match or has_calculation_match))
+            or (has_name_match and (has_unit_match or has_calculation_match))
+        )
+
+        candidate_debug.append(
+            {
+                "id": ingredient.id,
+                "supplier_product_code": ingredient.supplier_product_code,
+                "supplier_product_name": ingredient.supplier_product_name,
+                "supplier_unit": ingredient.supplier_unit,
+                "supplier_sales_unit_code": ingredient.supplier_sales_unit_code,
+                "supplier_sales_unit_name": ingredient.supplier_sales_unit_name,
+                "calculation_unit": ingredient.calculation_unit,
+                "calculation_quantity_per_package": float(ingredient.calculation_quantity_per_package)
+                if ingredient.calculation_quantity_per_package is not None
+                else None,
+                "has_code_match": has_code_match,
+                "has_name_match": has_name_match,
+                "has_unit_match": has_unit_match,
+                "has_calculation_match": has_calculation_match,
+                "strong_unit_match": strong_unit_match,
+                "strong_calculation_match": strong_calculation_match,
+                "would_be_strong": would_be_strong,
+                "would_be_possible": would_be_possible,
+            }
+        )
+
+    return {
+        "manual_ingredient": {
+            "id": manual_ingredient.id,
+            "supplier_name": manual_ingredient.supplier_name,
+            "supplier_product_code": manual_ingredient.supplier_product_code,
+            "supplier_product_name": manual_ingredient.supplier_product_name,
+            "supplier_unit": manual_ingredient.supplier_unit,
+            "supplier_sales_unit_code": manual_ingredient.supplier_sales_unit_code,
+            "supplier_sales_unit_name": manual_ingredient.supplier_sales_unit_name,
+            "calculation_unit": manual_ingredient.calculation_unit,
+            "calculation_quantity_per_package": float(manual_ingredient.calculation_quantity_per_package)
+            if manual_ingredient.calculation_quantity_per_package is not None
+            else None,
+        },
+        "current_match_result": detect_import_match_for_manual_ingredient(db, manual_ingredient),
+        "candidate_count": len(candidate_debug),
+        "candidates": candidate_debug,
+    }

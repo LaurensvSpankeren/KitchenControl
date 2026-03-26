@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.ingredient import Ingredient
 from app.models.recipe_line import RecipeLine
-from app.services.ingredient_import_match_service import detect_import_match_for_manual_ingredient
+from app.services.ingredient_import_match_service import (
+    build_import_match_debug_for_manual_ingredient,
+    detect_import_match_for_manual_ingredient,
+)
 from app.services.manual_ingredient_link_service import link_manual_ingredient_to_import
 
 router = APIRouter()
@@ -295,6 +298,16 @@ def get_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
     return _serialize_ingredient(ingredient)
+
+
+@router.get("/api/manual-ingredients/{ingredient_id}/match-debug", tags=["ingredients"])
+def get_manual_ingredient_match_debug(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+    ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    if ingredient.source_type != "manual":
+        raise HTTPException(status_code=400, detail="Only manual ingredients can be debugged via this endpoint")
+    return build_import_match_debug_for_manual_ingredient(db, ingredient)
 
 
 @router.post("/api/ingredients", tags=["ingredients"])
