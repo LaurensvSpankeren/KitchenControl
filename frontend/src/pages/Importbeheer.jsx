@@ -332,11 +332,12 @@ export default function Importbeheer() {
     <div>
       <header className="page-header">
         <h2>Importbeheer</h2>
-        <p>Upload hier CSV-bestanden om inkoopproducten te synchroniseren.</p>
+        <p>Beheer hier CSV-imports, handmatige ingrediënten en importcontroles.</p>
       </header>
 
       <section className="card">
-        <h3>CSV importeren</h3>
+        <h3>Handmatig CSV uploaden</h3>
+        <p>Upload hier CSV-bestanden om inkoopproducten te synchroniseren.</p>
         <input
           type="file"
           accept=".csv,text/csv"
@@ -349,287 +350,297 @@ export default function Importbeheer() {
       </section>
 
       <section className="card">
-        <h3>Open duplicate issues</h3>
-        <p>Alleen issues van type `duplicate_conflict_in_file` worden hier getoond.</p>
-        {issuesMessage ? <p className="form-info inline-message">{issuesMessage}</p> : null}
-        {issueError ? <p>{issueError}</p> : null}
-        {isLoadingIssues ? (
-          <p>Issues laden...</p>
-        ) : duplicateIssues.length === 0 ? (
-          <p>Geen open duplicate issues gevonden.</p>
-        ) : (
-          <div className="table-scroll">
-            <table className="ingredients-table">
-              <thead>
-                <tr>
-                  <th>Artikelcode</th>
-                  <th>Productnaam</th>
-                  <th>Aangemaakt</th>
-                  <th>Actie</th>
-                </tr>
-              </thead>
-              <tbody>
-                {duplicateIssues.map((issue) => (
-                  <tr key={issue.id}>
-                    <td>{issue.supplier_product_code || '-'}</td>
-                    <td>{issue.supplier_product_name || '-'}</td>
-                    <td>{formatDateTime(issue.created_at)}</td>
-                    <td>
-                      <button type="button" onClick={() => handleOpenIssue(issue.id)}>
-                        Open
-                      </button>
-                    </td>
+        <h3>Handmatige ingrediënten controleren</h3>
+        <p>Controleer hier handmatig ingevoerde ingrediënten.</p>
+
+        <div style={{ marginTop: '1.5rem' }}>
+          <h4>Import match controleren</h4>
+          <p>Beoordeel of een handmatig ingrediënt gekoppeld kan worden aan een importproduct.</p>
+          {manualMatchMessage ? <p className="form-info inline-message">{manualMatchMessage}</p> : null}
+          {manualMatchError ? <p>{manualMatchError}</p> : null}
+          {isLoadingManualMatchIngredients ? (
+            <p>Handmatige ingrediënten met importmatch laden...</p>
+          ) : manualMatchIngredients.length === 0 ? (
+            <p>Geen handmatige ingrediënten met importmatch gevonden.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="ingredients-table">
+                <thead>
+                  <tr>
+                    <th>Leverancier</th>
+                    <th>Product</th>
+                    <th>Artikelcode</th>
+                    <th>Prijs</th>
+                    <th>Eenheid</th>
+                    <th>Rekeneenheid</th>
+                    <th>Aantal</th>
+                    <th>Import match</th>
+                    <th>Notitie</th>
+                    <th>Acties</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="card">
-        <h3>Importingrediënten ter controle</h3>
-        <p>Hier zie je importingrediënten die 45 dagen of langer niet zijn ververst door import.</p>
-        {staleImportMessage ? <p className="form-info inline-message">{staleImportMessage}</p> : null}
-        {staleImportError ? <p>{staleImportError}</p> : null}
-        {isLoadingStaleImportIngredients ? (
-          <p>Importingrediënten laden...</p>
-        ) : staleImportIngredients.length === 0 ? (
-          <p>Geen importingrediënten ter controle gevonden.</p>
-        ) : (
-          <div className="table-scroll">
-            <table className="ingredients-table">
-              <thead>
-                <tr>
-                  <th>Leverancier</th>
-                  <th>Product</th>
-                  <th>Artikelcode</th>
-                  <th>Prijs</th>
-                  <th>Eenheid</th>
-                  <th>Rekeneenheid</th>
-                  <th>Aantal</th>
-                  <th>Laatste import</th>
-                  <th>Acties</th>
-                </tr>
-              </thead>
-              <tbody>
-                {staleImportIngredients.map((ingredient) => {
-                  const isBusy = activeStaleImportActionId === ingredient.id
-                  return (
-                    <tr key={ingredient.id}>
-                      <td>{ingredient.supplier_name || '-'}</td>
-                      <td>{ingredient.supplier_product_name || '-'}</td>
-                      <td>{ingredient.supplier_product_code || '-'}</td>
-                      <td>{formatCurrency(ingredient.supplier_price_ex_vat)}</td>
-                      <td>{ingredient.supplier_unit || '-'}</td>
-                      <td>{ingredient.calculation_unit || '-'}</td>
-                      <td>{formatNumber(ingredient.calculation_quantity_per_package)}</td>
-                      <td>{formatDateTime(ingredient.supplier_last_imported_at)}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          <button
-                            type="button"
-                            className="secondary-btn"
-                            onClick={() => handleStaleImportIngredientAction(ingredient.id, 'archive')}
-                            disabled={isBusy}
-                          >
-                            Archiveren
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-btn"
-                            onClick={() => handleStaleImportIngredientAction(ingredient.id, 'delete')}
-                            disabled={isBusy}
-                          >
-                            Verwijderen
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="card">
-        <h3>Handmatige ingrediënten met importmatch</h3>
-        <p>Hier zie je alle actieve handmatige leveranciersingrediënten die nog wachten op importmatch.</p>
-        {manualMatchMessage ? <p className="form-info inline-message">{manualMatchMessage}</p> : null}
-        {manualMatchError ? <p>{manualMatchError}</p> : null}
-        {isLoadingManualMatchIngredients ? (
-          <p>Handmatige ingrediënten met importmatch laden...</p>
-        ) : manualMatchIngredients.length === 0 ? (
-          <p>Geen handmatige ingrediënten met importmatch gevonden.</p>
-        ) : (
-          <div className="table-scroll">
-            <table className="ingredients-table">
-              <thead>
-                <tr>
-                  <th>Leverancier</th>
-                  <th>Product</th>
-                  <th>Artikelcode</th>
-                  <th>Prijs</th>
-                  <th>Eenheid</th>
-                  <th>Rekeneenheid</th>
-                  <th>Aantal</th>
-                  <th>Import match</th>
-                  <th>Notitie</th>
-                  <th>Acties</th>
-                </tr>
-              </thead>
-              <tbody>
-                {manualMatchIngredients.map((ingredient) => {
-                  const isBusy = activeManualActionId === ingredient.id
-                  return (
-                    <tr key={ingredient.id}>
-                      <td>{ingredient.supplier_name || '-'}</td>
-                      <td>{ingredient.supplier_product_name || '-'}</td>
-                      <td>{ingredient.supplier_product_code || '-'}</td>
-                      <td>{formatCurrency(ingredient.supplier_price_ex_vat)}</td>
-                      <td>{ingredient.supplier_unit || '-'}</td>
-                      <td>{ingredient.calculation_unit || '-'}</td>
-                      <td>{formatNumber(ingredient.calculation_quantity_per_package)}</td>
-                      <td>{formatImportMatch(ingredient)}</td>
-                      <td>{ingredient.manual_note || '-'}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          <button
-                            type="button"
-                            onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
-                            disabled={isBusy}
-                          >
-                            Reviewen
-                          </button>
-                          {ingredient.match_status === 'strong' ? (
+                </thead>
+                <tbody>
+                  {manualMatchIngredients.map((ingredient) => {
+                    const isBusy = activeManualActionId === ingredient.id
+                    return (
+                      <tr key={ingredient.id}>
+                        <td>{ingredient.supplier_name || '-'}</td>
+                        <td>{ingredient.supplier_product_name || '-'}</td>
+                        <td>{ingredient.supplier_product_code || '-'}</td>
+                        <td>{formatCurrency(ingredient.supplier_price_ex_vat)}</td>
+                        <td>{ingredient.supplier_unit || '-'}</td>
+                        <td>{ingredient.calculation_unit || '-'}</td>
+                        <td>{formatNumber(ingredient.calculation_quantity_per_package)}</td>
+                        <td>{formatImportMatch(ingredient)}</td>
+                        <td>{ingredient.manual_note || '-'}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <button
                               type="button"
-                              onClick={() => handleOpenMatchPreview(ingredient)}
-                              disabled={isBusy || isLoadingMatchPreview}
-                            >
-                              Bekijk match
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="secondary-btn"
-                            onClick={() => handleManualIngredientAction(ingredient.id, 'archive')}
-                            disabled={isBusy}
-                          >
-                            Archiveren
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-btn"
-                            onClick={() => handleManualIngredientAction(ingredient.id, 'delete')}
-                            disabled={isBusy}
-                          >
-                            Verwijderen
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="card">
-        <h3>Handmatige ingrediënten ter controle</h3>
-        <p>Hier zie je handmatige leveranciersingrediënten die 45 dagen of ouder zijn en aandacht nodig hebben.</p>
-        {manualReviewMessage ? <p className="form-info inline-message">{manualReviewMessage}</p> : null}
-        {manualReviewError ? <p>{manualReviewError}</p> : null}
-        {isLoadingManualIngredients ? (
-          <p>Handmatige ingrediënten laden...</p>
-        ) : manualIngredients.length === 0 ? (
-          <p>Geen handmatige ingrediënten ter controle gevonden.</p>
-        ) : (
-          <div className="table-scroll">
-            <table className="ingredients-table">
-              <thead>
-                <tr>
-                  <th>Leverancier</th>
-                  <th>Product</th>
-                  <th>Artikelcode</th>
-                  <th>Prijs</th>
-                  <th>Eenheid</th>
-                  <th>Rekeneenheid</th>
-                  <th>Aantal</th>
-                  <th>Aangemaakt</th>
-                  <th>Laatste review</th>
-                  <th>Wacht op import</th>
-                  <th>Import match</th>
-                  <th>Notitie</th>
-                  <th>Acties</th>
-                </tr>
-              </thead>
-              <tbody>
-                {manualIngredients.map((ingredient) => {
-                  const isBusy = activeManualActionId === ingredient.id
-                  return (
-                    <tr key={ingredient.id}>
-                      <td>{ingredient.supplier_name || '-'}</td>
-                      <td>{ingredient.supplier_product_name || '-'}</td>
-                      <td>{ingredient.supplier_product_code || '-'}</td>
-                      <td>{formatCurrency(ingredient.supplier_price_ex_vat)}</td>
-                      <td>{ingredient.supplier_unit || '-'}</td>
-                      <td>{ingredient.calculation_unit || '-'}</td>
-                      <td>{formatNumber(ingredient.calculation_quantity_per_package)}</td>
-                      <td>{formatDateTime(ingredient.manual_created_at)}</td>
-                      <td>{formatDateTime(ingredient.last_manual_review_at)}</td>
-                      <td>{ingredient.awaiting_import_match ? 'Ja' : 'Nee'}</td>
-                      <td>{formatImportMatch(ingredient)}</td>
-                      <td>{ingredient.manual_note || '-'}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          <button
-                            type="button"
-                            onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
-                            disabled={isBusy}
-                          >
-                            Reviewen
-                          </button>
-                          {ingredient.match_status === 'strong' ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleManualIngredientAction(ingredient.id, 'link-import')
-                              }
+                              onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
                               disabled={isBusy}
                             >
-                              Koppel aan import
+                              Reviewen
                             </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="secondary-btn"
-                            onClick={() => handleManualIngredientAction(ingredient.id, 'archive')}
-                            disabled={isBusy}
-                          >
-                            Archiveren
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-btn"
-                            onClick={() => handleManualIngredientAction(ingredient.id, 'delete')}
-                            disabled={isBusy}
-                          >
-                            Verwijderen
-                          </button>
-                        </div>
+                            {ingredient.match_status === 'strong' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenMatchPreview(ingredient)}
+                                disabled={isBusy || isLoadingMatchPreview}
+                              >
+                                Bekijk match
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => handleManualIngredientAction(ingredient.id, 'archive')}
+                              disabled={isBusy}
+                            >
+                              Archiveren
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => handleManualIngredientAction(ingredient.id, 'delete')}
+                              disabled={isBusy}
+                            >
+                              Verwijderen
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #e5e7eb' }}>
+          <h4>Inactieve handmatige ingrediënten</h4>
+          <p>Deze ingrediënten zijn 45 dagen of langer niet bijgewerkt. Controleer ze en werk ze bij indien nodig.</p>
+          {manualReviewMessage ? <p className="form-info inline-message">{manualReviewMessage}</p> : null}
+          {manualReviewError ? <p>{manualReviewError}</p> : null}
+          {isLoadingManualIngredients ? (
+            <p>Handmatige ingrediënten laden...</p>
+          ) : manualIngredients.length === 0 ? (
+            <p>Geen handmatige ingrediënten ter controle gevonden.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="ingredients-table">
+                <thead>
+                  <tr>
+                    <th>Leverancier</th>
+                    <th>Product</th>
+                    <th>Artikelcode</th>
+                    <th>Prijs</th>
+                    <th>Eenheid</th>
+                    <th>Rekeneenheid</th>
+                    <th>Aantal</th>
+                    <th>Aangemaakt</th>
+                    <th>Laatste review</th>
+                    <th>Wacht op import</th>
+                    <th>Import match</th>
+                    <th>Notitie</th>
+                    <th>Acties</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {manualIngredients.map((ingredient) => {
+                    const isBusy = activeManualActionId === ingredient.id
+                    return (
+                      <tr key={ingredient.id}>
+                        <td>{ingredient.supplier_name || '-'}</td>
+                        <td>{ingredient.supplier_product_name || '-'}</td>
+                        <td>{ingredient.supplier_product_code || '-'}</td>
+                        <td>{formatCurrency(ingredient.supplier_price_ex_vat)}</td>
+                        <td>{ingredient.supplier_unit || '-'}</td>
+                        <td>{ingredient.calculation_unit || '-'}</td>
+                        <td>{formatNumber(ingredient.calculation_quantity_per_package)}</td>
+                        <td>{formatDateTime(ingredient.manual_created_at)}</td>
+                        <td>{formatDateTime(ingredient.last_manual_review_at)}</td>
+                        <td>{ingredient.awaiting_import_match ? 'Ja' : 'Nee'}</td>
+                        <td>{formatImportMatch(ingredient)}</td>
+                        <td>{ingredient.manual_note || '-'}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
+                              disabled={isBusy}
+                            >
+                              Reviewen
+                            </button>
+                            {ingredient.match_status === 'strong' ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleManualIngredientAction(ingredient.id, 'link-import')
+                                }
+                                disabled={isBusy}
+                              >
+                                Koppel aan import
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => handleManualIngredientAction(ingredient.id, 'archive')}
+                              disabled={isBusy}
+                            >
+                              Archiveren
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => handleManualIngredientAction(ingredient.id, 'delete')}
+                              disabled={isBusy}
+                            >
+                              Verwijderen
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="card">
+        <h3>Import ingrediënten controleren</h3>
+        <p>Controleer hier geïmporteerde ingrediënten.</p>
+
+        <div style={{ marginTop: '1.5rem' }}>
+          <h4>Inactieve import ingrediënten</h4>
+          <p>Deze ingrediënten zijn 45 dagen of langer niet vernieuwd via import. Controleer ze en werk ze bij indien nodig.</p>
+          {staleImportMessage ? <p className="form-info inline-message">{staleImportMessage}</p> : null}
+          {staleImportError ? <p>{staleImportError}</p> : null}
+          {isLoadingStaleImportIngredients ? (
+            <p>Importingrediënten laden...</p>
+          ) : staleImportIngredients.length === 0 ? (
+            <p>Geen importingrediënten ter controle gevonden.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="ingredients-table">
+                <thead>
+                  <tr>
+                    <th>Leverancier</th>
+                    <th>Product</th>
+                    <th>Artikelcode</th>
+                    <th>Prijs</th>
+                    <th>Eenheid</th>
+                    <th>Rekeneenheid</th>
+                    <th>Aantal</th>
+                    <th>Laatste import</th>
+                    <th>Acties</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staleImportIngredients.map((ingredient) => {
+                    const isBusy = activeStaleImportActionId === ingredient.id
+                    return (
+                      <tr key={ingredient.id}>
+                        <td>{ingredient.supplier_name || '-'}</td>
+                        <td>{ingredient.supplier_product_name || '-'}</td>
+                        <td>{ingredient.supplier_product_code || '-'}</td>
+                        <td>{formatCurrency(ingredient.supplier_price_ex_vat)}</td>
+                        <td>{ingredient.supplier_unit || '-'}</td>
+                        <td>{ingredient.calculation_unit || '-'}</td>
+                        <td>{formatNumber(ingredient.calculation_quantity_per_package)}</td>
+                        <td>{formatDateTime(ingredient.supplier_last_imported_at)}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => handleStaleImportIngredientAction(ingredient.id, 'archive')}
+                              disabled={isBusy}
+                            >
+                              Archiveren
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => handleStaleImportIngredientAction(ingredient.id, 'delete')}
+                              disabled={isBusy}
+                            >
+                              Verwijderen
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #e5e7eb' }}>
+          <h4>Duplicaten in import</h4>
+          <p>Mogelijke dubbele importproducten gevonden. Controleer en voeg samen.</p>
+          {issuesMessage ? <p className="form-info inline-message">{issuesMessage}</p> : null}
+          {issueError ? <p>{issueError}</p> : null}
+          {isLoadingIssues ? (
+            <p>Issues laden...</p>
+          ) : duplicateIssues.length === 0 ? (
+            <p>Geen open duplicate issues gevonden.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="ingredients-table">
+                <thead>
+                  <tr>
+                    <th>Artikelcode</th>
+                    <th>Productnaam</th>
+                    <th>Aangemaakt</th>
+                    <th>Actie</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {duplicateIssues.map((issue) => (
+                    <tr key={issue.id}>
+                      <td>{issue.supplier_product_code || '-'}</td>
+                      <td>{issue.supplier_product_name || '-'}</td>
+                      <td>{formatDateTime(issue.created_at)}</td>
+                      <td>
+                        <button type="button" onClick={() => handleOpenIssue(issue.id)}>
+                          Open
+                        </button>
                       </td>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </section>
 
       {selectedManualMatchIngredient && selectedImportMatchIngredient ? (
@@ -640,9 +651,23 @@ export default function Importbeheer() {
             </div>
 
             <div className="modal-body">
-              <div className="modal-grid two-col calm-grid">
-                <div>
-                  <h4>Handmatig ingrediënt</h4>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0, 1fr) 64px minmax(0, 1fr)',
+                  gap: '1rem',
+                  alignItems: 'stretch'
+                }}
+              >
+                <div
+                  style={{
+                    background: '#f3f4f6',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '1rem',
+                    padding: '1rem'
+                  }}
+                >
+                  <h4 style={{ marginTop: 0, marginBottom: '0.75rem' }}>Handmatig</h4>
                   <div className="modal-grid one-col calm-grid">
                     <label>
                       Leverancier
@@ -692,8 +717,29 @@ export default function Importbeheer() {
                   </div>
                 </div>
 
-                <div>
-                  <h4>Importingrediënt</h4>
+                <div
+                  aria-hidden="true"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#2563eb',
+                    fontSize: '1.75rem',
+                    fontWeight: 700
+                  }}
+                >
+                  →
+                </div>
+
+                <div
+                  style={{
+                    background: '#ecfeff',
+                    border: '1px solid #99f6e4',
+                    borderRadius: '1rem',
+                    padding: '1rem'
+                  }}
+                >
+                  <h4 style={{ marginTop: 0, marginBottom: '0.75rem' }}>Import</h4>
                   <div className="modal-grid one-col calm-grid">
                     <label>
                       Leverancier
@@ -745,7 +791,7 @@ export default function Importbeheer() {
                 }
                 disabled={activeManualActionId === selectedManualMatchIngredient.id}
               >
-                Ja, koppel aan import
+                Koppelen
               </button>
               <button
                 type="button"
@@ -753,7 +799,7 @@ export default function Importbeheer() {
                 onClick={closeMatchPreview}
                 disabled={activeManualActionId === selectedManualMatchIngredient.id}
               >
-                Sluiten
+                Annuleren
               </button>
             </div>
           </div>
