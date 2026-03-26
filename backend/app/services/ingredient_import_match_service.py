@@ -119,6 +119,7 @@ def _possible_calculation_match(manual_ingredient: Ingredient, import_ingredient
 
 def _possible_unit_match(manual_ingredient: Ingredient, import_ingredient: Ingredient) -> bool:
     manual_supplier_unit = _clean_text(manual_ingredient.supplier_unit)
+    import_supplier_unit = _clean_text(import_ingredient.supplier_unit)
     import_sales_unit_name = _clean_text(import_ingredient.supplier_sales_unit_name)
     if (
         manual_supplier_unit is not None
@@ -126,13 +127,10 @@ def _possible_unit_match(manual_ingredient: Ingredient, import_ingredient: Ingre
         and manual_supplier_unit == import_sales_unit_name
     ):
         return True
-
-    manual_calc_unit = _normalize_unit(manual_ingredient.calculation_unit)
-    import_calc_unit = _normalize_unit(import_ingredient.calculation_unit)
     return (
-        manual_calc_unit is not None
-        and import_calc_unit is not None
-        and manual_calc_unit == import_calc_unit
+        manual_supplier_unit is not None
+        and import_supplier_unit is not None
+        and manual_supplier_unit == import_supplier_unit
     )
 
 
@@ -160,8 +158,14 @@ def detect_import_match_for_manual_ingredient(db: Session, manual_ingredient: In
         ingredient
         for ingredient in candidates
         if ingredient.supplier_product_code == manual_ingredient.supplier_product_code
-        and _strong_unit_match(manual_ingredient, ingredient)
-        and _strong_calculation_match(manual_ingredient, ingredient)
+        and (
+            _product_names_look_similar(
+                manual_ingredient.supplier_product_name,
+                ingredient.supplier_product_name,
+            )
+            or _strong_unit_match(manual_ingredient, ingredient)
+            or _strong_calculation_match(manual_ingredient, ingredient)
+        )
     ]
     if len(strong_matches) == 1:
         return {
@@ -180,12 +184,13 @@ def detect_import_match_for_manual_ingredient(db: Session, manual_ingredient: In
         )
         has_unit_match = _possible_unit_match(manual_ingredient, ingredient)
         has_calculation_match = _possible_calculation_match(manual_ingredient, ingredient)
+        has_supporting_match = has_unit_match or has_calculation_match
 
-        if has_code_match and (has_unit_match or has_calculation_match):
+        if has_code_match:
             possible_matches.append(ingredient)
             continue
 
-        if has_name_match and has_unit_match and has_calculation_match:
+        if has_name_match and has_supporting_match:
             possible_matches.append(ingredient)
 
     if possible_matches:
