@@ -783,23 +783,48 @@ export default function Importbeheer() {
               </div>
             </div>
 
-            <div className="modal-footer">
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '0.75rem',
+                marginTop: '1.5rem',
+                paddingTop: '1rem',
+                borderTop: '1px solid #e5e7eb'
+              }}
+            >
+              <button
+                type="button"
+                onClick={closeMatchPreview}
+                disabled={activeManualActionId === selectedManualMatchIngredient.id}
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  background: '#fff',
+                  cursor: 'pointer'
+                }}
+              >
+                Annuleren
+              </button>
+
               <button
                 type="button"
                 onClick={() =>
                   handleManualIngredientAction(selectedManualMatchIngredient.id, 'link-import')
                 }
                 disabled={activeManualActionId === selectedManualMatchIngredient.id}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  borderRadius: '0.5rem',
+                  border: 'none',
+                  background: '#2563eb',
+                  color: '#fff',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
               >
                 Koppelen
-              </button>
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={closeMatchPreview}
-                disabled={activeManualActionId === selectedManualMatchIngredient.id}
-              >
-                Annuleren
               </button>
             </div>
           </div>
