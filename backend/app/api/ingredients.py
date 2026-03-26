@@ -444,7 +444,12 @@ def list_manual_ingredients_with_matches(db: Session = Depends(get_db)) -> list[
         .order_by(Ingredient.supplier_name.asc(), Ingredient.supplier_product_name.asc())
         .all()
     )
-    return [_serialize_ingredient_with_match(db, ingredient) for ingredient in ingredients]
+    results = []
+    for ingredient in ingredients:
+        serialized = _serialize_ingredient_with_match(db, ingredient)
+        if serialized.get("match_status") in {"possible", "strong"}:
+            results.append(serialized)
+    return results
 
 
 @router.get("/api/import-ingredients/stale", tags=["ingredients"])
