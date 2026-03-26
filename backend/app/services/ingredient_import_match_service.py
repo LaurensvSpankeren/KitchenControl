@@ -1,3 +1,5 @@
+import re
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -42,7 +44,31 @@ def _product_names_look_similar(left: str | None, right: str | None) -> bool:
     right_clean = _clean_text(right)
     if left_clean is None or right_clean is None:
         return False
-    return left_clean in right_clean or right_clean in left_clean
+    if left_clean == right_clean:
+        return True
+
+    alias_map = {
+        "roll": "rol",
+    }
+
+    def tokenize(value: str) -> set[str]:
+        tokens = set()
+        for token in re.findall(r"[a-z0-9]+", value):
+            normalized = alias_map.get(token, token)
+            if len(normalized) >= 3:
+                tokens.add(normalized)
+        return tokens
+
+    left_tokens = tokenize(left_clean)
+    right_tokens = tokenize(right_clean)
+    if not left_tokens or not right_tokens:
+        return False
+
+    shared_tokens = left_tokens & right_tokens
+    if len(shared_tokens) >= 2:
+        return True
+
+    return False
 
 
 def _amounts_equal(left, right) -> bool:
