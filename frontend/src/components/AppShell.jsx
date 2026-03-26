@@ -1,5 +1,7 @@
-import React from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import React, { useEffect, useMemo, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+
+import { apiClient } from '../api/client'
 
 const navItems = [
   { to: '/', label: 'Dashboard', end: true },
@@ -12,6 +14,55 @@ const navItems = [
 ]
 
 export default function AppShell({ onLogout }) {
+  const [importAlerts, setImportAlerts] = useState(0)
+  const location = useLocation()
+
+  useEffect(() => {
+    let isCancelled = false
+
+    async function loadImportAlerts() {
+      try {
+        const [manualMatches, manualReview, staleImport, issues] = await Promise.all([
+          apiClient.getManualIngredientsWithMatches(),
+          apiClient.getManualIngredientsForReview(),
+          apiClient.getStaleImportIngredients(),
+          apiClient.getImportIssues({ status: 'open' })
+        ])
+
+        const duplicateIssues = Array.isArray(issues)
+          ? issues.filter((issue) => issue.issue_type === 'duplicate_conflict_in_file')
+          : []
+
+        if (!isCancelled) {
+          setImportAlerts(
+            (Array.isArray(manualMatches) ? manualMatches.length : 0) +
+              (Array.isArray(manualReview) ? manualReview.length : 0) +
+              (Array.isArray(staleImport) ? staleImport.length : 0) +
+              duplicateIssues.length
+          )
+        }
+      } catch (error) {
+        console.error('Importbeheer badge laden mislukt.', error)
+        if (!isCancelled) {
+          setImportAlerts(0)
+        }
+      }
+    }
+
+    loadImportAlerts()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [location.pathname])
+
+  const importAlertsLabel = useMemo(() => {
+    if (importAlerts <= 0) {
+      return null
+    }
+    return importAlerts > 99 ? '99+' : String(importAlerts)
+  }, [importAlerts])
+
   return (
     <div className="layout">
       <aside className="sidebar">
@@ -30,7 +81,31 @@ export default function AppShell({ onLogout }) {
                 `nav-link${isActive ? ' is-active' : ''}`
               }
             >
-              {item.label}
+              <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                {item.label}
+                {item.to === '/importbeheer' && importAlertsLabel ? (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '-0.4rem',
+                      right: '-1rem',
+                      minWidth: '1.2rem',
+                      height: '1.2rem',
+                      padding: '0 0.3rem',
+                      borderRadius: '999px',
+                      background: '#dc2626',
+                      color: '#fff',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      lineHeight: '1.2rem',
+                      textAlign: 'center',
+                      boxShadow: '0 0 0 2px #fff'
+                    }}
+                  >
+                    {importAlertsLabel}
+                  </span>
+                ) : null}
+              </span>
             </NavLink>
           ))}
         </nav>
