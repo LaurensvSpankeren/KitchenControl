@@ -87,8 +87,8 @@ export default function AppShell({ onLogout }) {
                   <span
                     style={{
                       position: 'absolute',
-                      top: '-0.4rem',
-                      right: '-1rem',
+                      top: '-0.35rem',
+                      right: '-1.15rem',
                       minWidth: '1.2rem',
                       height: '1.2rem',
                       padding: '0 0.3rem',

@@ -337,7 +337,7 @@ export default function Importbeheer() {
 
       <section className="card">
         <h3>Handmatig CSV uploaden</h3>
-        <p>Upload hier CSV-bestanden om inkoopproducten te synchroniseren.</p>
+        <p style={{ marginTop: '0.65rem' }}>Upload hier CSV-bestanden om inkoopproducten te synchroniseren.</p>
         <input
           type="file"
           accept=".csv,text/csv"
@@ -349,13 +349,13 @@ export default function Importbeheer() {
         {importMessage ? <p>{importMessage}</p> : null}
       </section>
 
-      <section className="card">
+      <section className="card" style={{ marginTop: '1.75rem' }}>
         <h3>Handmatige ingrediënten controleren</h3>
-        <p>Controleer hier handmatig ingevoerde ingrediënten.</p>
+        <p style={{ marginTop: '0.65rem' }}>Controleer hier handmatig ingevoerde ingrediënten.</p>
 
-        <div style={{ marginTop: '1.5rem' }}>
+        <div style={{ marginTop: '2rem' }}>
           <h4>Import match controleren</h4>
-          <p>Beoordeel of een handmatig ingrediënt gekoppeld kan worden aan een importproduct.</p>
+          <p style={{ marginTop: '0.65rem' }}>Beoordeel of een handmatig ingrediënt gekoppeld kan worden aan een importproduct.</p>
           {manualMatchMessage ? <p className="form-info inline-message">{manualMatchMessage}</p> : null}
           {manualMatchError ? <p>{manualMatchError}</p> : null}
           {isLoadingManualMatchIngredients ? (
@@ -363,7 +363,7 @@ export default function Importbeheer() {
           ) : manualMatchIngredients.length === 0 ? (
             <p>Geen handmatige ingrediënten met importmatch gevonden.</p>
           ) : (
-            <div className="table-scroll">
+            <div className="table-scroll" style={{ marginTop: '1rem' }}>
               <table className="ingredients-table">
                 <thead>
                   <tr>
@@ -438,9 +438,9 @@ export default function Importbeheer() {
           )}
         </div>
 
-        <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #e5e7eb' }}>
+        <div style={{ marginTop: '2.75rem', paddingTop: '2rem', borderTop: '1px solid #e5e7eb' }}>
           <h4>Inactieve handmatige ingrediënten</h4>
-          <p>Deze ingrediënten zijn 45 dagen of langer niet bijgewerkt. Controleer ze en werk ze bij indien nodig.</p>
+          <p style={{ marginTop: '0.65rem' }}>Deze ingrediënten zijn 45 dagen of langer niet bijgewerkt. Controleer ze en werk ze bij indien nodig.</p>
           {manualReviewMessage ? <p className="form-info inline-message">{manualReviewMessage}</p> : null}
           {manualReviewError ? <p>{manualReviewError}</p> : null}
           {isLoadingManualIngredients ? (
@@ -448,7 +448,7 @@ export default function Importbeheer() {
           ) : manualIngredients.length === 0 ? (
             <p>Geen handmatige ingrediënten ter controle gevonden.</p>
           ) : (
-            <div className="table-scroll">
+            <div className="table-scroll" style={{ marginTop: '1rem' }}>
               <table className="ingredients-table">
                 <thead>
                   <tr>
@@ -532,13 +532,13 @@ export default function Importbeheer() {
         </div>
       </section>
 
-      <section className="card">
+      <section className="card" style={{ marginTop: '1.75rem' }}>
         <h3>Import ingrediënten controleren</h3>
-        <p>Controleer hier geïmporteerde ingrediënten.</p>
+        <p style={{ marginTop: '0.65rem' }}>Controleer hier geïmporteerde ingrediënten.</p>
 
-        <div style={{ marginTop: '1.5rem' }}>
+        <div style={{ marginTop: '2rem' }}>
           <h4>Inactieve import ingrediënten</h4>
-          <p>Deze ingrediënten zijn 45 dagen of langer niet vernieuwd via import. Controleer ze en werk ze bij indien nodig.</p>
+          <p style={{ marginTop: '0.65rem' }}>Deze ingrediënten zijn 45 dagen of langer niet vernieuwd via import. Controleer ze en werk ze bij indien nodig.</p>
           {staleImportMessage ? <p className="form-info inline-message">{staleImportMessage}</p> : null}
           {staleImportError ? <p>{staleImportError}</p> : null}
           {isLoadingStaleImportIngredients ? (
@@ -546,7 +546,7 @@ export default function Importbeheer() {
           ) : staleImportIngredients.length === 0 ? (
             <p>Geen importingrediënten ter controle gevonden.</p>
           ) : (
-            <div className="table-scroll">
+            <div className="table-scroll" style={{ marginTop: '1rem' }}>
               <table className="ingredients-table">
                 <thead>
                   <tr>
@@ -603,9 +603,9 @@ export default function Importbeheer() {
           )}
         </div>
 
-        <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid #e5e7eb' }}>
+        <div style={{ marginTop: '2.75rem', paddingTop: '2rem', borderTop: '1px solid #e5e7eb' }}>
           <h4>Duplicaten in import</h4>
-          <p>Mogelijke dubbele importproducten gevonden. Controleer en voeg samen.</p>
+          <p style={{ marginTop: '0.65rem' }}>Mogelijke dubbele importproducten gevonden. Controleer en voeg samen.</p>
           {issuesMessage ? <p className="form-info inline-message">{issuesMessage}</p> : null}
           {issueError ? <p>{issueError}</p> : null}
           {isLoadingIssues ? (
@@ -613,7 +613,7 @@ export default function Importbeheer() {
           ) : duplicateIssues.length === 0 ? (
             <p>Geen open duplicate issues gevonden.</p>
           ) : (
-            <div className="table-scroll">
+            <div className="table-scroll" style={{ marginTop: '1rem' }}>
               <table className="ingredients-table">
                 <thead>
                   <tr>
@@ -788,8 +788,10 @@ export default function Importbeheer() {
                 display: 'flex',
                 justifyContent: 'flex-end',
                 gap: '0.75rem',
-                marginTop: '1.5rem',
-                paddingTop: '1rem',
+                width: '100%',
+                marginTop: '2rem',
+                paddingTop: '1.25rem',
+                paddingBottom: '0.25rem',
                 borderTop: '1px solid #e5e7eb'
               }}
             >
