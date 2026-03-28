@@ -201,6 +201,9 @@ export default function Menukaarten() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [menukaarten, setMenukaarten] = useState([])
   const [archivedMenukaarten, setArchivedMenukaarten] = useState([])
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isCreatingNewMenukaart, setIsCreatingNewMenukaart] = useState(false)
+  const [newMenukaartName, setNewMenukaartName] = useState('')
   const [selectedMenukaartId, setSelectedMenukaartId] = useState(null)
   const [selectedMenukaart, setSelectedMenukaart] = useState(null)
   const [availableDishes, setAvailableDishes] = useState([])
@@ -439,6 +442,38 @@ export default function Menukaarten() {
     loadMenukaartDetail(selectedMenukaartId)
   }, [selectedMenukaartId])
 
+  function openMenukaartModal(menukaartId) {
+    setIsCreatingNewMenukaart(false)
+    setNewMenukaartName('')
+    setIsModalOpen(true)
+    setSelectedMenukaartId(menukaartId)
+  }
+
+  function openNewMenukaartModal() {
+    setSelectedMenukaartId(null)
+    setSelectedMenukaart(null)
+    setSelectedSectieId('')
+    setMoveDishState(null)
+    setDragDishState(null)
+    setDragOverDishState(null)
+    setIsCreatingNewMenukaart(true)
+    setNewMenukaartName('')
+    setError('')
+    setMessage('')
+    setIsModalOpen(true)
+  }
+
+  function closeMenukaartModal() {
+    if (isSubmittingDetailAction) {
+      return
+    }
+    setIsModalOpen(false)
+    setIsCreatingNewMenukaart(false)
+    setNewMenukaartName('')
+    setSelectedMenukaart(null)
+    setSelectedMenukaartId(null)
+  }
+
   useEffect(() => {
     if (!openActionsMenuId) {
       return
@@ -470,16 +505,18 @@ export default function Menukaarten() {
   }
 
   async function handleCreate() {
-    const name = window.prompt('Naam van de nieuwe menukaart')
-    if (!name || !name.trim()) {
+    const name = newMenukaartName.trim()
+    if (!name) {
       return
     }
     try {
       setError('')
       setMessage('')
-      const created = await apiClient.createMenukaart({ name: name.trim() })
+      const created = await apiClient.createMenukaart({ name })
       setMessage('Menukaart aangemaakt.')
       await loadMenukaarten()
+      setIsCreatingNewMenukaart(false)
+      setNewMenukaartName('')
       setSelectedMenukaartId(created.id)
     } catch {
       setError('Menukaart aanmaken mislukt.')
@@ -536,6 +573,7 @@ export default function Menukaarten() {
       setMessage('Menukaart gearchiveerd.')
       await loadMenukaarten()
       if (selectedMenukaartId === item.id) {
+        setIsModalOpen(false)
         setSelectedMenukaartId(null)
       }
     } catch {
@@ -555,6 +593,7 @@ export default function Menukaarten() {
       await loadMenukaarten()
       setOpenActionsMenuId(null)
       setActiveTab('active')
+      setIsModalOpen(true)
       setSelectedMenukaartId(item.id)
       await loadMenukaartDetail(item.id)
       setMessage('Menukaart hersteld uit archief.')
@@ -580,6 +619,7 @@ export default function Menukaarten() {
       await loadMenukaarten()
       setOpenActionsMenuId(null)
       if (selectedMenukaartId === item.id) {
+        setIsModalOpen(false)
         setSelectedMenukaartId(null)
       }
       setMessage('Menukaart verwijderd.')
@@ -596,6 +636,7 @@ export default function Menukaarten() {
       const duplicated = await apiClient.duplicateMenukaart(item.id)
       setMessage('Menukaart gedupliceerd.')
       await loadMenukaarten()
+      setIsModalOpen(true)
       setSelectedMenukaartId(duplicated.id)
     } catch {
       setError('Menukaart dupliceren mislukt.')
@@ -1202,7 +1243,7 @@ export default function Menukaarten() {
                             type="button"
                             className="table-action-btn"
                             style={archivedActionUiStyles.rowActionButton}
-                            onClick={() => setSelectedMenukaartId(item.id)}
+                            onClick={() => openMenukaartModal(item.id)}
                           >
                             Openen
                           </button>
@@ -1249,7 +1290,7 @@ export default function Menukaarten() {
                             type="button"
                             className="table-action-btn"
                             style={archivedActionUiStyles.rowActionButton}
-                            onClick={() => setSelectedMenukaartId(item.id)}
+                            onClick={() => openMenukaartModal(item.id)}
                           >
                             Openen
                           </button>
@@ -1365,7 +1406,7 @@ export default function Menukaarten() {
             <button
               type="button"
               className="sfp-new-btn"
-              onClick={handleCreate}
+              onClick={openNewMenukaartModal}
               style={menukaartToolbarStyles.newButton}
             >
               Nieuwe menukaart
@@ -1378,228 +1419,273 @@ export default function Menukaarten() {
         {error ? <p>{error}</p> : null}
       </section>
 
-      {selectedMenukaartId ? (
-        <section className="card" style={{ marginTop: '1rem' }}>
-          {isLoadingDetail || !selectedMenukaart ? (
-            <p>Menukaartdetail laden...</p>
-          ) : (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                <div>
-                  <h3 style={{ marginBottom: '0.45rem' }}>{selectedMenukaart.name}</h3>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <span
-                      style={{
-                        padding: '0.3rem 0.55rem',
-                        borderRadius: '999px',
-                        background: '#f3f4f6',
-                        color: '#374151',
-                        fontSize: '0.92rem'
-                      }}
-                    >
-                      Status: {statusLabel(selectedMenukaart.status)}
-                    </span>
-                    <span
-                      style={{
-                        padding: '0.3rem 0.55rem',
-                        borderRadius: '999px',
-                        background: '#f3f4f6',
-                        color: '#374151',
-                        fontSize: '0.92rem'
-                      }}
-                    >
-                      Secties: {(selectedMenukaart.secties || []).filter((sectie) => sectie.id != null).length}
-                    </span>
-                    <span
-                      style={{
-                        padding: '0.3rem 0.55rem',
-                        borderRadius: '999px',
-                        background: '#f3f4f6',
-                        color: '#374151',
-                        fontSize: '0.92rem'
-                      }}
-                    >
-                      Gerechten: {selectedMenukaart.dish_count ?? 0}
-                    </span>
-                    {selectedMenukaart.average_margin_percent != null ? (
-                      <span
-                        style={{
-                          padding: '0.3rem 0.55rem',
-                          borderRadius: '999px',
-                          background: '#f3f4f6',
-                          color: '#374151',
-                          fontSize: '0.92rem'
-                        }}
-                      >
-                        Gem. marge: {formatPercent(selectedMenukaart.average_margin_percent)}
-                      </span>
-                    ) : null}
-                    {selectedMenukaart.status === 'active' && selectedMenukaart.activated_at ? (
-                      <span
-                        style={{
-                          padding: '0.3rem 0.55rem',
-                          borderRadius: '999px',
-                          background: '#f3f4f6',
-                          color: '#374151',
-                          fontSize: '0.92rem'
-                        }}
-                      >
-                        Actief sinds: {formatDate(selectedMenukaart.activated_at)}
-                        {selectedMenukaart.active_days != null
-                          ? ` · ${selectedMenukaart.active_days} dagen`
-                          : ''}
-                      </span>
-                    ) : selectedMenukaart.status !== 'active' ? (
-                      <span
-                        style={{
-                          padding: '0.3rem 0.55rem',
-                          borderRadius: '999px',
-                          background: '#f3f4f6',
-                          color: '#374151',
-                          fontSize: '0.92rem'
-                        }}
-                      >
-                        Concept
-                      </span>
-                    ) : null}
+      {isModalOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-card modal-wide sfp-modal">
+            <div className="modal-header">
+              <h3>
+                {isCreatingNewMenukaart && !selectedMenukaartId
+                  ? 'Nieuwe menukaart'
+                  : isSelectedArchived
+                    ? 'Menukaart bekijken'
+                    : 'Menukaart bewerken'}
+              </h3>
+            </div>
+
+            <div className="modal-body">
+              {error ? <div className="modal-validation-banner">{error}</div> : null}
+              {message ? <p className="form-info inline-message">{message}</p> : null}
+
+              {isCreatingNewMenukaart && !selectedMenukaartId ? (
+                <section className="modal-section">
+                  <h4>Algemeen</h4>
+                  <div className="modal-grid one-col calm-grid">
+                    <label>
+                      Naam
+                      <input
+                        type="text"
+                        value={newMenukaartName}
+                        onChange={(event) => setNewMenukaartName(event.target.value)}
+                        placeholder="Naam van de menukaart"
+                      />
+                    </label>
                   </div>
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                  {isSelectedArchived ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleRestore(selectedMenukaart)}
-                        style={{ maxWidth: '180px' }}
-                      >
-                        Herstellen
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        onClick={() => handleDeleteArchived(selectedMenukaart)}
-                        style={{ maxWidth: '180px' }}
-                      >
-                        Verwijderen
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleRename(selectedMenukaart)}
-                        style={{ maxWidth: '180px' }}
-                      >
-                        Hernoemen
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDuplicate(selectedMenukaart)}
-                        style={{ maxWidth: '180px' }}
-                      >
-                        Dupliceren
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        onClick={() => handleArchive(selectedMenukaart)}
-                        style={{ maxWidth: '180px' }}
-                      >
-                        Archiveren
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handlePrintMenukaart}
-                        style={{ maxWidth: '180px' }}
-                      >
-                        Print menukaart
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handlePrintAllergenenkaart}
-                        style={{ maxWidth: '220px' }}
-                      >
-                        Print allergenenkaart
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    onClick={() => setSelectedMenukaartId(null)}
-                    style={{ maxWidth: '180px' }}
-                  >
-                    Sluiten
-                  </button>
-                </div>
-              </div>
-
-              {!isSelectedArchived ? (
-                <div className="card" style={{ marginTop: '1.25rem', padding: '1rem' }}>
-                  <div style={{ display: 'grid', gap: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                      <div>
-                        <h4 style={{ marginBottom: '0.25rem' }}>Menukaart bewerken</h4>
-                        <p style={{ margin: 0, color: '#4b5563' }}>
-                          Voeg secties toe en koppel gerechten aan de juiste sectie.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: 'grid',
-                        gap: '1rem',
-                        gridTemplateColumns: 'minmax(220px, 280px) minmax(0, 1fr)'
-                      }}
+                  <div className="modal-actions" style={{ padding: '1rem 0 0', borderTop: '0', justifyContent: 'flex-start' }}>
+                    <button
+                      type="button"
+                      className="primary-btn"
+                      onClick={handleCreate}
+                      disabled={!newMenukaartName.trim()}
                     >
-                      <div
-                        style={{
-                          padding: '1rem',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '0.75rem',
-                          background: '#f8fafc'
-                        }}
-                      >
-                        <h5 style={{ margin: '0 0 0.35rem' }}>Sectie toevoegen</h5>
-                        <p style={{ margin: 0, color: '#4b5563', lineHeight: 1.4 }}>
-                          Maak eerst een nieuwe sectie aan voor deze menukaart.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleCreateSectie}
-                          disabled={isSubmittingDetailAction}
-                          style={{ maxWidth: '220px', marginTop: '0.9rem' }}
-                        >
-                          Sectie toevoegen
-                        </button>
-                      </div>
+                      Menukaart aanmaken
+                    </button>
+                    <button type="button" className="secondary-btn" onClick={closeMenukaartModal}>
+                      Sluiten
+                    </button>
+                  </div>
+                </section>
+              ) : isLoadingDetail || !selectedMenukaart ? (
+                <p>Menukaartdetail laden...</p>
+              ) : (
+                <>
+                  <section className="modal-section">
+                    <h4>Algemene info</h4>
+                    <div className="modal-grid one-col calm-grid">
+                      <div style={{ display: 'grid', gap: '1rem' }}>
+                        <div style={{ display: 'grid', gap: '0.8rem', gridTemplateColumns: 'minmax(0, 1fr) minmax(180px, 220px)' }}>
+                          <label>
+                            Naam
+                            <input type="text" value={selectedMenukaart.name || ''} readOnly />
+                          </label>
+                          <label>
+                            Categorie
+                            <input type="text" value="" readOnly placeholder="Nog niet gekoppeld in deze release" />
+                          </label>
+                        </div>
 
-                      <div
-                        style={{
-                          padding: '1rem',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '0.75rem',
-                          background: '#fff'
-                        }}
-                      >
-                        <h5 style={{ margin: '0 0 0.35rem' }}>Gerecht toevoegen aan sectie</h5>
-                        <p style={{ margin: 0, color: '#4b5563', lineHeight: 1.4 }}>
-                          Kies eerst de sectie en daarna het gerecht dat je wilt toevoegen.
-                        </p>
                         <div
                           style={{
-                            display: 'flex',
+                            display: 'grid',
                             gap: '0.75rem',
-                            alignItems: 'flex-end',
-                            flexWrap: 'wrap',
-                            marginTop: '0.9rem'
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))'
                           }}
                         >
-                          <label style={{ minWidth: '220px', flex: '1 1 220px' }}>
-                            <span style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>
-                              Sectie
-                            </span>
+                          <div>
+                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Status</div>
+                            <div>{statusLabel(selectedMenukaart.status)}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Secties</div>
+                            <div>{(selectedMenukaart.secties || []).filter((sectie) => sectie.id != null).length}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Gerechten</div>
+                            <div>{selectedMenukaart.dish_count ?? 0}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Gem. marge</div>
+                            <div>{formatPercent(selectedMenukaart.average_margin_percent)}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Margestatus</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                              {selectedMenukaart.margin_status ? (
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    width: '0.75rem',
+                                    height: '0.75rem',
+                                    borderRadius: '999px',
+                                    background: getMarginDotColor(selectedMenukaart.margin_status)
+                                  }}
+                                />
+                              ) : (
+                                <span>-</span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Actief sinds</div>
+                            <div>
+                              {selectedMenukaart.status === 'active' && selectedMenukaart.activated_at
+                                ? formatDate(selectedMenukaart.activated_at)
+                                : 'Concept'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                          {isSelectedArchived ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleRestore(selectedMenukaart)}
+                                style={{ maxWidth: '180px' }}
+                              >
+                                Herstellen
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-btn"
+                                onClick={() => handleDeleteArchived(selectedMenukaart)}
+                                style={{ maxWidth: '180px' }}
+                              >
+                                Verwijderen
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleRename(selectedMenukaart)}
+                                style={{ maxWidth: '180px' }}
+                              >
+                                Hernoemen
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicate(selectedMenukaart)}
+                                style={{ maxWidth: '180px' }}
+                              >
+                                Dupliceren
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-btn"
+                                onClick={() => handleArchive(selectedMenukaart)}
+                                style={{ maxWidth: '180px' }}
+                              >
+                                Archiveren
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="modal-section">
+                    <h4>Secties</h4>
+                    <div className="modal-grid one-col calm-grid">
+                      {!isSelectedArchived ? (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <p style={{ margin: 0, color: '#4b5563' }}>
+                            Beheer hier op hoog niveau de volgorde en opbouw van de secties.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleCreateSectie}
+                            disabled={isSubmittingDetailAction}
+                            style={{ maxWidth: '220px' }}
+                          >
+                            Sectie toevoegen
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {(selectedMenukaart.secties || []).length === 0 ? (
+                        <p>Nog geen secties op deze menukaart.</p>
+                      ) : (
+                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+                          {selectedMenukaart.secties.map((sectie) => (
+                            <div
+                              key={`section-summary-${sectie.id ?? sectie.title}`}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                gap: '1rem',
+                                flexWrap: 'wrap',
+                                alignItems: 'center',
+                                padding: '0.8rem 0.9rem',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '10px',
+                                background: '#fafafa'
+                              }}
+                            >
+                              <div>
+                                <div style={{ fontWeight: 600 }}>{sectie.title}</div>
+                                <div style={{ fontSize: '0.88rem', color: '#6b7280' }}>
+                                  {sectie.gerechten?.length || 0} gerechten
+                                </div>
+                              </div>
+                              {sectie.id != null && !isSelectedArchived ? (
+                                <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveSectie(sectie, 'up')}
+                                    disabled={isSubmittingDetailAction}
+                                    style={getToolActionButtonStyle()}
+                                  >
+                                    Omhoog
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveSectie(sectie, 'down')}
+                                    disabled={isSubmittingDetailAction}
+                                    style={getToolActionButtonStyle()}
+                                  >
+                                    Omlaag
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRenameSectie(sectie)}
+                                    disabled={isSubmittingDetailAction}
+                                    style={getToolActionButtonStyle()}
+                                  >
+                                    Hernoemen
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="secondary-btn"
+                                    onClick={() => handleDeleteSectie(sectie)}
+                                    disabled={isSubmittingDetailAction}
+                                    style={getToolActionButtonStyle('danger')}
+                                  >
+                                    Verwijderen
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  {!isSelectedArchived ? (
+                    <section className="modal-section">
+                      <h4>Secties beheren</h4>
+                      <div className="modal-grid one-col calm-grid">
+                        <div
+                          style={{
+                            display: 'grid',
+                            gap: '0.75rem',
+                            gridTemplateColumns: 'minmax(220px, 1fr) minmax(260px, 1fr) auto',
+                            alignItems: 'end'
+                          }}
+                        >
+                          <label>
+                            Sectie
                             <select
                               value={selectedSectieId}
                               onChange={(event) => setSelectedSectieId(event.target.value)}
@@ -1613,10 +1699,8 @@ export default function Menukaarten() {
                               ))}
                             </select>
                           </label>
-                          <label style={{ minWidth: '260px', flex: '1 1 260px' }}>
-                            <span style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>
-                              Gerecht
-                            </span>
+                          <label>
+                            Gerecht
                             <select
                               value={selectedDishId}
                               onChange={(event) => setSelectedDishId(event.target.value)}
@@ -1640,12 +1724,12 @@ export default function Menukaarten() {
                           </button>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
+                    </section>
+                  ) : null}
 
-              <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1rem' }}>
+                  <section className="modal-section">
+                    <h4>Inhoud per sectie</h4>
+                    <div style={{ display: 'grid', gap: '1rem' }}>
                 {(selectedMenukaart.secties || []).length === 0 ? (
                   <p>Nog geen secties op deze menukaart.</p>
                 ) : (
@@ -1879,10 +1963,37 @@ export default function Menukaarten() {
                     </section>
                   ))
                 )}
-              </div>
-            </>
-          )}
-        </section>
+                    </div>
+                  </section>
+
+                  <div className="modal-actions">
+                    {selectedMenukaartId ? (
+                      <>
+                        <button
+                          type="button"
+                          className="table-action-btn"
+                          onClick={handlePrintMenukaart}
+                        >
+                          Print menukaart
+                        </button>
+                        <button
+                          type="button"
+                          className="table-action-btn"
+                          onClick={handlePrintAllergenenkaart}
+                        >
+                          Print allergenenkaart
+                        </button>
+                      </>
+                    ) : null}
+                    <button type="button" className="secondary-btn" onClick={closeMenukaartModal}>
+                      Sluiten
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {isLoading ? (
