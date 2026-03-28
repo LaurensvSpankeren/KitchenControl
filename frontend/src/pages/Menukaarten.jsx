@@ -269,6 +269,41 @@ export default function Menukaarten() {
     return availableDishes.filter((dish) => !linkedIds.has(dish.id))
   }, [availableDishes, selectedMenukaart])
   const isSelectedArchived = !!selectedMenukaart?.is_archived
+  const menukaartToolbarStyles = {
+    viewModeSwitch: { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' },
+    toolbar: {
+      display: 'grid',
+      gridTemplateColumns: 'minmax(180px, 1fr) minmax(150px, 220px) minmax(150px, 220px) auto',
+      gap: '0.75rem',
+      alignItems: 'center'
+    },
+    control: {
+      width: '100%',
+      height: '40px',
+      minHeight: '40px',
+      marginTop: 0,
+      padding: '0 0.75rem',
+      border: '1px solid #d1d5db',
+      borderRadius: '8px',
+      font: 'inherit',
+      fontSize: '0.95rem',
+      lineHeight: 1.2,
+      background: '#fff',
+      boxSizing: 'border-box'
+    },
+    newButton: {
+      width: 'auto',
+      minWidth: '180px',
+      height: '40px',
+      minHeight: '40px',
+      marginTop: 0,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 1rem',
+      boxSizing: 'border-box'
+    }
+  }
   const archivedActionUiStyles = {
     actionCell: {
       verticalAlign: 'middle',
@@ -1229,7 +1264,7 @@ export default function Menukaarten() {
       </header>
 
       <section className="card">
-        <div style={archivedActionUiStyles.viewModeSwitch || { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        <div style={menukaartToolbarStyles.viewModeSwitch}>
           <button
             type="button"
             className="table-action-btn"
@@ -1247,17 +1282,19 @@ export default function Menukaarten() {
             Archief
           </button>
         </div>
-        <div className="sfp-toolbar">
+        <div className="sfp-toolbar" style={menukaartToolbarStyles.toolbar}>
           <input
             type="text"
             placeholder="Zoek op naam"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
+            style={menukaartToolbarStyles.control}
           />
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
             disabled={activeTab === 'archived'}
+            style={menukaartToolbarStyles.control}
           >
             <option value="all">Alle</option>
             <option value="active">Actief</option>
@@ -1265,7 +1302,12 @@ export default function Menukaarten() {
           </select>
           <div />
           {activeTab === 'active' ? (
-            <button type="button" className="sfp-new-btn" onClick={handleCreate}>
+            <button
+              type="button"
+              className="sfp-new-btn"
+              onClick={handleCreate}
+              style={menukaartToolbarStyles.newButton}
+            >
               Nieuwe menukaart
             </button>
           ) : (
