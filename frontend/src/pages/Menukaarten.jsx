@@ -1559,7 +1559,7 @@ export default function Menukaarten() {
           </style>
         </head>
         <body>
-          <h1>Menukaartnaam: ${escapeHtml(selectedMenukaart.name)}</h1>
+          <h1>${escapeHtml(selectedMenukaart.name)}</h1>
           ${sectionsHtml || '<p>Geen secties of gerechten beschikbaar.</p>'}
         </body>
       </html>
