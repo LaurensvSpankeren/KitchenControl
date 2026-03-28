@@ -6,6 +6,7 @@ from app.models.ingredient_import_batch import IngredientImportBatch
 from app.models.ingredient_import_issue import IngredientImportIssue
 from app.models.ingredient_price_history import IngredientPriceHistory
 from app.models.menukaart import Menukaart
+from app.models.menukaart_category import MenukaartCategory
 from app.models.menukaart_gerecht import MenukaartGerecht
 from app.models.menukaart_sectie import MenukaartSectie
 from app.models.recipe_line import RecipeLine
@@ -20,6 +21,7 @@ __all__ = [
     "IngredientImportIssue",
     "IngredientPriceHistory",
     "Menukaart",
+    "MenukaartCategory",
     "MenukaartGerecht",
     "MenukaartSectie",
     "SemiFinishedProduct",

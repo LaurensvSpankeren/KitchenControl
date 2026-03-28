@@ -15,6 +15,7 @@ from app.db.session import get_db
 from app.models.dish import Dish
 from app.models.ingredient import Ingredient
 from app.models.menukaart import Menukaart
+from app.models.menukaart_category import MenukaartCategory
 from app.models.menukaart_gerecht import MenukaartGerecht
 from app.models.menukaart_sectie import MenukaartSectie
 from app.models.recipe_line import RecipeLine
@@ -28,6 +29,23 @@ def _serialize_price(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
 
 
+def _parse_optional_int(payload: dict, field_name: str) -> int | None:
+    value = payload.get(field_name)
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid integer value for field: {field_name}",
+        ) from exc
+
+
+def _normalize_name(value: str | None) -> str:
+    return (value or "").strip()
+
+
 def _get_margin_status(value: float | None) -> str | None:
     if value is None:
         return None
@@ -39,6 +57,7 @@ def _get_margin_status(value: float | None) -> str | None:
 
 
 def _build_menukaart_serializer_context(db: Session, items: list[Menukaart]) -> dict:
+    category_ids = {item.category_id for item in items if item.category_id is not None}
     dish_ids = {
         link.gerecht_id
         for item in items
@@ -47,6 +66,16 @@ def _build_menukaart_serializer_context(db: Session, items: list[Menukaart]) -> 
     }
     if not dish_ids:
         return {
+            "category_names_by_id": (
+                {
+                    category.id: category.name
+                    for category in db.query(MenukaartCategory)
+                    .filter(MenukaartCategory.id.in_(category_ids))
+                    .all()
+                }
+                if category_ids
+                else {}
+            ),
             "recipe_lines_by_dish_id": {},
             "ingredients_by_id": {},
             "semi_finished_products_by_id": {},
@@ -91,6 +120,16 @@ def _build_menukaart_serializer_context(db: Session, items: list[Menukaart]) -> 
     )
 
     return {
+        "category_names_by_id": (
+            {
+                category.id: category.name
+                for category in db.query(MenukaartCategory)
+                .filter(MenukaartCategory.id.in_(category_ids))
+                .all()
+            }
+            if category_ids
+            else {}
+        ),
         "recipe_lines_by_dish_id": recipe_lines_by_dish_id,
         "ingredients_by_id": ingredients_by_id,
         "semi_finished_products_by_id": semi_finished_products_by_id,
@@ -286,6 +325,8 @@ def _serialize_menukaart(db: Session, item: Menukaart, context: dict) -> dict:
     data = {
         "id": item.id,
         "name": item.name,
+        "category_id": item.category_id,
+        "category_name": context["category_names_by_id"].get(item.category_id),
         "status": item.status,
         "is_archived": item.is_archived,
         "created_at": item.created_at.isoformat() if item.created_at is not None else None,
@@ -327,6 +368,11 @@ def _validate_status(value: str | None) -> str:
     if status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status. Use 'concept' or 'active'.")
     return status
+
+
+def _list_menukaart_categories(db: Session) -> list[dict]:
+    categories = db.query(MenukaartCategory).order_by(MenukaartCategory.name.asc()).all()
+    return [{"id": category.id, "name": category.name} for category in categories]
 
 
 def _get_menukaart(db: Session, menukaart_id: int) -> Menukaart:
@@ -393,6 +439,33 @@ def list_menukaarten(db: Session = Depends(get_db)) -> list[dict]:
     return [_serialize_menukaart(db, item, context) for item in items]
 
 
+@router.get("/api/menukaart-categories", tags=["menukaarten"])
+def list_menukaart_categories(db: Session = Depends(get_db)) -> list[dict]:
+    return _list_menukaart_categories(db)
+
+
+@router.post("/api/menukaart-categories", tags=["menukaarten"])
+def create_menukaart_category(payload: dict, db: Session = Depends(get_db)) -> dict:
+    name = _normalize_name(payload.get("name"))
+    if not name:
+        raise HTTPException(status_code=400, detail="Category name is required")
+
+    existing = (
+        db.query(MenukaartCategory)
+        .filter(func.lower(MenukaartCategory.name) == name.lower())
+        .first()
+    )
+    if existing is not None:
+        raise HTTPException(status_code=400, detail="Category already exists")
+
+    category = MenukaartCategory(name=name)
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+
+    return {"id": category.id, "name": category.name}
+
+
 @router.get("/api/menukaarten/archived", tags=["menukaarten"])
 def list_archived_menukaarten(db: Session = Depends(get_db)) -> list[dict]:
     items = (
@@ -420,7 +493,18 @@ def create_menukaart(payload: dict, db: Session = Depends(get_db)) -> dict:
     if not name:
         raise HTTPException(status_code=400, detail="Missing required field: name")
 
-    item = Menukaart(name=name, status="concept", is_archived=False)
+    category_id = _parse_optional_int(payload, "category_id")
+    if category_id is not None:
+        category = db.query(MenukaartCategory).filter(MenukaartCategory.id == category_id).first()
+        if category is None:
+            raise HTTPException(status_code=404, detail="Menukaart category not found")
+
+    item = Menukaart(
+        name=name,
+        category_id=category_id,
+        status="concept",
+        is_archived=False,
+    )
     db.add(item)
     db.commit()
     item = _get_menukaart(db, item.id)
@@ -434,6 +518,7 @@ def duplicate_menukaart(menukaart_id: int, db: Session = Depends(get_db)) -> dic
 
     duplicate = Menukaart(
         name=f"{source.name} kopie",
+        category_id=source.category_id,
         status="concept",
         is_archived=False,
         activated_at=None,
@@ -479,6 +564,18 @@ def update_menukaart(menukaart_id: int, payload: dict, db: Session = Depends(get
         if not name:
             raise HTTPException(status_code=400, detail="Missing required field: name")
         item.name = name
+
+    if "category_id" in payload:
+        category_id = _parse_optional_int(payload, "category_id")
+        if category_id is not None:
+            category = (
+                db.query(MenukaartCategory)
+                .filter(MenukaartCategory.id == category_id)
+                .first()
+            )
+            if category is None:
+                raise HTTPException(status_code=404, detail="Menukaart category not found")
+        item.category_id = category_id
 
     if "status" in payload:
         next_status = _validate_status(payload.get("status"))

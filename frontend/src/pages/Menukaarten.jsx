@@ -206,6 +206,8 @@ export default function Menukaarten() {
   const [newMenukaartName, setNewMenukaartName] = useState('')
   const [menukaartNameInput, setMenukaartNameInput] = useState('')
   const [isSavingMenukaartName, setIsSavingMenukaartName] = useState(false)
+  const [menukaartCategories, setMenukaartCategories] = useState([])
+  const [isLoadingMenukaartCategories, setIsLoadingMenukaartCategories] = useState(false)
   const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -410,8 +412,8 @@ export default function Menukaarten() {
       lineHeight: 1.4
     }
   }
-  const menukaartCategoryOptions = []
-  const supportsMenukaartCategories = false
+  const menukaartCategoryOptions = useMemo(() => menukaartCategories, [menukaartCategories])
+  const supportsMenukaartCategories = true
 
   async function loadMenukaarten() {
     setIsLoading(true)
@@ -466,9 +468,22 @@ export default function Menukaarten() {
     }
   }
 
+  async function loadMenukaartCategories() {
+    setIsLoadingMenukaartCategories(true)
+    try {
+      const data = await apiClient.getMenukaartCategories()
+      setMenukaartCategories(Array.isArray(data) ? data : [])
+    } catch {
+      setMenukaartCategories([])
+    } finally {
+      setIsLoadingMenukaartCategories(false)
+    }
+  }
+
   useEffect(() => {
     loadMenukaarten()
     loadAvailableDishes()
+    loadMenukaartCategories()
   }, [])
 
   useEffect(() => {
@@ -485,7 +500,7 @@ export default function Menukaarten() {
 
   useEffect(() => {
     setMenukaartNameInput(selectedMenukaart?.name || '')
-    setSelectedCategoryId('')
+    setSelectedCategoryId(selectedMenukaart?.category_id != null ? String(selectedMenukaart.category_id) : '')
     setShowNewCategoryInput(false)
     setNewCategoryName('')
   }, [selectedMenukaart])
@@ -633,14 +648,58 @@ export default function Menukaarten() {
     }
   }
 
-  function handleCategorySaveAttempt() {
-    if (!newCategoryName.trim()) {
+  async function handleCategoryChange(value) {
+    if (!selectedMenukaart || isSelectedArchived) {
+      return
+    }
+
+    if (String(selectedMenukaart.category_id ?? '') === String(value || '')) {
+      setSelectedCategoryId(value)
+      return
+    }
+
+    try {
+      setError('')
+      setMessage('')
+      setSelectedCategoryId(value)
+      await apiClient.updateMenukaart(selectedMenukaart.id, {
+        category_id: value === '' ? null : Number(value)
+      })
+      setMessage('Categorie bijgewerkt.')
+      await loadMenukaarten()
+      await loadMenukaartDetail(selectedMenukaart.id)
+    } catch {
+      setError('Categorie bijwerken mislukt.')
+      setSelectedCategoryId(selectedMenukaart.category_id != null ? String(selectedMenukaart.category_id) : '')
+    }
+  }
+
+  async function handleCreateMenukaartCategory() {
+    if (isSelectedArchived || !selectedMenukaart) {
+      return
+    }
+
+    const name = newCategoryName.trim()
+    if (!name) {
       setError('Vul eerst een categorienaam in.')
       return
     }
 
-    setError('')
-    setMessage('Categorie voor menukaarten is nog niet gekoppeld aan backend.')
+    try {
+      setError('')
+      setMessage('')
+      const created = await apiClient.createMenukaartCategory({ name })
+      await loadMenukaartCategories()
+      setShowNewCategoryInput(false)
+      setNewCategoryName('')
+      setSelectedCategoryId(String(created.id))
+      await apiClient.updateMenukaart(selectedMenukaart.id, { category_id: created.id })
+      setMessage('Categorie aangemaakt.')
+      await loadMenukaarten()
+      await loadMenukaartDetail(selectedMenukaart.id)
+    } catch {
+      setError('Categorie aanmaken mislukt.')
+    }
   }
 
   async function handleSetStatus(item, nextStatus) {
@@ -1590,8 +1649,8 @@ export default function Menukaarten() {
                             Categorie
                             <select
                               value={selectedCategoryId}
-                              disabled={!supportsMenukaartCategories || isSelectedArchived}
-                              onChange={(event) => setSelectedCategoryId(event.target.value)}
+                              disabled={isLoadingMenukaartCategories || !supportsMenukaartCategories || isSelectedArchived}
+                              onChange={(event) => handleCategoryChange(event.target.value)}
                             >
                               <option value="">Kies een categorie</option>
                               {menukaartCategoryOptions.map((category) => (
@@ -1617,7 +1676,11 @@ export default function Menukaarten() {
                                   readOnly={isSelectedArchived}
                                   onChange={(event) => setNewCategoryName(event.target.value)}
                                 />
-                                <button type="button" onClick={handleCategorySaveAttempt} disabled={isSelectedArchived}>
+                                <button
+                                  type="button"
+                                  onClick={handleCreateMenukaartCategory}
+                                  disabled={isSelectedArchived || isLoadingMenukaartCategories}
+                                >
                                   Opslaan
                                 </button>
                               </div>
