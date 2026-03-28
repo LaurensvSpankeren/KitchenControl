@@ -208,6 +208,7 @@ export default function Menukaarten() {
   const [isSavingMenukaartName, setIsSavingMenukaartName] = useState(false)
   const [menukaartCategories, setMenukaartCategories] = useState([])
   const [isLoadingMenukaartCategories, setIsLoadingMenukaartCategories] = useState(false)
+  const [dishCategories, setDishCategories] = useState([])
   const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -216,6 +217,15 @@ export default function Menukaarten() {
   const [availableDishes, setAvailableDishes] = useState([])
   const [selectedDishId, setSelectedDishId] = useState('')
   const [selectedSectieId, setSelectedSectieId] = useState('')
+  const [dishSearchTerm, setDishSearchTerm] = useState('')
+  const [dishCategoryFilter, setDishCategoryFilter] = useState('')
+  const [dishSubcategoryFilter, setDishSubcategoryFilter] = useState('')
+  const [hasSearchedDishes, setHasSearchedDishes] = useState(false)
+  const [appliedDishSearch, setAppliedDishSearch] = useState({
+    term: '',
+    categoryId: '',
+    subcategoryId: ''
+  })
   const [editingSectieId, setEditingSectieId] = useState(null)
   const [editingSectieTitle, setEditingSectieTitle] = useState('')
   const [moveDishState, setMoveDishState] = useState(null)
@@ -283,6 +293,10 @@ export default function Menukaarten() {
     () => (selectedMenukaart?.secties || []).filter((sectie) => sectie.id != null),
     [selectedMenukaart]
   )
+  const selectedBeheerSectie = useMemo(
+    () => editableSecties.find((sectie) => String(sectie.id) === String(selectedSectieId)) || null,
+    [editableSecties, selectedSectieId]
+  )
   const availableDishOptions = useMemo(() => {
     const linkedIds = new Set(
       (selectedMenukaart?.secties || []).flatMap((sectie) =>
@@ -291,6 +305,56 @@ export default function Menukaarten() {
     )
     return availableDishes.filter((dish) => !linkedIds.has(dish.id))
   }, [availableDishes, selectedMenukaart])
+  const categoryNameById = useMemo(() => {
+    const next = new Map()
+    dishCategories.forEach((category) => {
+      next.set(String(category.id), category.name)
+    })
+    return next
+  }, [dishCategories])
+  const subcategoryNameById = useMemo(() => {
+    const next = new Map()
+    dishCategories.forEach((category) => {
+      ;(category.subcategories || []).forEach((subcategory) => {
+        next.set(String(subcategory.id), subcategory.name)
+      })
+    })
+    return next
+  }, [dishCategories])
+  const subcategoryOptions = useMemo(() => {
+    if (!dishCategoryFilter) {
+      return []
+    }
+    const categoryRecord =
+      dishCategories.find((category) => String(category.id) === String(dishCategoryFilter)) || null
+    return categoryRecord?.subcategories || []
+  }, [dishCategories, dishCategoryFilter])
+  const filteredDishSearchResults = useMemo(() => {
+    const normalizedTerm = appliedDishSearch.term.trim().toLowerCase()
+
+    return availableDishOptions.filter((dish) => {
+      const categoryId = String(dish.category_id ?? '')
+      const subcategoryId = String(dish.subcategory_id ?? '')
+      const categoryName = categoryNameById.get(categoryId) || ''
+      const subcategoryName = subcategoryNameById.get(subcategoryId) || ''
+      const matchesTerm =
+        !normalizedTerm ||
+        [String(dish.name || ''), String(dish.menu_name || '')]
+          .some((value) => value.toLowerCase().includes(normalizedTerm))
+
+      if (!matchesTerm) {
+        return false
+      }
+      if (appliedDishSearch.categoryId && categoryId !== String(appliedDishSearch.categoryId)) {
+        return false
+      }
+      if (appliedDishSearch.subcategoryId && subcategoryId !== String(appliedDishSearch.subcategoryId)) {
+        return false
+      }
+
+      return Boolean(categoryName || subcategoryName || matchesTerm)
+    })
+  }, [availableDishOptions, appliedDishSearch, categoryNameById, subcategoryNameById])
   const isSelectedArchived = !!selectedMenukaart?.is_archived
   const menukaartToolbarStyles = {
     viewModeSwitch: { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' },
@@ -492,6 +556,34 @@ export default function Menukaarten() {
       display: 'flex',
       gap: '0.35rem',
       alignItems: 'center'
+    },
+    beheerSection: {
+      display: 'grid',
+      gap: '1rem'
+    },
+    beheerCard: {
+      display: 'grid',
+      gap: '0.9rem',
+      padding: '1rem',
+      border: '1px solid #e5e7eb',
+      borderRadius: '12px',
+      background: '#fafafa'
+    },
+    beheerGrid: {
+      display: 'grid',
+      gap: '0.75rem',
+      gridTemplateColumns: 'minmax(0, 1.3fr) minmax(180px, 220px) minmax(180px, 220px) auto',
+      alignItems: 'end'
+    },
+    beheerHint: {
+      margin: 0,
+      color: '#6b7280'
+    },
+    contentTableActions: {
+      display: 'flex',
+      gap: '0.35rem',
+      alignItems: 'center',
+      justifyContent: 'flex-end'
     }
   }
   const menukaartCategoryOptions = useMemo(() => menukaartCategories, [menukaartCategories])
@@ -530,8 +622,7 @@ export default function Menukaarten() {
         if (hasCurrent) {
           return currentValue
         }
-        const firstEditableSectie = (detail.secties || []).find((sectie) => sectie.id != null)
-        return firstEditableSectie ? String(firstEditableSectie.id) : ''
+        return ''
       })
     } catch {
       setError('Menukaartdetail laden mislukt.')
@@ -547,6 +638,15 @@ export default function Menukaarten() {
       setAvailableDishes(Array.isArray(data) ? data : [])
     } catch {
       setAvailableDishes([])
+    }
+  }
+
+  async function loadDishCategories() {
+    try {
+      const data = await apiClient.getDishCategories()
+      setDishCategories(Array.isArray(data) ? data : [])
+    } catch {
+      setDishCategories([])
     }
   }
 
@@ -566,12 +666,23 @@ export default function Menukaarten() {
     loadMenukaarten()
     loadAvailableDishes()
     loadMenukaartCategories()
+    loadDishCategories()
   }, [])
 
   useEffect(() => {
     if (!selectedMenukaartId) {
       setSelectedMenukaart(null)
       setSelectedSectieId('')
+      setSelectedDishId('')
+      setDishSearchTerm('')
+      setDishCategoryFilter('')
+      setDishSubcategoryFilter('')
+      setHasSearchedDishes(false)
+      setAppliedDishSearch({
+        term: '',
+        categoryId: '',
+        subcategoryId: ''
+      })
       setEditingSectieId(null)
       setEditingSectieTitle('')
       setMoveDishState(null)
@@ -587,6 +698,16 @@ export default function Menukaarten() {
     setSelectedCategoryId(selectedMenukaart?.category_id != null ? String(selectedMenukaart.category_id) : '')
     setShowNewCategoryInput(false)
     setNewCategoryName('')
+    setSelectedDishId('')
+    setDishSearchTerm('')
+    setDishCategoryFilter('')
+    setDishSubcategoryFilter('')
+    setHasSearchedDishes(false)
+    setAppliedDishSearch({
+      term: '',
+      categoryId: '',
+      subcategoryId: ''
+    })
     setEditingSectieId(null)
     setEditingSectieTitle('')
   }, [selectedMenukaart])
@@ -1035,11 +1156,19 @@ export default function Menukaarten() {
     if (!selectedMenukaart || !selectedDishId || !selectedSectieId || isSubmittingDetailAction) {
       return
     }
+    return handleAddDishToSectie(selectedDishId, selectedSectieId)
+  }
+
+  async function handleAddDishToSectie(dishId, sectieId) {
+    if (!selectedMenukaart || !dishId || !sectieId || isSubmittingDetailAction) {
+      return
+    }
     setIsSubmittingDetailAction(true)
     setError('')
     setMessage('')
     try {
-      await apiClient.addGerechtToMenukaart(selectedMenukaart.id, Number(selectedDishId), Number(selectedSectieId))
+      await apiClient.addGerechtToMenukaart(selectedMenukaart.id, Number(dishId), Number(sectieId))
+      setSelectedDishId('')
       await refreshAfterDetailMutation(selectedMenukaart.id, 'Gerecht toegevoegd aan menukaart.')
     } catch (actionError) {
       setError(actionError?.message || 'Gerecht toevoegen mislukt.')
@@ -1063,6 +1192,15 @@ export default function Menukaarten() {
     } finally {
       setIsSubmittingDetailAction(false)
     }
+  }
+
+  function applyDishSearchFilters() {
+    setHasSearchedDishes(true)
+    setAppliedDishSearch({
+      term: dishSearchTerm,
+      categoryId: dishCategoryFilter,
+      subcategoryId: dishSubcategoryFilter
+    })
   }
 
   async function handleMoveSectie(sectie, direction) {
@@ -2037,297 +2175,227 @@ export default function Menukaarten() {
                     </div>
                   </section>
 
-                  {!isSelectedArchived ? (
-                    <section className="modal-section">
-                      <h4>Secties beheren</h4>
-                      <div className="modal-grid one-col calm-grid">
-                        <div
-                          style={{
-                            display: 'grid',
-                            gap: '0.75rem',
-                            gridTemplateColumns: 'minmax(220px, 1fr) minmax(260px, 1fr) auto',
-                            alignItems: 'end'
-                          }}
-                        >
+                  <section className="modal-section">
+                    <h4>Secties beheren</h4>
+                    <div style={sectieBlockStyles.beheerSection}>
+                      <div style={sectieBlockStyles.beheerCard}>
+                        <label>
+                          Kies een sectie
+                          <select
+                            value={selectedSectieId}
+                            onChange={(event) => setSelectedSectieId(event.target.value)}
+                            disabled={editableSecties.length === 0}
+                          >
+                            <option value="">Kies een sectie</option>
+                            {editableSecties.map((sectie) => (
+                              <option key={sectie.id} value={sectie.id}>
+                                {sectie.title}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <div style={sectieBlockStyles.beheerCard}>
+                        <h5 style={{ margin: 0 }}>Voeg gerechten toe</h5>
+                        <div style={sectieBlockStyles.beheerGrid}>
                           <label>
-                            Sectie
+                            Zoeken
+                            <input
+                              type="text"
+                              value={dishSearchTerm}
+                              onChange={(event) => setDishSearchTerm(event.target.value)}
+                              placeholder="Zoek op gerecht of menukaart"
+                              disabled={!selectedBeheerSectie || isSelectedArchived}
+                            />
+                          </label>
+                          <label>
+                            Categorie
                             <select
-                              value={selectedSectieId}
-                              onChange={(event) => setSelectedSectieId(event.target.value)}
-                              disabled={isSubmittingDetailAction || editableSecties.length === 0}
+                              value={dishCategoryFilter}
+                              onChange={(event) => {
+                                setDishCategoryFilter(event.target.value)
+                                setDishSubcategoryFilter('')
+                              }}
+                              disabled={!selectedBeheerSectie || isSelectedArchived}
                             >
-                              <option value="">Selecteer een sectie</option>
-                              {editableSecties.map((sectie) => (
-                                <option key={sectie.id} value={sectie.id}>
-                                  {sectie.title}
+                              <option value="">Alle categorieën</option>
+                              {dishCategories.map((category) => (
+                                <option key={category.id} value={category.id}>
+                                  {category.name}
                                 </option>
                               ))}
                             </select>
                           </label>
                           <label>
-                            Gerecht
+                            Subcategorie
                             <select
-                              value={selectedDishId}
-                              onChange={(event) => setSelectedDishId(event.target.value)}
-                              disabled={isSubmittingDetailAction || availableDishOptions.length === 0}
+                              value={dishSubcategoryFilter}
+                              onChange={(event) => setDishSubcategoryFilter(event.target.value)}
+                              disabled={!selectedBeheerSectie || isSelectedArchived || !dishCategoryFilter}
                             >
-                              <option value="">Selecteer een gerecht</option>
-                              {availableDishOptions.map((dish) => (
-                                <option key={dish.id} value={dish.id}>
-                                  {dish.name}
+                              <option value="">Alle subcategorieën</option>
+                              {subcategoryOptions.map((subcategory) => (
+                                <option key={subcategory.id} value={subcategory.id}>
+                                  {subcategory.name}
                                 </option>
                               ))}
                             </select>
                           </label>
                           <button
                             type="button"
-                            onClick={handleAddDish}
-                            disabled={!selectedDishId || !selectedSectieId || isSubmittingDetailAction}
-                            style={{ maxWidth: '220px' }}
+                            onClick={applyDishSearchFilters}
+                            disabled={!selectedBeheerSectie || isSelectedArchived}
+                            style={{ maxWidth: '180px' }}
                           >
-                            Gerecht toevoegen
+                            Zoek
                           </button>
                         </div>
-                      </div>
-                    </section>
-                  ) : null}
 
-                  <section className="modal-section">
-                    <h4>Inhoud per sectie</h4>
-                    <div style={{ display: 'grid', gap: '1rem' }}>
-                {(selectedMenukaart.secties || []).length === 0 ? (
-                  <p>Nog geen secties op deze menukaart.</p>
-                ) : (
-                  selectedMenukaart.secties.map((sectie) => (
-                    <section key={sectie.id ?? `unassigned-${sectie.title}`} className="card">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                        <div>
-                          <h4 style={{ marginBottom: '0.25rem' }}>{sectie.title}</h4>
-                          <p style={{ color: '#4b5563', margin: 0 }}>
-                            {sectie.gerechten?.length || 0} gerechten
-                            {getSectionAverageMargin(sectie) != null
-                              ? ` · Gemiddelde marge ${formatPercent(getSectionAverageMargin(sectie))}`
-                              : ''}
+                        {!selectedBeheerSectie ? (
+                          <p style={sectieBlockStyles.beheerHint}>
+                            Kies eerst een sectie om gerechten te zoeken en toe te voegen.
                           </p>
-                        </div>
-                        {sectie.id != null && !isSelectedArchived ? (
-                          <div
-                            style={{
-                              display: 'flex',
-                              gap: '0.45rem',
-                              flexWrap: 'wrap',
-                              padding: '0.35rem',
-                              border: '1px solid #e5e7eb',
-                              borderRadius: '0.75rem',
-                              background: '#f8fafc'
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleMoveSectie(sectie, 'up')}
-                              disabled={isSubmittingDetailAction}
-                              style={{ ...getToolActionButtonStyle(), maxWidth: '120px' }}
-                            >
-                              Omhoog
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleMoveSectie(sectie, 'down')}
-                              disabled={isSubmittingDetailAction}
-                              style={{ ...getToolActionButtonStyle(), maxWidth: '120px' }}
-                            >
-                              Omlaag
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRenameSectie(sectie)}
-                              disabled={isSubmittingDetailAction}
-                              style={{ ...getToolActionButtonStyle(), maxWidth: '140px' }}
-                            >
-                              Hernoemen
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-btn"
-                              onClick={() => handleDeleteSectie(sectie)}
-                              disabled={isSubmittingDetailAction}
-                              style={{ ...getToolActionButtonStyle('danger'), maxWidth: '140px' }}
-                            >
-                              Verwijderen
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {sectie.gerechten?.length ? (
-                        <div className="table-scroll" style={{ marginTop: '1.1rem' }}>
-                          <table className="ingredients-table">
-                            <thead>
-                              <tr>
-                                <th>Naam</th>
-                                <th>Prijs</th>
-                                <th>Marge</th>
-                                {!isSelectedArchived ? <th>Acties</th> : null}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {sectie.gerechten.map((gerecht, index) => (
-                                <tr
-                                  key={gerecht.id}
-                                  draggable={sectie.id != null && !isSubmittingDetailAction}
-                                  onDragStart={() => handleDishDragStart(sectie, gerecht, index)}
-                                  onDragOver={(event) => handleDishDragOver(event, sectie, gerecht, index)}
-                                  onDrop={(event) => handleDishDrop(event, sectie, index)}
-                                  onDragEnd={handleDishDragEnd}
-                                  style={{
-                                    background: getMarginRowBackground(gerecht.margin_status),
-                                    opacity:
-                                      dragDishState?.sectieId === sectie.id &&
-                                      dragDishState?.gerechtId === gerecht.id
-                                        ? 0.55
-                                        : 1,
-                                    outline:
-                                      dragOverDishState?.sectieId === sectie.id &&
-                                      dragOverDishState?.gerechtId === gerecht.id
-                                        ? '2px solid #93c5fd'
-                                        : 'none',
-                                    outlineOffset:
-                                      dragOverDishState?.sectieId === sectie.id &&
-                                      dragOverDishState?.gerechtId === gerecht.id
-                                        ? '-2px'
-                                        : 0
-                                  }}
-                                >
-                                  <td style={{ fontWeight: 500 }}>{gerecht.name}</td>
-                                  <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                                    {formatCurrency(gerecht.sale_price_incl_vat)}
-                                  </td>
-                                  <td style={{ whiteSpace: 'nowrap' }}>
-                                    {gerecht.margin_status ? (
-                                      <span
-                                        title={`Marge: ${formatPercent(gerecht.gross_margin_percent)}`}
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '0.45rem',
-                                          whiteSpace: 'nowrap'
-                                        }}
-                                      >
-                                        <span
-                                          style={{
-                                            display: 'inline-block',
-                                            width: '0.75rem',
-                                            height: '0.75rem',
-                                            borderRadius: '999px',
-                                            background: getMarginDotColor(gerecht.margin_status)
-                                          }}
-                                        />
-                                        <span>{formatPercent(gerecht.gross_margin_percent)}</span>
-                                      </span>
-                                    ) : (
-                                      '-'
-                                    )}
-                                  </td>
-                                  {!isSelectedArchived ? (
-                                    <td style={{ minWidth: '340px' }}>
-                                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleMoveDish(sectie, gerecht.id, 'up')}
-                                          disabled={isSubmittingDetailAction || sectie.id == null}
-                                          style={getToolActionButtonStyle()}
-                                        >
-                                          Omhoog
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleMoveDish(sectie, gerecht.id, 'down')}
-                                          disabled={isSubmittingDetailAction || sectie.id == null}
-                                          style={getToolActionButtonStyle()}
-                                        >
-                                          Omlaag
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleMoveDishToSectie(sectie, gerecht)}
-                                          disabled={isSubmittingDetailAction || sectie.id == null}
-                                          style={getToolActionButtonStyle()}
-                                        >
-                                          Verplaatsen
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="secondary-btn"
-                                          onClick={() => handleRemoveDish(gerecht.id)}
-                                          disabled={isSubmittingDetailAction}
-                                          style={getToolActionButtonStyle('danger')}
-                                        >
-                                          Verwijderen
-                                        </button>
-                                      </div>
-                                      {moveDishState?.gerechtId === gerecht.id &&
-                                      moveDishState?.fromSectieId === sectie.id ? (
-                                        <div
-                                          style={{
-                                            display: 'flex',
-                                            gap: '0.5rem',
-                                            flexWrap: 'wrap',
-                                            alignItems: 'center',
-                                            marginTop: '0.75rem'
-                                          }}
-                                        >
-                                          <select
-                                            value={moveDishState.targetSectieId}
-                                            onChange={(event) =>
-                                              setMoveDishState((currentState) =>
-                                                currentState == null
-                                                  ? null
-                                                  : { ...currentState, targetSectieId: event.target.value }
-                                              )
-                                            }
-                                            disabled={isSubmittingDetailAction}
-                                          >
-                                            <option value="">Kies doelsectie</option>
-                                            {editableSecties
-                                              .filter((item) => item.id !== sectie.id)
-                                              .map((item) => (
-                                                <option key={item.id} value={item.id}>
-                                                  {item.title}
-                                                </option>
-                                              ))}
-                                          </select>
-                                          <button
-                                            type="button"
-                                            onClick={handleConfirmMoveDishToSectie}
-                                            disabled={!moveDishState.targetSectieId || isSubmittingDetailAction}
-                                            style={getToolActionButtonStyle()}
-                                          >
-                                            Bevestigen
-                                          </button>
-                                          <button
-                                            type="button"
-                                            className="secondary-btn"
-                                            onClick={handleCancelMoveDishToSectie}
-                                            disabled={isSubmittingDetailAction}
-                                            style={getToolActionButtonStyle('danger')}
-                                          >
-                                            Annuleren
-                                          </button>
-                                        </div>
+                        ) : !hasSearchedDishes ? (
+                          <p style={sectieBlockStyles.beheerHint}>
+                            Vul filters in en klik op Zoek om gerechten voor deze sectie te vinden.
+                          </p>
+                        ) : filteredDishSearchResults.length ? (
+                          <div className="table-scroll">
+                            <table className="ingredients-table">
+                              <thead>
+                                <tr>
+                                  <th>Gerecht</th>
+                                  <th>Categorie</th>
+                                  <th>Subcategorie</th>
+                                  <th>Actie</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredDishSearchResults.map((dish) => (
+                                  <tr key={dish.id}>
+                                    <td>
+                                      <div style={{ fontWeight: 500 }}>{dish.name}</div>
+                                      {dish.menu_name ? (
+                                        <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{dish.menu_name}</div>
                                       ) : null}
                                     </td>
-                                  ) : null}
+                                    <td>{categoryNameById.get(String(dish.category_id ?? '')) || '-'}</td>
+                                    <td>{subcategoryNameById.get(String(dish.subcategory_id ?? '')) || '-'}</td>
+                                    <td>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleAddDishToSectie(dish.id, selectedBeheerSectie.id)}
+                                        disabled={isSelectedArchived || isSubmittingDetailAction}
+                                        style={{ maxWidth: '160px' }}
+                                      >
+                                        Voeg toe
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p style={sectieBlockStyles.beheerHint}>Geen gerechten gevonden voor deze zoekopdracht.</p>
+                        )}
+                      </div>
+
+                      <div style={sectieBlockStyles.beheerCard}>
+                        <h5 style={{ margin: 0 }}>Inhoud van de sectie</h5>
+                        {!selectedBeheerSectie ? (
+                          <p style={sectieBlockStyles.beheerHint}>
+                            Kies eerst een sectie om de inhoud te bekijken en te beheren.
+                          </p>
+                        ) : selectedBeheerSectie.gerechten?.length ? (
+                          <div className="table-scroll">
+                            <table className="ingredients-table">
+                              <thead>
+                                <tr>
+                                  <th>Naam</th>
+                                  <th>Prijs</th>
+                                  <th>Marge</th>
+                                  {!isSelectedArchived ? <th>Acties</th> : null}
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <p style={{ marginTop: '1rem' }}>Nog geen gerechten in deze sectie.</p>
-                      )}
-                    </section>
-                  ))
-                )}
+                              </thead>
+                              <tbody>
+                                {selectedBeheerSectie.gerechten.map((gerecht) => (
+                                  <tr key={`${selectedBeheerSectie.id}-${gerecht.id}`}>
+                                    <td style={{ fontWeight: 500 }}>{gerecht.name}</td>
+                                    <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                                      {formatCurrency(gerecht.sale_price_incl_vat)}
+                                    </td>
+                                    <td style={{ whiteSpace: 'nowrap' }}>
+                                      {gerecht.margin_status ? (
+                                        <span
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.45rem',
+                                            whiteSpace: 'nowrap'
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              display: 'inline-block',
+                                              width: '0.75rem',
+                                              height: '0.75rem',
+                                              borderRadius: '999px',
+                                              background: getMarginDotColor(gerecht.margin_status)
+                                            }}
+                                          />
+                                          <span>{formatPercent(gerecht.gross_margin_percent)}</span>
+                                        </span>
+                                      ) : (
+                                        '-'
+                                      )}
+                                    </td>
+                                    {!isSelectedArchived ? (
+                                      <td>
+                                        <div style={sectieBlockStyles.contentTableActions}>
+                                          <button
+                                            type="button"
+                                            aria-label="Gerecht omhoog"
+                                            title="Omhoog"
+                                            onClick={() => handleMoveDish(selectedBeheerSectie, gerecht.id, 'up')}
+                                            disabled={isSubmittingDetailAction || selectedBeheerSectie.id == null}
+                                            style={sectieBlockStyles.iconButton}
+                                          >
+                                            ↑
+                                          </button>
+                                          <button
+                                            type="button"
+                                            aria-label="Gerecht omlaag"
+                                            title="Omlaag"
+                                            onClick={() => handleMoveDish(selectedBeheerSectie, gerecht.id, 'down')}
+                                            disabled={isSubmittingDetailAction || selectedBeheerSectie.id == null}
+                                            style={sectieBlockStyles.iconButton}
+                                          >
+                                            ↓
+                                          </button>
+                                          <button
+                                            type="button"
+                                            aria-label="Gerecht verwijderen"
+                                            title="Verwijderen"
+                                            onClick={() => handleRemoveDish(gerecht.id)}
+                                            disabled={isSubmittingDetailAction}
+                                            style={sectieBlockStyles.iconButtonDanger}
+                                          >
+                                            🗑
+                                          </button>
+                                        </div>
+                                      </td>
+                                    ) : null}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p style={sectieBlockStyles.beheerHint}>Nog geen gerechten in deze sectie.</p>
+                        )}
+                      </div>
                     </div>
                   </section>
 
