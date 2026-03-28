@@ -293,18 +293,20 @@ export default function Menukaarten() {
     () => (selectedMenukaart?.secties || []).filter((sectie) => sectie.id != null),
     [selectedMenukaart]
   )
+  const linkedDishSectieById = useMemo(() => {
+    const next = new Map()
+    ;(selectedMenukaart?.secties || []).forEach((sectie) => {
+      ;(sectie.gerechten || []).forEach((gerecht) => {
+        next.set(gerecht.id, sectie)
+      })
+    })
+    return next
+  }, [selectedMenukaart])
   const selectedBeheerSectie = useMemo(
     () => editableSecties.find((sectie) => String(sectie.id) === String(selectedSectieId)) || null,
     [editableSecties, selectedSectieId]
   )
-  const availableDishOptions = useMemo(() => {
-    const linkedIds = new Set(
-      (selectedMenukaart?.secties || []).flatMap((sectie) =>
-        (sectie.gerechten || []).map((gerecht) => gerecht.id)
-      )
-    )
-    return availableDishes.filter((dish) => !linkedIds.has(dish.id))
-  }, [availableDishes, selectedMenukaart])
+  const availableDishOptions = useMemo(() => availableDishes, [availableDishes])
   const categoryNameById = useMemo(() => {
     const next = new Map()
     dishCategories.forEach((category) => {
@@ -571,19 +573,76 @@ export default function Menukaarten() {
     },
     beheerGrid: {
       display: 'grid',
-      gap: '0.75rem',
-      gridTemplateColumns: 'minmax(0, 1.3fr) minmax(180px, 220px) minmax(180px, 220px) auto',
+      gap: '0.9rem',
+      gridTemplateColumns: 'minmax(240px, 1.5fr) minmax(200px, 1fr) minmax(200px, 1fr) auto',
       alignItems: 'end'
     },
     beheerHint: {
       margin: 0,
       color: '#6b7280'
     },
+    chooserRow: {
+      display: 'grid',
+      gridTemplateColumns: 'minmax(0, 1fr) minmax(260px, 320px)',
+      gap: '1rem',
+      alignItems: 'center'
+    },
+    chooserIntro: {
+      display: 'grid',
+      gap: '0.2rem'
+    },
+    chooserLabel: {
+      fontSize: '0.85rem',
+      color: '#6b7280',
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em'
+    },
+    chooserText: {
+      margin: 0,
+      color: '#374151'
+    },
+    largeControl: {
+      width: '100%',
+      minHeight: '44px',
+      height: '44px',
+      marginTop: 0,
+      padding: '0 0.85rem',
+      border: '1px solid #d1d5db',
+      borderRadius: '10px',
+      font: 'inherit',
+      fontSize: '0.95rem',
+      lineHeight: 1.2,
+      background: '#fff',
+      boxSizing: 'border-box'
+    },
+    searchButton: {
+      minWidth: '140px',
+      minHeight: '44px',
+      marginTop: 0
+    },
+    resultMeta: {
+      marginTop: '0.2rem',
+      fontSize: '0.85rem',
+      color: '#6b7280'
+    },
+    addedStatus: {
+      fontSize: '0.85rem',
+      color: '#6b7280',
+      whiteSpace: 'nowrap'
+    },
+    centeredCell: {
+      textAlign: 'center',
+      whiteSpace: 'nowrap'
+    },
     contentTableActions: {
       display: 'flex',
       gap: '0.35rem',
       alignItems: 'center',
       justifyContent: 'flex-end'
+    },
+    contentActionCell: {
+      width: '118px',
+      textAlign: 'right'
     }
   }
   const menukaartCategoryOptions = useMemo(() => menukaartCategories, [menukaartCategories])
@@ -2179,12 +2238,18 @@ export default function Menukaarten() {
                     <h4>Secties beheren</h4>
                     <div style={sectieBlockStyles.beheerSection}>
                       <div style={sectieBlockStyles.beheerCard}>
-                        <label>
-                          Kies een sectie
+                        <div style={sectieBlockStyles.chooserRow}>
+                          <div style={sectieBlockStyles.chooserIntro}>
+                            <div style={sectieBlockStyles.chooserLabel}>Kies een sectie</div>
+                            <p style={sectieBlockStyles.chooserText}>
+                              Kies eerst welke sectie je wilt vullen en beheren.
+                            </p>
+                          </div>
                           <select
                             value={selectedSectieId}
                             onChange={(event) => setSelectedSectieId(event.target.value)}
                             disabled={editableSecties.length === 0}
+                            style={sectieBlockStyles.largeControl}
                           >
                             <option value="">Kies een sectie</option>
                             {editableSecties.map((sectie) => (
@@ -2193,7 +2258,7 @@ export default function Menukaarten() {
                               </option>
                             ))}
                           </select>
-                        </label>
+                        </div>
                       </div>
 
                       <div style={sectieBlockStyles.beheerCard}>
@@ -2207,6 +2272,7 @@ export default function Menukaarten() {
                               onChange={(event) => setDishSearchTerm(event.target.value)}
                               placeholder="Zoek op gerecht of menukaart"
                               disabled={!selectedBeheerSectie || isSelectedArchived}
+                              style={sectieBlockStyles.largeControl}
                             />
                           </label>
                           <label>
@@ -2218,6 +2284,7 @@ export default function Menukaarten() {
                                 setDishSubcategoryFilter('')
                               }}
                               disabled={!selectedBeheerSectie || isSelectedArchived}
+                              style={sectieBlockStyles.largeControl}
                             >
                               <option value="">Alle categorieën</option>
                               {dishCategories.map((category) => (
@@ -2233,6 +2300,7 @@ export default function Menukaarten() {
                               value={dishSubcategoryFilter}
                               onChange={(event) => setDishSubcategoryFilter(event.target.value)}
                               disabled={!selectedBeheerSectie || isSelectedArchived || !dishCategoryFilter}
+                              style={sectieBlockStyles.largeControl}
                             >
                               <option value="">Alle subcategorieën</option>
                               {subcategoryOptions.map((subcategory) => (
@@ -2246,7 +2314,7 @@ export default function Menukaarten() {
                             type="button"
                             onClick={applyDishSearchFilters}
                             disabled={!selectedBeheerSectie || isSelectedArchived}
-                            style={{ maxWidth: '180px' }}
+                            style={sectieBlockStyles.searchButton}
                           >
                             Zoek
                           </button>
@@ -2272,28 +2340,54 @@ export default function Menukaarten() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {filteredDishSearchResults.map((dish) => (
-                                  <tr key={dish.id}>
-                                    <td>
-                                      <div style={{ fontWeight: 500 }}>{dish.name}</div>
-                                      {dish.menu_name ? (
-                                        <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{dish.menu_name}</div>
-                                      ) : null}
-                                    </td>
-                                    <td>{categoryNameById.get(String(dish.category_id ?? '')) || '-'}</td>
-                                    <td>{subcategoryNameById.get(String(dish.subcategory_id ?? '')) || '-'}</td>
-                                    <td>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleAddDishToSectie(dish.id, selectedBeheerSectie.id)}
-                                        disabled={isSelectedArchived || isSubmittingDetailAction}
-                                        style={{ maxWidth: '160px' }}
-                                      >
-                                        Voeg toe
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
+                                {filteredDishSearchResults.map((dish) => {
+                                  const linkedSectie = linkedDishSectieById.get(dish.id)
+                                  const isAlreadyLinked = Boolean(linkedSectie)
+                                  const alreadyInSelectedSectie =
+                                    linkedSectie && String(linkedSectie.id) === String(selectedBeheerSectie.id)
+
+                                  return (
+                                    <tr key={dish.id}>
+                                      <td>
+                                        <div style={{ fontWeight: 500 }}>{dish.name}</div>
+                                        {dish.menu_name ? (
+                                          <div style={sectieBlockStyles.resultMeta}>{dish.menu_name}</div>
+                                        ) : null}
+                                      </td>
+                                      <td>{categoryNameById.get(String(dish.category_id ?? '')) || '-'}</td>
+                                      <td>{subcategoryNameById.get(String(dish.subcategory_id ?? '')) || '-'}</td>
+                                      <td style={{ textAlign: 'right' }}>
+                                        <div
+                                          style={{
+                                            display: 'grid',
+                                            gap: '0.35rem',
+                                            justifyItems: 'end'
+                                          }}
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={() => handleAddDishToSectie(dish.id, selectedBeheerSectie.id)}
+                                            disabled={
+                                              isSelectedArchived ||
+                                              isSubmittingDetailAction ||
+                                              isAlreadyLinked
+                                            }
+                                            style={{ maxWidth: '160px', minWidth: '120px' }}
+                                          >
+                                            Voeg toe
+                                          </button>
+                                          {isAlreadyLinked ? (
+                                            <span style={sectieBlockStyles.addedStatus}>
+                                              {alreadyInSelectedSectie
+                                                ? 'Al toegevoegd aan deze sectie'
+                                                : `Al toegevoegd aan ${linkedSectie.title}`}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
                               </tbody>
                             </table>
                           </div>
@@ -2314,19 +2408,19 @@ export default function Menukaarten() {
                               <thead>
                                 <tr>
                                   <th>Naam</th>
-                                  <th>Prijs</th>
-                                  <th>Marge</th>
-                                  {!isSelectedArchived ? <th>Acties</th> : null}
+                                  <th style={{ textAlign: 'center' }}>Prijs</th>
+                                  <th style={{ textAlign: 'center' }}>Marge</th>
+                                  {!isSelectedArchived ? <th style={{ width: '118px', textAlign: 'right' }}>Acties</th> : null}
                                 </tr>
                               </thead>
                               <tbody>
                                 {selectedBeheerSectie.gerechten.map((gerecht) => (
                                   <tr key={`${selectedBeheerSectie.id}-${gerecht.id}`}>
                                     <td style={{ fontWeight: 500 }}>{gerecht.name}</td>
-                                    <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                                    <td style={sectieBlockStyles.centeredCell}>
                                       {formatCurrency(gerecht.sale_price_incl_vat)}
                                     </td>
-                                    <td style={{ whiteSpace: 'nowrap' }}>
+                                    <td style={sectieBlockStyles.centeredCell}>
                                       {gerecht.margin_status ? (
                                         <span
                                           style={{
@@ -2349,10 +2443,10 @@ export default function Menukaarten() {
                                         </span>
                                       ) : (
                                         '-'
-                                      )}
+                                          )}
                                     </td>
                                     {!isSelectedArchived ? (
-                                      <td>
+                                      <td style={sectieBlockStyles.contentActionCell}>
                                         <div style={sectieBlockStyles.contentTableActions}>
                                           <button
                                             type="button"
