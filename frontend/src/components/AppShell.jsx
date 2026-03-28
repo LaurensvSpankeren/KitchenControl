@@ -10,8 +10,7 @@ const navItems = [
   { to: '/halffabricaten', label: 'Halffabricaten' },
   { to: '/gerechten', label: 'Gerechten' },
   { to: '/menukaarten', label: 'Menukaarten' },
-  { to: '/buffetten', label: 'Buffetten' },
-  { to: '/instellingen', label: 'Instellingen', icon: '⚙' }
+  { to: '/buffetten', label: 'Buffetten' }
 ]
 
 export default function AppShell({ onLogout }) {
@@ -116,9 +115,28 @@ export default function AppShell({ onLogout }) {
           ))}
         </nav>
 
-        <button type="button" className="logout-btn" onClick={onLogout}>
-          Uitloggen
-        </button>
+        <div style={{ marginTop: 'auto', display: 'grid', gap: '0.65rem' }}>
+          <NavLink
+            to="/instellingen"
+            className={({ isActive }) =>
+              `nav-link${isActive ? ' is-active' : ''}`
+            }
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+              <img
+                src="/icons/settings.svg"
+                alt=""
+                aria-hidden="true"
+                style={{ width: '1rem', height: '1rem', objectFit: 'contain' }}
+              />
+              Instellingen
+            </span>
+          </NavLink>
+
+          <button type="button" className="logout-btn" onClick={onLogout} style={{ marginTop: 0 }}>
+            Uitloggen
+          </button>
+        </div>
       </aside>
 
       <main className="content">
