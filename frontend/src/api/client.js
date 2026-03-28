@@ -174,6 +174,24 @@ export const apiClient = {
     }
     return response.json()
   },
+  async restoreMenukaart(id) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${id}/restore`, {
+      method: 'PUT'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to restore menukaart: ${response.status}`)
+    }
+    return response.json()
+  },
+  async deleteMenukaart(id) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${id}`, {
+      method: 'DELETE'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to delete menukaart: ${response.status}`)
+    }
+    return response.json()
+  },
   async duplicateMenukaart(id) {
     const response = await fetch(`${API_BASE_URL}/api/menukaarten/${id}/duplicate`, {
       method: 'POST'

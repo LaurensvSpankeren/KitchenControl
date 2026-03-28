@@ -750,7 +750,25 @@ def archive_menukaart(menukaart_id: int, db: Session = Depends(get_db)) -> dict:
     if item is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
 
+    if item.is_archived:
+        db.delete(item)
+        db.commit()
+        return {"status": "deleted", "menukaart_id": menukaart_id}
+
     item.is_archived = True
+    db.commit()
+    item = _get_menukaart(db, menukaart_id)
+    context = _build_menukaart_serializer_context(db, [item])
+    return _serialize_menukaart(db, item, context)
+
+
+@router.put("/api/menukaarten/{menukaart_id}/restore", tags=["menukaarten"])
+def restore_menukaart(menukaart_id: int, db: Session = Depends(get_db)) -> dict:
+    item = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Menukaart not found")
+
+    item.is_archived = False
     db.commit()
     item = _get_menukaart(db, menukaart_id)
     context = _build_menukaart_serializer_context(db, [item])

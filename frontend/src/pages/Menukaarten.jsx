@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { apiClient } from '../api/client'
 
@@ -198,11 +198,13 @@ export default function Menukaarten() {
   const [moveDishState, setMoveDishState] = useState(null)
   const [dragDishState, setDragDishState] = useState(null)
   const [dragOverDishState, setDragOverDishState] = useState(null)
+  const [openActionsMenuId, setOpenActionsMenuId] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
   const [isSubmittingDetailAction, setIsSubmittingDetailAction] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const actionsMenuRef = useRef(null)
 
   const activeMenukaarten = useMemo(
     () =>
@@ -242,6 +244,62 @@ export default function Menukaarten() {
     )
     return availableDishes.filter((dish) => !linkedIds.has(dish.id))
   }, [availableDishes, selectedMenukaart])
+  const isSelectedArchived = !!selectedMenukaart?.is_archived
+  const archivedActionUiStyles = {
+    actionCell: {
+      verticalAlign: 'middle',
+      paddingTop: '12px',
+      paddingBottom: '12px',
+      textAlign: 'center'
+    },
+    rowActionsWrap: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '6px',
+      position: 'relative'
+    },
+    rowActionButton: {
+      marginTop: 0,
+      minHeight: '30px',
+      height: '30px',
+      padding: '0.35rem 0.6rem',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    rowMenuButton: {
+      width: '30px',
+      minWidth: '30px',
+      height: '30px',
+      marginTop: 0,
+      padding: 0,
+      lineHeight: 1,
+      fontSize: '1rem'
+    },
+    rowMenu: {
+      position: 'absolute',
+      top: '100%',
+      right: 0,
+      zIndex: 15,
+      marginTop: '0.2rem',
+      border: '1px solid #d1d5db',
+      borderRadius: '8px',
+      background: '#fff',
+      boxShadow: '0 6px 14px rgba(17,24,39,0.12)',
+      minWidth: '140px',
+      padding: '0.25rem'
+    },
+    rowMenuItem: {
+      width: '100%',
+      marginTop: 0,
+      textAlign: 'left',
+      border: '1px solid transparent',
+      borderRadius: '6px',
+      background: '#fff',
+      padding: '0.45rem 0.5rem'
+    }
+  }
 
   async function loadMenukaarten() {
     setIsLoading(true)
@@ -312,6 +370,23 @@ export default function Menukaarten() {
     }
     loadMenukaartDetail(selectedMenukaartId)
   }, [selectedMenukaartId])
+
+  useEffect(() => {
+    if (!openActionsMenuId) {
+      return
+    }
+
+    function handleOutsideClick(event) {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
+        setOpenActionsMenuId(null)
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+    }
+  }, [openActionsMenuId])
 
   async function refreshAfterDetailMutation(menukaartId, successMessage) {
     await Promise.all([loadMenukaartDetail(menukaartId), loadMenukaarten()])
@@ -395,6 +470,51 @@ export default function Menukaarten() {
       }
     } catch {
       setError('Menukaart archiveren mislukt.')
+    }
+  }
+
+  async function handleRestore(item) {
+    if (!item?.id) {
+      return
+    }
+
+    try {
+      setError('')
+      setMessage('')
+      await apiClient.restoreMenukaart(item.id)
+      await loadMenukaarten()
+      setOpenActionsMenuId(null)
+      setActiveTab('active')
+      setSelectedMenukaartId(item.id)
+      await loadMenukaartDetail(item.id)
+      setMessage('Menukaart hersteld uit archief.')
+    } catch {
+      setError('Herstellen mislukt.')
+    }
+  }
+
+  async function handleDeleteArchived(item) {
+    if (!item?.id) {
+      return
+    }
+
+    const confirmed = window.confirm('Weet je zeker dat je deze menukaart definitief wilt verwijderen?')
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      setError('')
+      setMessage('')
+      await apiClient.deleteMenukaart(item.id)
+      await loadMenukaarten()
+      setOpenActionsMenuId(null)
+      if (selectedMenukaartId === item.id) {
+        setSelectedMenukaartId(null)
+      }
+      setMessage('Menukaart verwijderd.')
+    } catch {
+      setError('Verwijderen mislukt.')
     }
   }
 
@@ -993,34 +1113,79 @@ export default function Menukaarten() {
                       )}
                     </td>
                     <td>{renderDateCell(item)}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        {!item.is_archived ? (
-                          <>
-                            <button type="button" onClick={() => setSelectedMenukaartId(item.id)}>
-                              Beheren
-                            </button>
-                            <button type="button" onClick={() => handleRename(item)}>
-                              Naam wijzigen
-                            </button>
-                            <button type="button" onClick={() => handleDuplicate(item)}>
-                              Dupliceren
-                            </button>
-                            {item.status !== 'active' ? (
-                              <button type="button" onClick={() => handleSetStatus(item, 'active')}>
-                                Actief maken
+                    <td style={item.is_archived ? archivedActionUiStyles.actionCell : undefined}>
+                      {item.is_archived ? (
+                        <div
+                          style={archivedActionUiStyles.rowActionsWrap}
+                          ref={openActionsMenuId === item.id ? actionsMenuRef : null}
+                        >
+                          <button
+                            type="button"
+                            className="table-action-btn"
+                            style={archivedActionUiStyles.rowActionButton}
+                            onClick={() => setSelectedMenukaartId(item.id)}
+                          >
+                            Openen
+                          </button>
+                          <button
+                            type="button"
+                            className="table-action-btn"
+                            aria-label="Meer acties"
+                            style={archivedActionUiStyles.rowMenuButton}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setOpenActionsMenuId((prev) => (prev === item.id ? null : item.id))
+                            }}
+                          >
+                            ⋯
+                          </button>
+                          {openActionsMenuId === item.id ? (
+                            <div
+                              style={archivedActionUiStyles.rowMenu}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                style={archivedActionUiStyles.rowMenuItem}
+                                onClick={() => handleRestore(item)}
+                              >
+                                ♻️ Herstellen
                               </button>
-                            ) : (
-                              <button type="button" onClick={() => handleSetStatus(item, 'concept')}>
-                                Terug naar concept
+                              <button
+                                type="button"
+                                style={archivedActionUiStyles.rowMenuItem}
+                                onClick={() => handleDeleteArchived(item)}
+                              >
+                                🗑 Verwijderen
                               </button>
-                            )}
-                            <button type="button" className="secondary-btn" onClick={() => handleArchive(item)}>
-                              Archiveren
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <button type="button" onClick={() => setSelectedMenukaartId(item.id)}>
+                            Beheren
+                          </button>
+                          <button type="button" onClick={() => handleRename(item)}>
+                            Naam wijzigen
+                          </button>
+                          <button type="button" onClick={() => handleDuplicate(item)}>
+                            Dupliceren
+                          </button>
+                          {item.status !== 'active' ? (
+                            <button type="button" onClick={() => handleSetStatus(item, 'active')}>
+                              Actief maken
                             </button>
-                          </>
-                        ) : null}
-                      </div>
+                          ) : (
+                            <button type="button" onClick={() => handleSetStatus(item, 'concept')}>
+                              Terug naar concept
+                            </button>
+                          )}
+                          <button type="button" className="secondary-btn" onClick={() => handleArchive(item)}>
+                            Archiveren
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1067,7 +1232,7 @@ export default function Menukaarten() {
         {error ? <p>{error}</p> : null}
       </section>
 
-      {selectedMenukaartId && activeTab === 'active' ? (
+      {selectedMenukaartId ? (
         <section className="card" style={{ marginTop: '1rem' }}>
           {isLoadingDetail || !selectedMenukaart ? (
             <p>Menukaartdetail laden...</p>
@@ -1154,42 +1319,64 @@ export default function Menukaarten() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={() => handleRename(selectedMenukaart)}
-                    style={{ maxWidth: '180px' }}
-                  >
-                    Hernoemen
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDuplicate(selectedMenukaart)}
-                    style={{ maxWidth: '180px' }}
-                  >
-                    Dupliceren
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    onClick={() => handleArchive(selectedMenukaart)}
-                    style={{ maxWidth: '180px' }}
-                  >
-                    Archiveren
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePrintMenukaart}
-                    style={{ maxWidth: '180px' }}
-                  >
-                    Print menukaart
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePrintAllergenenkaart}
-                    style={{ maxWidth: '220px' }}
-                  >
-                    Print allergenenkaart
-                  </button>
+                  {isSelectedArchived ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleRestore(selectedMenukaart)}
+                        style={{ maxWidth: '180px' }}
+                      >
+                        Herstellen
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={() => handleDeleteArchived(selectedMenukaart)}
+                        style={{ maxWidth: '180px' }}
+                      >
+                        Verwijderen
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleRename(selectedMenukaart)}
+                        style={{ maxWidth: '180px' }}
+                      >
+                        Hernoemen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDuplicate(selectedMenukaart)}
+                        style={{ maxWidth: '180px' }}
+                      >
+                        Dupliceren
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={() => handleArchive(selectedMenukaart)}
+                        style={{ maxWidth: '180px' }}
+                      >
+                        Archiveren
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handlePrintMenukaart}
+                        style={{ maxWidth: '180px' }}
+                      >
+                        Print menukaart
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handlePrintAllergenenkaart}
+                        style={{ maxWidth: '220px' }}
+                      >
+                        Print allergenenkaart
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     className="secondary-btn"
@@ -1201,114 +1388,116 @@ export default function Menukaarten() {
                 </div>
               </div>
 
-              <div className="card" style={{ marginTop: '1.25rem', padding: '1rem' }}>
-                <div style={{ display: 'grid', gap: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                    <div>
-                      <h4 style={{ marginBottom: '0.25rem' }}>Menukaart bewerken</h4>
-                      <p style={{ margin: 0, color: '#4b5563' }}>
-                        Voeg secties toe en koppel gerechten aan de juiste sectie.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gap: '1rem',
-                      gridTemplateColumns: 'minmax(220px, 280px) minmax(0, 1fr)'
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: '1rem',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '0.75rem',
-                        background: '#f8fafc'
-                      }}
-                    >
-                      <h5 style={{ margin: '0 0 0.35rem' }}>Sectie toevoegen</h5>
-                      <p style={{ margin: 0, color: '#4b5563', lineHeight: 1.4 }}>
-                        Maak eerst een nieuwe sectie aan voor deze menukaart.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={handleCreateSectie}
-                        disabled={isSubmittingDetailAction}
-                        style={{ maxWidth: '220px', marginTop: '0.9rem' }}
-                      >
-                        Sectie toevoegen
-                      </button>
+              {!isSelectedArchived ? (
+                <div className="card" style={{ marginTop: '1.25rem', padding: '1rem' }}>
+                  <div style={{ display: 'grid', gap: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                      <div>
+                        <h4 style={{ marginBottom: '0.25rem' }}>Menukaart bewerken</h4>
+                        <p style={{ margin: 0, color: '#4b5563' }}>
+                          Voeg secties toe en koppel gerechten aan de juiste sectie.
+                        </p>
+                      </div>
                     </div>
 
                     <div
                       style={{
-                        padding: '1rem',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '0.75rem',
-                        background: '#fff'
+                        display: 'grid',
+                        gap: '1rem',
+                        gridTemplateColumns: 'minmax(220px, 280px) minmax(0, 1fr)'
                       }}
                     >
-                      <h5 style={{ margin: '0 0 0.35rem' }}>Gerecht toevoegen aan sectie</h5>
-                      <p style={{ margin: 0, color: '#4b5563', lineHeight: 1.4 }}>
-                        Kies eerst de sectie en daarna het gerecht dat je wilt toevoegen.
-                      </p>
                       <div
                         style={{
-                          display: 'flex',
-                          gap: '0.75rem',
-                          alignItems: 'flex-end',
-                          flexWrap: 'wrap',
-                          marginTop: '0.9rem'
+                          padding: '1rem',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '0.75rem',
+                          background: '#f8fafc'
                         }}
                       >
-                        <label style={{ minWidth: '220px', flex: '1 1 220px' }}>
-                          <span style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>
-                            Sectie
-                          </span>
-                          <select
-                            value={selectedSectieId}
-                            onChange={(event) => setSelectedSectieId(event.target.value)}
-                            disabled={isSubmittingDetailAction || editableSecties.length === 0}
-                          >
-                            <option value="">Selecteer een sectie</option>
-                            {editableSecties.map((sectie) => (
-                              <option key={sectie.id} value={sectie.id}>
-                                {sectie.title}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label style={{ minWidth: '260px', flex: '1 1 260px' }}>
-                          <span style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>
-                            Gerecht
-                          </span>
-                          <select
-                            value={selectedDishId}
-                            onChange={(event) => setSelectedDishId(event.target.value)}
-                            disabled={isSubmittingDetailAction || availableDishOptions.length === 0}
-                          >
-                            <option value="">Selecteer een gerecht</option>
-                            {availableDishOptions.map((dish) => (
-                              <option key={dish.id} value={dish.id}>
-                                {dish.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <h5 style={{ margin: '0 0 0.35rem' }}>Sectie toevoegen</h5>
+                        <p style={{ margin: 0, color: '#4b5563', lineHeight: 1.4 }}>
+                          Maak eerst een nieuwe sectie aan voor deze menukaart.
+                        </p>
                         <button
                           type="button"
-                          onClick={handleAddDish}
-                          disabled={!selectedDishId || !selectedSectieId || isSubmittingDetailAction}
-                          style={{ maxWidth: '220px' }}
+                          onClick={handleCreateSectie}
+                          disabled={isSubmittingDetailAction}
+                          style={{ maxWidth: '220px', marginTop: '0.9rem' }}
                         >
-                          Gerecht toevoegen
+                          Sectie toevoegen
                         </button>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: '1rem',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '0.75rem',
+                          background: '#fff'
+                        }}
+                      >
+                        <h5 style={{ margin: '0 0 0.35rem' }}>Gerecht toevoegen aan sectie</h5>
+                        <p style={{ margin: 0, color: '#4b5563', lineHeight: 1.4 }}>
+                          Kies eerst de sectie en daarna het gerecht dat je wilt toevoegen.
+                        </p>
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: '0.75rem',
+                            alignItems: 'flex-end',
+                            flexWrap: 'wrap',
+                            marginTop: '0.9rem'
+                          }}
+                        >
+                          <label style={{ minWidth: '220px', flex: '1 1 220px' }}>
+                            <span style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>
+                              Sectie
+                            </span>
+                            <select
+                              value={selectedSectieId}
+                              onChange={(event) => setSelectedSectieId(event.target.value)}
+                              disabled={isSubmittingDetailAction || editableSecties.length === 0}
+                            >
+                              <option value="">Selecteer een sectie</option>
+                              {editableSecties.map((sectie) => (
+                                <option key={sectie.id} value={sectie.id}>
+                                  {sectie.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label style={{ minWidth: '260px', flex: '1 1 260px' }}>
+                            <span style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>
+                              Gerecht
+                            </span>
+                            <select
+                              value={selectedDishId}
+                              onChange={(event) => setSelectedDishId(event.target.value)}
+                              disabled={isSubmittingDetailAction || availableDishOptions.length === 0}
+                            >
+                              <option value="">Selecteer een gerecht</option>
+                              {availableDishOptions.map((dish) => (
+                                <option key={dish.id} value={dish.id}>
+                                  {dish.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleAddDish}
+                            disabled={!selectedDishId || !selectedSectieId || isSubmittingDetailAction}
+                            style={{ maxWidth: '220px' }}
+                          >
+                            Gerecht toevoegen
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : null}
 
               <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1rem' }}>
                 {(selectedMenukaart.secties || []).length === 0 ? (
@@ -1326,7 +1515,7 @@ export default function Menukaarten() {
                               : ''}
                           </p>
                         </div>
-                        {sectie.id != null ? (
+                        {sectie.id != null && !isSelectedArchived ? (
                           <div
                             style={{
                               display: 'flex',
@@ -1383,7 +1572,7 @@ export default function Menukaarten() {
                                 <th>Naam</th>
                                 <th>Prijs</th>
                                 <th>Marge</th>
-                                <th>Acties</th>
+                                {!isSelectedArchived ? <th>Acties</th> : null}
                               </tr>
                             </thead>
                             <tbody>
@@ -1444,93 +1633,95 @@ export default function Menukaarten() {
                                       '-'
                                     )}
                                   </td>
-                                  <td style={{ minWidth: '340px' }}>
-                                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleMoveDish(sectie, gerecht.id, 'up')}
-                                        disabled={isSubmittingDetailAction || sectie.id == null}
-                                        style={getToolActionButtonStyle()}
-                                      >
-                                        Omhoog
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleMoveDish(sectie, gerecht.id, 'down')}
-                                        disabled={isSubmittingDetailAction || sectie.id == null}
-                                        style={getToolActionButtonStyle()}
-                                      >
-                                        Omlaag
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleMoveDishToSectie(sectie, gerecht)}
-                                        disabled={isSubmittingDetailAction || sectie.id == null}
-                                        style={getToolActionButtonStyle()}
-                                      >
-                                        Verplaatsen
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="secondary-btn"
-                                        onClick={() => handleRemoveDish(gerecht.id)}
-                                        disabled={isSubmittingDetailAction}
-                                        style={getToolActionButtonStyle('danger')}
-                                      >
-                                        Verwijderen
-                                      </button>
-                                    </div>
-                                    {moveDishState?.gerechtId === gerecht.id &&
-                                    moveDishState?.fromSectieId === sectie.id ? (
-                                      <div
-                                        style={{
-                                          display: 'flex',
-                                          gap: '0.5rem',
-                                          flexWrap: 'wrap',
-                                          alignItems: 'center',
-                                          marginTop: '0.75rem'
-                                        }}
-                                      >
-                                        <select
-                                          value={moveDishState.targetSectieId}
-                                          onChange={(event) =>
-                                            setMoveDishState((currentState) =>
-                                              currentState == null
-                                                ? null
-                                                : { ...currentState, targetSectieId: event.target.value }
-                                            )
-                                          }
-                                          disabled={isSubmittingDetailAction}
-                                        >
-                                          <option value="">Kies doelsectie</option>
-                                          {editableSecties
-                                            .filter((item) => item.id !== sectie.id)
-                                            .map((item) => (
-                                              <option key={item.id} value={item.id}>
-                                                {item.title}
-                                              </option>
-                                            ))}
-                                        </select>
+                                  {!isSelectedArchived ? (
+                                    <td style={{ minWidth: '340px' }}>
+                                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                                         <button
                                           type="button"
-                                          onClick={handleConfirmMoveDishToSectie}
-                                          disabled={!moveDishState.targetSectieId || isSubmittingDetailAction}
+                                          onClick={() => handleMoveDish(sectie, gerecht.id, 'up')}
+                                          disabled={isSubmittingDetailAction || sectie.id == null}
                                           style={getToolActionButtonStyle()}
                                         >
-                                          Bevestigen
+                                          Omhoog
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleMoveDish(sectie, gerecht.id, 'down')}
+                                          disabled={isSubmittingDetailAction || sectie.id == null}
+                                          style={getToolActionButtonStyle()}
+                                        >
+                                          Omlaag
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleMoveDishToSectie(sectie, gerecht)}
+                                          disabled={isSubmittingDetailAction || sectie.id == null}
+                                          style={getToolActionButtonStyle()}
+                                        >
+                                          Verplaatsen
                                         </button>
                                         <button
                                           type="button"
                                           className="secondary-btn"
-                                          onClick={handleCancelMoveDishToSectie}
+                                          onClick={() => handleRemoveDish(gerecht.id)}
                                           disabled={isSubmittingDetailAction}
                                           style={getToolActionButtonStyle('danger')}
                                         >
-                                          Annuleren
+                                          Verwijderen
                                         </button>
                                       </div>
-                                    ) : null}
-                                  </td>
+                                      {moveDishState?.gerechtId === gerecht.id &&
+                                      moveDishState?.fromSectieId === sectie.id ? (
+                                        <div
+                                          style={{
+                                            display: 'flex',
+                                            gap: '0.5rem',
+                                            flexWrap: 'wrap',
+                                            alignItems: 'center',
+                                            marginTop: '0.75rem'
+                                          }}
+                                        >
+                                          <select
+                                            value={moveDishState.targetSectieId}
+                                            onChange={(event) =>
+                                              setMoveDishState((currentState) =>
+                                                currentState == null
+                                                  ? null
+                                                  : { ...currentState, targetSectieId: event.target.value }
+                                              )
+                                            }
+                                            disabled={isSubmittingDetailAction}
+                                          >
+                                            <option value="">Kies doelsectie</option>
+                                            {editableSecties
+                                              .filter((item) => item.id !== sectie.id)
+                                              .map((item) => (
+                                                <option key={item.id} value={item.id}>
+                                                  {item.title}
+                                                </option>
+                                              ))}
+                                          </select>
+                                          <button
+                                            type="button"
+                                            onClick={handleConfirmMoveDishToSectie}
+                                            disabled={!moveDishState.targetSectieId || isSubmittingDetailAction}
+                                            style={getToolActionButtonStyle()}
+                                          >
+                                            Bevestigen
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="secondary-btn"
+                                            onClick={handleCancelMoveDishToSectie}
+                                            disabled={isSubmittingDetailAction}
+                                            style={getToolActionButtonStyle('danger')}
+                                          >
+                                            Annuleren
+                                          </button>
+                                        </div>
+                                      ) : null}
+                                    </td>
+                                  ) : null}
                                 </tr>
                               ))}
                             </tbody>
