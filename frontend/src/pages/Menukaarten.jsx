@@ -186,6 +186,16 @@ function getToolActionButtonStyle(variant = 'default') {
   }
 }
 
+function splitSectionsSummary(value) {
+  if (!value) {
+    return []
+  }
+  return String(value)
+    .split(' · ')
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
 export default function Menukaarten() {
   const [activeTab, setActiveTab] = useState('active')
   const [searchTerm, setSearchTerm] = useState('')
@@ -500,6 +510,7 @@ export default function Menukaarten() {
     try {
       setError('')
       setMessage('')
+      setOpenActionsMenuId(null)
       await apiClient.updateMenukaart(item.id, { status: nextStatus })
       setMessage(
         nextStatus === 'active' ? 'Menukaart geactiveerd.' : 'Menukaart teruggezet naar concept.'
@@ -521,6 +532,7 @@ export default function Menukaarten() {
     try {
       setError('')
       setMessage('')
+      setOpenActionsMenuId(null)
       await apiClient.archiveMenukaart(item.id)
       setMessage('Menukaart gearchiveerd.')
       await loadMenukaarten()
@@ -581,6 +593,7 @@ export default function Menukaarten() {
     try {
       setError('')
       setMessage('')
+      setOpenActionsMenuId(null)
       const duplicated = await apiClient.duplicateMenukaart(item.id)
       setMessage('Menukaart gedupliceerd.')
       await loadMenukaarten()
@@ -1126,32 +1139,40 @@ export default function Menukaarten() {
             <table className="ingredients-table">
               <thead>
                 <tr>
-                  <th>Naam</th>
+                  <th style={{ minWidth: '220px' }}>Naam</th>
                   <th>Status</th>
-                  <th>Inhoud</th>
+                  <th style={{ minWidth: '220px' }}>Inhoud</th>
                   <th>Aantal gerechten</th>
                   <th>Binnen marge</th>
                   <th>Datum</th>
-                  <th>Acties</th>
+                  <th style={{ width: '120px' }}>Acties</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item) => (
                   <tr key={item.id}>
-                    <td>{item.name}</td>
+                    <td style={{ fontWeight: 500 }}>{item.name}</td>
                     <td>{statusLabel(item.status)}</td>
                     <td>
-                      <div
-                        title={item.sections_summary || '-'}
-                        style={{
-                          maxWidth: '260px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        {item.sections_summary || '-'}
-                      </div>
+                      {item.sections_summary ? (
+                        <div title={item.sections_summary} style={{ display: 'grid', gap: '0.15rem' }}>
+                          {splitSectionsSummary(item.sections_summary).map((part) => (
+                            <div
+                              key={`${item.id}-${part}`}
+                              style={{
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                color: '#374151'
+                              }}
+                            >
+                              {part}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        '-'
+                      )}
                     </td>
                     <td>{item.dish_count ?? 0}</td>
                     <td>
@@ -1172,7 +1193,7 @@ export default function Menukaarten() {
                       )}
                     </td>
                     <td>{renderDateCell(item)}</td>
-                    <td style={item.is_archived ? archivedActionUiStyles.actionCell : undefined}>
+                    <td style={archivedActionUiStyles.actionCell}>
                       {item.is_archived ? (
                         <div
                           style={archivedActionUiStyles.rowActionsWrap}
@@ -1221,28 +1242,68 @@ export default function Menukaarten() {
                           ) : null}
                         </div>
                       ) : (
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          <button type="button" onClick={() => setSelectedMenukaartId(item.id)}>
-                            Beheren
+                        <div
+                          style={archivedActionUiStyles.rowActionsWrap}
+                          ref={openActionsMenuId === item.id ? actionsMenuRef : null}
+                        >
+                          <button
+                            type="button"
+                            className="table-action-btn"
+                            style={archivedActionUiStyles.rowActionButton}
+                            onClick={() => setSelectedMenukaartId(item.id)}
+                          >
+                            Openen
                           </button>
-                          <button type="button" onClick={() => handleRename(item)}>
-                            Naam wijzigen
+                          <button
+                            type="button"
+                            className="table-action-btn"
+                            aria-label="Meer acties"
+                            style={archivedActionUiStyles.rowMenuButton}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setOpenActionsMenuId((prev) => (prev === item.id ? null : item.id))
+                            }}
+                          >
+                            ⋯
                           </button>
-                          <button type="button" onClick={() => handleDuplicate(item)}>
-                            Dupliceren
-                          </button>
-                          {item.status !== 'active' ? (
-                            <button type="button" onClick={() => handleSetStatus(item, 'active')}>
-                              Actief maken
-                            </button>
-                          ) : (
-                            <button type="button" onClick={() => handleSetStatus(item, 'concept')}>
-                              Terug naar concept
-                            </button>
-                          )}
-                          <button type="button" className="secondary-btn" onClick={() => handleArchive(item)}>
-                            Archiveren
-                          </button>
+                          {openActionsMenuId === item.id ? (
+                            <div
+                              style={archivedActionUiStyles.rowMenu}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                style={archivedActionUiStyles.rowMenuItem}
+                                onClick={() => handleDuplicate(item)}
+                              >
+                                ⧉ Dupliceren
+                              </button>
+                              {item.status === 'active' ? (
+                                <button
+                                  type="button"
+                                  style={archivedActionUiStyles.rowMenuItem}
+                                  onClick={() => handleSetStatus(item, 'concept')}
+                                >
+                                  ↩ Terug naar concept
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  style={archivedActionUiStyles.rowMenuItem}
+                                  onClick={() => handleSetStatus(item, 'active')}
+                                >
+                                  ✅ Actief maken
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                style={archivedActionUiStyles.rowMenuItem}
+                                onClick={() => handleArchive(item)}
+                              >
+                                <span style={{ color: '#d97706' }}>🗄</span> Archiveren
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       )}
                     </td>
