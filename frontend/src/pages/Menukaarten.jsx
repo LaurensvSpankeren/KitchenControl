@@ -307,6 +307,13 @@ export default function Menukaarten() {
     [editableSecties, selectedSectieId]
   )
   const availableDishOptions = useMemo(() => availableDishes, [availableDishes])
+  const availableDishById = useMemo(() => {
+    const next = new Map()
+    availableDishes.forEach((dish) => {
+      next.set(dish.id, dish)
+    })
+    return next
+  }, [availableDishes])
   const categoryNameById = useMemo(() => {
     const next = new Map()
     dishCategories.forEach((category) => {
@@ -1451,15 +1458,25 @@ export default function Menukaarten() {
     const sectionsHtml = (selectedMenukaart.secties || [])
       .map((sectie) => {
         const dishesHtml = (sectie.gerechten || [])
-          .map(
-            (gerecht) => `
+          .map((gerecht) => {
+            const dishRecord = availableDishById.get(gerecht.id)
+            const description = dishRecord?.menu_description?.trim()
+
+            return `
               <div class="print-row">
-                <span class="print-name">${escapeHtml(gerecht.name)}</span>
+                <div class="print-name-block">
+                  <div class="print-name">${escapeHtml(gerecht.name)}</div>
+                  ${
+                    description
+                      ? `<div class="print-description">${escapeHtml(description)}</div>`
+                      : ''
+                  }
+                </div>
                 <span class="print-dots"></span>
                 <span class="print-price">${escapeHtml(formatCurrency(gerecht.sale_price_incl_vat))}</span>
               </div>
             `
-          )
+          })
           .join('')
 
         return `
@@ -1501,23 +1518,33 @@ export default function Menukaarten() {
             }
             .print-row {
               display: flex;
-              align-items: baseline;
+              align-items: flex-start;
               gap: 10px;
               margin: 8px 0;
               font-size: 17px;
             }
+            .print-name-block {
+              display: grid;
+              gap: 2px;
+            }
             .print-name {
               white-space: nowrap;
+            }
+            .print-description {
+              font-size: 0.85em;
+              color: #6b7280;
+              white-space: normal;
             }
             .print-dots {
               flex: 1;
               border-bottom: 1px dotted #666;
-              transform: translateY(-2px);
+              transform: translateY(11px);
             }
             .print-price {
               min-width: 90px;
               text-align: right;
               white-space: nowrap;
+              padding-top: 1px;
             }
             .print-empty {
               margin: 0;
@@ -1531,7 +1558,7 @@ export default function Menukaarten() {
           </style>
         </head>
         <body>
-          <h1>${escapeHtml(selectedMenukaart.name)}</h1>
+          <h1>Menukaartnaam: ${escapeHtml(selectedMenukaart.name)}</h1>
           ${sectionsHtml || '<p>Geen secties of gerechten beschikbaar.</p>'}
         </body>
       </html>
