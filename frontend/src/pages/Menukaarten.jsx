@@ -99,7 +99,7 @@ function parseAllergenString(value) {
   }
   return new Set(
     String(value)
-      .split(/[,\n;]/)
+      .split(/[,\n;|]/)
       .map((item) => normalizeAllergenValue(item))
       .filter(Boolean)
   )
