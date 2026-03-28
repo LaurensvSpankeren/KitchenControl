@@ -204,6 +204,11 @@ export default function Menukaarten() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isCreatingNewMenukaart, setIsCreatingNewMenukaart] = useState(false)
   const [newMenukaartName, setNewMenukaartName] = useState('')
+  const [menukaartNameInput, setMenukaartNameInput] = useState('')
+  const [isSavingMenukaartName, setIsSavingMenukaartName] = useState(false)
+  const [selectedCategoryId, setSelectedCategoryId] = useState('')
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
   const [selectedMenukaartId, setSelectedMenukaartId] = useState(null)
   const [selectedMenukaart, setSelectedMenukaart] = useState(null)
   const [availableDishes, setAvailableDishes] = useState([])
@@ -371,6 +376,42 @@ export default function Menukaarten() {
       padding: '0.45rem 0.5rem'
     }
   }
+  const generalInfoStyles = {
+    layout: {
+      display: 'grid',
+      gap: '1rem',
+      gridTemplateColumns: 'minmax(0, 1.3fr) minmax(260px, 0.9fr)',
+      alignItems: 'start'
+    },
+    leftColumn: {
+      display: 'grid',
+      gap: '1rem'
+    },
+    infoBox: {
+      display: 'grid',
+      gap: '0.8rem',
+      padding: '1rem',
+      border: '1px solid #e5e7eb',
+      borderRadius: '12px',
+      background: '#f3f4f6'
+    },
+    infoRow: {
+      display: 'grid',
+      gap: '0.2rem'
+    },
+    infoLabel: {
+      fontSize: '0.85rem',
+      color: '#6b7280'
+    },
+    hint: {
+      margin: 0,
+      fontSize: '0.85rem',
+      color: '#6b7280',
+      lineHeight: 1.4
+    }
+  }
+  const menukaartCategoryOptions = []
+  const supportsMenukaartCategories = false
 
   async function loadMenukaarten() {
     setIsLoading(true)
@@ -441,6 +482,13 @@ export default function Menukaarten() {
     }
     loadMenukaartDetail(selectedMenukaartId)
   }, [selectedMenukaartId])
+
+  useEffect(() => {
+    setMenukaartNameInput(selectedMenukaart?.name || '')
+    setSelectedCategoryId('')
+    setShowNewCategoryInput(false)
+    setNewCategoryName('')
+  }, [selectedMenukaart])
 
   function openMenukaartModal(menukaartId) {
     setIsCreatingNewMenukaart(false)
@@ -540,6 +588,59 @@ export default function Menukaarten() {
     } catch {
       setError('Menukaart bijwerken mislukt.')
     }
+  }
+
+  async function handleSaveMenukaartName() {
+    if (!selectedMenukaart || isSelectedArchived || isSavingMenukaartName) {
+      return
+    }
+
+    const trimmedName = menukaartNameInput.trim()
+    if (!trimmedName) {
+      setMenukaartNameInput(selectedMenukaart.name || '')
+      setError('Naam mag niet leeg zijn.')
+      return
+    }
+
+    if (trimmedName === selectedMenukaart.name) {
+      return
+    }
+
+    try {
+      setIsSavingMenukaartName(true)
+      setError('')
+      setMessage('')
+      await apiClient.updateMenukaart(selectedMenukaart.id, { name: trimmedName })
+      setMessage('Menukaartnaam bijgewerkt.')
+      await loadMenukaarten()
+      await loadMenukaartDetail(selectedMenukaart.id)
+    } catch {
+      setError('Menukaartnaam bijwerken mislukt.')
+    } finally {
+      setIsSavingMenukaartName(false)
+    }
+  }
+
+  function handleMenukaartNameKeyDown(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.currentTarget.blur()
+    }
+
+    if (event.key === 'Escape') {
+      setMenukaartNameInput(selectedMenukaart?.name || '')
+      event.currentTarget.blur()
+    }
+  }
+
+  function handleCategorySaveAttempt() {
+    if (!newCategoryName.trim()) {
+      setError('Vul eerst een categorienaam in.')
+      return
+    }
+
+    setError('')
+    setMessage('Categorie voor menukaarten is nog niet gekoppeld aan backend.')
   }
 
   async function handleSetStatus(item, nextStatus) {
@@ -1471,72 +1572,64 @@ export default function Menukaarten() {
                   <section className="modal-section">
                     <h4>Algemene info</h4>
                     <div className="modal-grid one-col calm-grid">
-                      <div style={{ display: 'grid', gap: '1rem' }}>
-                        <div style={{ display: 'grid', gap: '0.8rem', gridTemplateColumns: 'minmax(0, 1fr) minmax(180px, 220px)' }}>
+                      <div style={generalInfoStyles.layout}>
+                        <div style={generalInfoStyles.leftColumn}>
                           <label>
                             Naam
-                            <input type="text" value={selectedMenukaart.name || ''} readOnly />
+                            <input
+                              type="text"
+                              value={menukaartNameInput}
+                              readOnly={isSelectedArchived || isSavingMenukaartName}
+                              onChange={(event) => setMenukaartNameInput(event.target.value)}
+                              onBlur={handleSaveMenukaartName}
+                              onKeyDown={handleMenukaartNameKeyDown}
+                            />
                           </label>
+
                           <label>
                             Categorie
-                            <input type="text" value="" readOnly placeholder="Nog niet gekoppeld in deze release" />
-                          </label>
-                        </div>
-
-                        <div
-                          style={{
-                            display: 'grid',
-                            gap: '0.75rem',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))'
-                          }}
-                        >
-                          <div>
-                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Status</div>
-                            <div>{statusLabel(selectedMenukaart.status)}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Secties</div>
-                            <div>{(selectedMenukaart.secties || []).filter((sectie) => sectie.id != null).length}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Gerechten</div>
-                            <div>{selectedMenukaart.dish_count ?? 0}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Gem. marge</div>
-                            <div>{formatPercent(selectedMenukaart.average_margin_percent)}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Margestatus</div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                              {selectedMenukaart.margin_status ? (
-                                <span
-                                  style={{
-                                    display: 'inline-block',
-                                    width: '0.75rem',
-                                    height: '0.75rem',
-                                    borderRadius: '999px',
-                                    background: getMarginDotColor(selectedMenukaart.margin_status)
-                                  }}
+                            <select
+                              value={selectedCategoryId}
+                              disabled={!supportsMenukaartCategories || isSelectedArchived}
+                              onChange={(event) => setSelectedCategoryId(event.target.value)}
+                            >
+                              <option value="">Kies een categorie</option>
+                              {menukaartCategoryOptions.map((category) => (
+                                <option key={category.id} value={category.id}>
+                                  {category.name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              className="table-action-btn"
+                              disabled={isSelectedArchived}
+                              onClick={() => setShowNewCategoryInput((prev) => !prev)}
+                            >
+                              Nieuwe categorie
+                            </button>
+                            {showNewCategoryInput ? (
+                              <div className="recipe-line-inline">
+                                <input
+                                  type="text"
+                                  placeholder="Nieuwe categorie"
+                                  value={newCategoryName}
+                                  readOnly={isSelectedArchived}
+                                  onChange={(event) => setNewCategoryName(event.target.value)}
                                 />
-                              ) : (
-                                <span>-</span>
-                              )}
-                            </div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Actief sinds</div>
-                            <div>
-                              {selectedMenukaart.status === 'active' && selectedMenukaart.activated_at
-                                ? formatDate(selectedMenukaart.activated_at)
-                                : 'Concept'}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                <button type="button" onClick={handleCategorySaveAttempt} disabled={isSelectedArchived}>
+                                  Opslaan
+                                </button>
+                              </div>
+                            ) : null}
+                          </label>
+                          {!supportsMenukaartCategories ? (
+                            <p style={generalInfoStyles.hint}>
+                              Categorie is in deze release alleen frontendmatig voorbereid. Er is nog geen backendkoppeling voor menukaarten.
+                            </p>
+                          ) : null}
                           {isSelectedArchived ? (
-                            <>
+                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                               <button
                                 type="button"
                                 onClick={() => handleRestore(selectedMenukaart)}
@@ -1552,33 +1645,56 @@ export default function Menukaarten() {
                               >
                                 Verwijderen
                               </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleRename(selectedMenukaart)}
-                                style={{ maxWidth: '180px' }}
-                              >
-                                Hernoemen
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDuplicate(selectedMenukaart)}
-                                style={{ maxWidth: '180px' }}
-                              >
-                                Dupliceren
-                              </button>
-                              <button
-                                type="button"
-                                className="secondary-btn"
-                                onClick={() => handleArchive(selectedMenukaart)}
-                                style={{ maxWidth: '180px' }}
-                              >
-                                Archiveren
-                              </button>
-                            </>
-                          )}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div style={generalInfoStyles.infoBox}>
+                          <div style={generalInfoStyles.infoRow}>
+                            <div style={generalInfoStyles.infoLabel}>Status</div>
+                            <div>{statusLabel(selectedMenukaart.status)}</div>
+                          </div>
+                          <div style={generalInfoStyles.infoRow}>
+                            <div style={generalInfoStyles.infoLabel}>Secties</div>
+                            <div>{(selectedMenukaart.secties || []).filter((sectie) => sectie.id != null).length}</div>
+                          </div>
+                          <div style={generalInfoStyles.infoRow}>
+                            <div style={generalInfoStyles.infoLabel}>Gerechten</div>
+                            <div>{selectedMenukaart.dish_count ?? 0}</div>
+                          </div>
+                          <div style={generalInfoStyles.infoRow}>
+                            <div style={generalInfoStyles.infoLabel}>Gem. marge</div>
+                            <div>{formatPercent(selectedMenukaart.average_margin_percent)}</div>
+                          </div>
+                          <div style={generalInfoStyles.infoRow}>
+                            <div style={generalInfoStyles.infoLabel}>Margestatus</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                              {selectedMenukaart.margin_status ? (
+                                <>
+                                  <span
+                                    style={{
+                                      display: 'inline-block',
+                                      width: '0.75rem',
+                                      height: '0.75rem',
+                                      borderRadius: '999px',
+                                      background: getMarginDotColor(selectedMenukaart.margin_status)
+                                    }}
+                                  />
+                                  <span>{formatPercent(selectedMenukaart.average_margin_percent)}</span>
+                                </>
+                              ) : (
+                                <span>-</span>
+                              )}
+                            </div>
+                          </div>
+                          <div style={generalInfoStyles.infoRow}>
+                            <div style={generalInfoStyles.infoLabel}>Actief sinds</div>
+                            <div>
+                              {selectedMenukaart.status === 'active' && selectedMenukaart.activated_at
+                                ? formatDate(selectedMenukaart.activated_at)
+                                : 'Concept'}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
