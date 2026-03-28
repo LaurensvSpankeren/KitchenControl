@@ -7,7 +7,7 @@ import Ingredientenbeheer from './pages/Ingredientenbeheer'
 import Importbeheer from './pages/Importbeheer'
 import Halffabricaten from './pages/Halffabricaten'
 import Gerechten from './pages/Gerechten'
-import Menus from './pages/Menus'
+import Menukaarten from './pages/Menukaarten'
 import Buffetten from './pages/Buffetten'
 import Login from './pages/Login'
 
@@ -48,7 +48,8 @@ export default function App() {
           <Route path="importbeheer" element={<Importbeheer />} />
           <Route path="halffabricaten" element={<Halffabricaten />} />
           <Route path="gerechten" element={<Gerechten />} />
-          <Route path="menus" element={<Menus />} />
+          <Route path="menukaarten" element={<Menukaarten />} />
+          <Route path="menus" element={<Navigate to="/menukaarten" replace />} />
           <Route path="buffetten" element={<Buffetten />} />
         </Route>
 

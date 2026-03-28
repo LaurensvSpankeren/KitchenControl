@@ -125,6 +125,198 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getMenukaarten() {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch menukaarten: ${response.status}`)
+    }
+    return response.json()
+  },
+  async getArchivedMenukaarten() {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/archived`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch archived menukaarten: ${response.status}`)
+    }
+    return response.json()
+  },
+  async createMenukaart(payload) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to create menukaart: ${response.status}`)
+    }
+    return response.json()
+  },
+  async updateMenukaart(id, payload) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to update menukaart: ${response.status}`)
+    }
+    return response.json()
+  },
+  async archiveMenukaart(id) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${id}`, {
+      method: 'DELETE'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to archive menukaart: ${response.status}`)
+    }
+    return response.json()
+  },
+  async duplicateMenukaart(id) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${id}/duplicate`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to duplicate menukaart: ${response.status}`)
+    }
+    return response.json()
+  },
+  async getMenukaart(id) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${id}`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch menukaart detail: ${response.status}`)
+    }
+    return response.json()
+  },
+  async createMenukaartSectie(menukaartId, payload) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${menukaartId}/secties`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to create menukaart section: ${response.status}`)
+    }
+    return response.json()
+  },
+  async updateMenukaartSectie(menukaartId, sectieId, payload) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${menukaartId}/secties/${sectieId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to update menukaart section: ${response.status}`)
+    }
+    return response.json()
+  },
+  async deleteMenukaartSectie(menukaartId, sectieId) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${menukaartId}/secties/${sectieId}`, {
+      method: 'DELETE'
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to delete menukaart section: ${response.status}`)
+    }
+    return response.json()
+  },
+  async moveMenukaartSectieUp(menukaartId, sectieId) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${menukaartId}/secties/${sectieId}/move-up`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to move menukaart section up: ${response.status}`)
+    }
+    return response.json()
+  },
+  async moveMenukaartSectieDown(menukaartId, sectieId) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${menukaartId}/secties/${sectieId}/move-down`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to move menukaart section down: ${response.status}`)
+    }
+    return response.json()
+  },
+  async addGerechtToMenukaart(menukaartId, gerechtId, menukaartSectieId) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${menukaartId}/gerechten`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        gerecht_id: gerechtId,
+        menukaart_sectie_id: menukaartSectieId
+      })
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to add dish to menukaart: ${response.status}`)
+    }
+    return response.json()
+  },
+  async moveMenukaartGerechtUp(menukaartId, sectieId, gerechtId) {
+    const response = await fetch(
+      `${API_BASE_URL}/api/menukaarten/${menukaartId}/secties/${sectieId}/gerechten/${gerechtId}/move-up`,
+      {
+        method: 'POST'
+      }
+    )
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to move dish up in menukaart: ${response.status}`)
+    }
+    return response.json()
+  },
+  async moveMenukaartGerechtDown(menukaartId, sectieId, gerechtId) {
+    const response = await fetch(
+      `${API_BASE_URL}/api/menukaarten/${menukaartId}/secties/${sectieId}/gerechten/${gerechtId}/move-down`,
+      {
+        method: 'POST'
+      }
+    )
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to move dish down in menukaart: ${response.status}`)
+    }
+    return response.json()
+  },
+  async moveMenukaartGerechtToSectie(menukaartId, gerechtId, menukaartSectieId) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${menukaartId}/gerechten/${gerechtId}/move`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        menukaart_sectie_id: menukaartSectieId
+      })
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to move dish to another section: ${response.status}`)
+    }
+    return response.json()
+  },
+  async removeGerechtFromMenukaart(menukaartId, gerechtId) {
+    const response = await fetch(`${API_BASE_URL}/api/menukaarten/${menukaartId}/gerechten/${gerechtId}`, {
+      method: 'DELETE'
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to remove dish from menukaart: ${response.status}`)
+    }
+    return response.json()
+  },
   async reviewManualIngredient(id) {
     const response = await fetch(`${API_BASE_URL}/api/manual-ingredients/${id}/review`, {
       method: 'POST'

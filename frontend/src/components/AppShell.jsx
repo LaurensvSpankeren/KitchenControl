@@ -9,7 +9,7 @@ const navItems = [
   { to: '/importbeheer', label: 'Importbeheer' },
   { to: '/halffabricaten', label: 'Halffabricaten' },
   { to: '/gerechten', label: 'Gerechten' },
-  { to: '/menus', label: 'Menu\'s' },
+  { to: '/menukaarten', label: 'Menukaarten' },
   { to: '/buffetten', label: 'Buffetten' }
 ]
 
