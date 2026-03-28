@@ -188,6 +188,8 @@ function getToolActionButtonStyle(variant = 'default') {
 
 export default function Menukaarten() {
   const [activeTab, setActiveTab] = useState('active')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [menukaarten, setMenukaarten] = useState([])
   const [archivedMenukaarten, setArchivedMenukaarten] = useState([])
   const [selectedMenukaartId, setSelectedMenukaartId] = useState(null)
@@ -205,6 +207,7 @@ export default function Menukaarten() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const actionsMenuRef = useRef(null)
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase()
 
   const activeMenukaarten = useMemo(
     () =>
@@ -231,6 +234,27 @@ export default function Menukaarten() {
   const conceptMenukaarten = useMemo(
     () => menukaarten.filter((item) => item.status !== 'active'),
     [menukaarten]
+  )
+  const filteredActiveMenukaarten = useMemo(
+    () =>
+      activeMenukaarten.filter((item) =>
+        !normalizedSearchTerm ? true : String(item.name || '').toLowerCase().includes(normalizedSearchTerm)
+      ),
+    [activeMenukaarten, normalizedSearchTerm]
+  )
+  const filteredConceptMenukaarten = useMemo(
+    () =>
+      conceptMenukaarten.filter((item) =>
+        !normalizedSearchTerm ? true : String(item.name || '').toLowerCase().includes(normalizedSearchTerm)
+      ),
+    [conceptMenukaarten, normalizedSearchTerm]
+  )
+  const filteredArchivedMenukaarten = useMemo(
+    () =>
+      archivedMenukaarten.filter((item) =>
+        !normalizedSearchTerm ? true : String(item.name || '').toLowerCase().includes(normalizedSearchTerm)
+      ),
+    [archivedMenukaarten, normalizedSearchTerm]
   )
   const editableSecties = useMemo(
     () => (selectedMenukaart?.secties || []).filter((sectie) => sectie.id != null),
@@ -1205,28 +1229,48 @@ export default function Menukaarten() {
       </header>
 
       <section className="card">
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={archivedActionUiStyles.viewModeSwitch || { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
           <button
             type="button"
+            className="table-action-btn"
             onClick={() => setActiveTab('active')}
-            className={activeTab === 'active' ? '' : 'secondary-btn'}
-            style={{ maxWidth: '180px' }}
+            style={activeTab === 'active' ? { background: '#e5eefc', borderColor: '#93c5fd' } : undefined}
           >
             Actief
           </button>
           <button
             type="button"
+            className="table-action-btn"
             onClick={() => setActiveTab('archived')}
-            className={activeTab === 'archived' ? '' : 'secondary-btn'}
-            style={{ maxWidth: '180px' }}
+            style={activeTab === 'archived' ? { background: '#e5eefc', borderColor: '#93c5fd' } : undefined}
           >
             Archief
           </button>
-          <div style={{ marginLeft: 'auto', minWidth: '220px' }}>
-            <button type="button" onClick={handleCreate}>
+        </div>
+        <div className="sfp-toolbar">
+          <input
+            type="text"
+            placeholder="Zoek op naam"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+          />
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            disabled={activeTab === 'archived'}
+          >
+            <option value="all">Alle</option>
+            <option value="active">Actief</option>
+            <option value="concept">In ontwikkeling</option>
+          </select>
+          <div />
+          {activeTab === 'active' ? (
+            <button type="button" className="sfp-new-btn" onClick={handleCreate}>
               Nieuwe menukaart
             </button>
-          </div>
+          ) : (
+            <div />
+          )}
         </div>
         {message ? <p className="form-info inline-message">{message}</p> : null}
         {error ? <p>{error}</p> : null}
@@ -1745,21 +1789,25 @@ export default function Menukaarten() {
         </section>
       ) : activeTab === 'active' ? (
         <>
-          {renderMenukaartSection(
-            'Actieve menukaarten',
-            activeMenukaarten,
-            'Geen actieve menukaarten gevonden.'
-          )}
-          {renderMenukaartSection(
-            'Menukaarten in ontwikkeling',
-            conceptMenukaarten,
-            'Geen menukaarten in ontwikkeling gevonden.'
-          )}
+          {statusFilter !== 'concept'
+            ? renderMenukaartSection(
+                'Actieve menukaarten',
+                filteredActiveMenukaarten,
+                'Geen actieve menukaarten gevonden.'
+              )
+            : null}
+          {statusFilter !== 'active'
+            ? renderMenukaartSection(
+                'Menukaarten in ontwikkeling',
+                filteredConceptMenukaarten,
+                'Geen menukaarten in ontwikkeling gevonden.'
+              )
+            : null}
         </>
       ) : (
         renderMenukaartSection(
           'Gearchiveerde menukaarten',
-          archivedMenukaarten,
+          filteredArchivedMenukaarten,
           'Geen gearchiveerde menukaarten gevonden.'
         )
       )}
