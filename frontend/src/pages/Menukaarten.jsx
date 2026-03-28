@@ -2270,6 +2270,12 @@ export default function Menukaarten() {
                               type="text"
                               value={dishSearchTerm}
                               onChange={(event) => setDishSearchTerm(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  applyDishSearchFilters()
+                                }
+                              }}
                               placeholder="Zoek op gerecht of menukaart"
                               disabled={!selectedBeheerSectie || isSelectedArchived}
                               style={sectieBlockStyles.largeControl}
@@ -2282,6 +2288,12 @@ export default function Menukaarten() {
                               onChange={(event) => {
                                 setDishCategoryFilter(event.target.value)
                                 setDishSubcategoryFilter('')
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  applyDishSearchFilters()
+                                }
                               }}
                               disabled={!selectedBeheerSectie || isSelectedArchived}
                               style={sectieBlockStyles.largeControl}
@@ -2299,6 +2311,12 @@ export default function Menukaarten() {
                             <select
                               value={dishSubcategoryFilter}
                               onChange={(event) => setDishSubcategoryFilter(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  applyDishSearchFilters()
+                                }
+                              }}
                               disabled={!selectedBeheerSectie || isSelectedArchived || !dishCategoryFilter}
                               style={sectieBlockStyles.largeControl}
                             >
