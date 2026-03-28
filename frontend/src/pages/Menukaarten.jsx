@@ -1671,7 +1671,6 @@ export default function Menukaarten() {
             .map((gerecht) => {
               const dishRecord = availableDishById.get(gerecht.id)
               const displayName = dishRecord?.menu_name?.trim()
-              const description = dishRecord?.menu_description?.trim()
               const iconEntries = getAllergenIcons(gerecht.allergens_total)
               const iconsHtml = iconEntries
                 .map(
@@ -1690,11 +1689,6 @@ export default function Menukaarten() {
                 <div class="allergen-row">
                   <div class="allergen-dish">
                     <div class="allergen-dish-name">${escapeHtml(displayName || '')}</div>
-                    ${
-                      description
-                        ? `<div class="allergen-dish-description">${escapeHtml(description)}</div>`
-                        : ''
-                    }
                   </div>
                   <div class="allergen-icons">
                     ${iconsHtml}
