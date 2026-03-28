@@ -228,6 +228,8 @@ export default function Menukaarten() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const actionsMenuRef = useRef(null)
+  const modalBodyRef = useRef(null)
+  const modalScrollRestoreRef = useRef(null)
   const normalizedSearchTerm = searchTerm.trim().toLowerCase()
 
   const activeMenukaarten = useMemo(
@@ -430,15 +432,16 @@ export default function Menukaarten() {
       maxWidth: '420px'
     },
     actionsWrap: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0.8rem',
+      display: 'grid',
+      gridTemplateColumns: 'auto auto auto',
+      alignItems: 'end',
+      columnGap: '0.6rem',
       flexWrap: 'wrap',
       justifyContent: 'flex-end'
     },
     orderWrap: {
       display: 'grid',
-      gap: '0.25rem',
+      gap: '0.18rem',
       justifyItems: 'center'
     },
     orderLabel: {
@@ -484,6 +487,11 @@ export default function Menukaarten() {
       justifyContent: 'center',
       fontSize: '0.95rem',
       lineHeight: 1
+    },
+    actionPair: {
+      display: 'flex',
+      gap: '0.35rem',
+      alignItems: 'center'
     }
   }
   const menukaartCategoryOptions = useMemo(() => menukaartCategories, [menukaartCategories])
@@ -632,14 +640,40 @@ export default function Menukaarten() {
     }
   }, [openActionsMenuId])
 
+  function captureModalBodyScroll() {
+    if (!modalBodyRef.current) {
+      return
+    }
+    modalScrollRestoreRef.current = modalBodyRef.current.scrollTop
+  }
+
+  function restoreModalBodyScroll() {
+    if (modalScrollRestoreRef.current == null) {
+      return
+    }
+    const targetScrollTop = modalScrollRestoreRef.current
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (modalBodyRef.current) {
+          modalBodyRef.current.scrollTop = targetScrollTop
+        }
+        modalScrollRestoreRef.current = null
+      })
+    })
+  }
+
   async function refreshAfterDetailMutation(menukaartId, successMessage) {
+    captureModalBodyScroll()
     await Promise.all([loadMenukaartDetail(menukaartId), loadMenukaarten()])
+    restoreModalBodyScroll()
     setMessage(successMessage)
   }
 
   async function applyDetailResponse(detail, successMessage = '') {
+    captureModalBodyScroll()
     setSelectedMenukaart(detail)
     await loadMenukaarten()
+    restoreModalBodyScroll()
     if (successMessage) {
       setMessage(successMessage)
     }
@@ -1727,7 +1761,7 @@ export default function Menukaarten() {
               </h3>
             </div>
 
-            <div className="modal-body">
+            <div className="modal-body" ref={modalBodyRef}>
               {error ? <div className="modal-validation-banner">{error}</div> : null}
               {message ? <p className="form-info inline-message">{message}</p> : null}
 
@@ -1972,26 +2006,28 @@ export default function Menukaarten() {
                                       </button>
                                     </div>
                                   </div>
-                                  <button
-                                    type="button"
-                                    aria-label="Sectienaam bewerken"
-                                    title="Bewerken"
-                                    onClick={() => handleStartInlineSectieEdit(sectie)}
-                                    disabled={isSubmittingDetailAction}
-                                    style={sectieBlockStyles.iconButton}
-                                  >
-                                    ✎
-                                  </button>
-                                  <button
-                                    type="button"
-                                    aria-label="Sectie verwijderen"
-                                    title="Verwijderen"
-                                    onClick={() => handleDeleteSectie(sectie)}
-                                    disabled={isSubmittingDetailAction}
-                                    style={sectieBlockStyles.iconButtonDanger}
-                                  >
-                                    🗑
-                                  </button>
+                                  <div style={sectieBlockStyles.actionPair}>
+                                    <button
+                                      type="button"
+                                      aria-label="Sectienaam bewerken"
+                                      title="Bewerken"
+                                      onClick={() => handleStartInlineSectieEdit(sectie)}
+                                      disabled={isSubmittingDetailAction}
+                                      style={sectieBlockStyles.iconButton}
+                                    >
+                                      ✎
+                                    </button>
+                                    <button
+                                      type="button"
+                                      aria-label="Sectie verwijderen"
+                                      title="Verwijderen"
+                                      onClick={() => handleDeleteSectie(sectie)}
+                                      disabled={isSubmittingDetailAction}
+                                      style={sectieBlockStyles.iconButtonDanger}
+                                    >
+                                      🗑
+                                    </button>
+                                  </div>
                                 </div>
                               ) : null}
                             </div>
