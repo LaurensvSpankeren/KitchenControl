@@ -1465,16 +1465,16 @@ export default function Menukaarten() {
 
             return `
               <div class="print-row">
-                <div class="print-name-block">
-                  <div class="print-name">${escapeHtml(displayName || '')}</div>
-                  ${
-                    description
-                      ? `<div class="print-description">${escapeHtml(description)}</div>`
-                      : ''
-                  }
+                <div class="print-main-line">
+                  <span class="print-name">${escapeHtml(displayName || '')}</span>
+                  <span class="print-dots"></span>
+                  <span class="print-price">${escapeHtml(formatCurrency(gerecht.sale_price_incl_vat))}</span>
                 </div>
-                <span class="print-dots"></span>
-                <span class="print-price">${escapeHtml(formatCurrency(gerecht.sale_price_incl_vat))}</span>
+                ${
+                  description
+                    ? `<div class="print-description">${escapeHtml(description)}</div>`
+                    : ''
+                }
               </div>
             `
           })
@@ -1518,15 +1518,15 @@ export default function Menukaarten() {
               page-break-inside: avoid;
             }
             .print-row {
-              display: flex;
-              align-items: flex-start;
-              gap: 10px;
+              display: grid;
+              gap: 2px;
               margin: 8px 0;
               font-size: 17px;
             }
-            .print-name-block {
-              display: grid;
-              gap: 2px;
+            .print-main-line {
+              display: flex;
+              align-items: baseline;
+              gap: 10px;
             }
             .print-name {
               white-space: nowrap;
@@ -1535,17 +1535,17 @@ export default function Menukaarten() {
               font-size: 0.85em;
               color: #6b7280;
               white-space: normal;
+              padding-right: 110px;
             }
             .print-dots {
               flex: 1;
               border-bottom: 1px dotted #666;
-              transform: translateY(11px);
+              transform: translateY(-2px);
             }
             .print-price {
               min-width: 90px;
               text-align: right;
               white-space: nowrap;
-              padding-top: 1px;
             }
             .print-empty {
               margin: 0;
