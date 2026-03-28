@@ -1460,12 +1460,13 @@ export default function Menukaarten() {
         const dishesHtml = (sectie.gerechten || [])
           .map((gerecht) => {
             const dishRecord = availableDishById.get(gerecht.id)
+            const displayName = dishRecord?.menu_name?.trim()
             const description = dishRecord?.menu_description?.trim()
 
             return `
               <div class="print-row">
                 <div class="print-name-block">
-                  <div class="print-name">${escapeHtml(gerecht.name)}</div>
+                  <div class="print-name">${escapeHtml(displayName || '')}</div>
                   ${
                     description
                       ? `<div class="print-description">${escapeHtml(description)}</div>`
