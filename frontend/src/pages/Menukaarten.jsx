@@ -32,16 +32,22 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;')
 }
 
-const ALLERGEN_PRINT_COLUMNS = [
-  { key: 'gluten', label: 'Gluten', matches: ['gluten', 'tarwe', 'rogge', 'gerst', 'haver', 'spelt', 'kamut'] },
-  { key: 'schaaldieren', label: 'Schaald.', matches: ['schaaldieren'] },
-  { key: 'ei', label: 'Ei', matches: ['ei'] },
-  { key: 'vis', label: 'Vis', matches: ['vis'] },
-  { key: 'pinda', label: 'Pinda', matches: ['pinda'] },
-  { key: 'soja', label: 'Soja', matches: ['soja'] },
-  { key: 'melk', label: 'Melk', matches: ['melk', 'lactose'] },
+const ALLERGEN_ICON_MAP = [
+  {
+    key: 'gluten',
+    file: '/allergenen/2gluten.png',
+    label: 'Gluten',
+    matches: ['gluten', 'tarwe', 'rogge', 'gerst', 'haver', 'spelt', 'kamut']
+  },
+  { key: 'schaaldieren', file: '/allergenen/2schaald.png', label: 'Schaaldieren', matches: ['schaaldieren'] },
+  { key: 'ei', file: '/allergenen/2ei.png', label: 'Ei', matches: ['ei'] },
+  { key: 'vis', file: '/allergenen/2vis.png', label: 'Vis', matches: ['vis'] },
+  { key: 'pinda', file: '/allergenen/2pindas.png', label: 'Pinda', matches: ['pinda'] },
+  { key: 'soja', file: '/allergenen/2soja.png', label: 'Soja', matches: ['soja'] },
+  { key: 'melk', file: '/allergenen/2melk.png', label: 'Melk', matches: ['melk', 'lactose'] },
   {
     key: 'noten',
+    file: '/allergenen/2noten.png',
     label: 'Noten',
     matches: [
       'noten',
@@ -56,12 +62,17 @@ const ALLERGEN_PRINT_COLUMNS = [
       'cashewnoten'
     ]
   },
-  { key: 'selderij', label: 'Selderij', matches: ['selderij'] },
-  { key: 'mosterd', label: 'Mosterd', matches: ['mosterd'] },
-  { key: 'sesam', label: 'Sesam', matches: ['sesam'] },
-  { key: 'sulfiet', label: 'Sulfiet', matches: ['sulfiet', 'sulfieten', 'zwaveldioxide en sulfieten'] },
-  { key: 'lupine', label: 'Lupine', matches: ['lupine'] },
-  { key: 'weekdieren', label: 'Weekd.', matches: ['weekdieren'] }
+  { key: 'selderij', file: '/allergenen/2selderij.png', label: 'Selderij', matches: ['selderij'] },
+  { key: 'mosterd', file: '/allergenen/2mosterd.png', label: 'Mosterd', matches: ['mosterd'] },
+  { key: 'sesam', file: '/allergenen/2sesamsaad.png', label: 'Sesam', matches: ['sesam'] },
+  {
+    key: 'sulfiet',
+    file: '/allergenen/2zwaveldioxid.png',
+    label: 'Sulfiet',
+    matches: ['sulfiet', 'sulfieten', 'zwaveldioxide en sulfieten']
+  },
+  { key: 'lupine', file: '/allergenen/2lupine.png', label: 'Lupine', matches: ['lupine'] },
+  { key: 'weekdieren', file: '/allergenen/2weekdieren.png', label: 'Weekdieren', matches: ['weekdieren'] }
 ]
 
 function normalizeAllergenValue(value) {
@@ -84,6 +95,12 @@ function parseAllergenString(value) {
 
 function hasAllergenMatch(allergens, column) {
   return column.matches.some((match) => allergens.has(match))
+}
+
+function getAllergenIcons(allergensTotal) {
+  const allergens = parseAllergenString(allergensTotal)
+
+  return ALLERGEN_ICON_MAP.filter((item) => hasAllergenMatch(allergens, item))
 }
 
 function statusLabel(status) {
@@ -1586,45 +1603,57 @@ export default function Menukaarten() {
     try {
       const sectionsHtml = (selectedMenukaart.secties || [])
         .map((sectie) => {
+          if (!(sectie.gerechten || []).length) {
+            return ''
+          }
+
           const rowsHtml = (sectie.gerechten || [])
             .map((gerecht) => {
-              const allergens = parseAllergenString(gerecht.allergens_total)
-              const cellsHtml = ALLERGEN_PRINT_COLUMNS.map(
-                (column) =>
-                  `<td class="allergen-cell">${hasAllergenMatch(allergens, column) ? '●' : ''}</td>`
-              ).join('')
+              const dishRecord = availableDishById.get(gerecht.id)
+              const displayName = dishRecord?.menu_name?.trim()
+              const description = dishRecord?.menu_description?.trim()
+              const iconEntries = getAllergenIcons(gerecht.allergens_total)
+              const iconsHtml = iconEntries
+                .map(
+                  (item) => `
+                    <img
+                      class="allergen-icon"
+                      src="${escapeHtml(item.file)}"
+                      alt="${escapeHtml(item.label)}"
+                      title="${escapeHtml(item.label)}"
+                    />
+                  `
+                )
+                .join('')
 
               return `
-                <tr>
-                  <td class="dish-name">${escapeHtml(gerecht.name)}</td>
-                  ${cellsHtml}
-                </tr>
+                <div class="allergen-row">
+                  <div class="allergen-dish">
+                    <div class="allergen-dish-name">${escapeHtml(displayName || '')}</div>
+                    ${
+                      description
+                        ? `<div class="allergen-dish-description">${escapeHtml(description)}</div>`
+                        : ''
+                    }
+                  </div>
+                  <div class="allergen-icons">
+                    ${iconsHtml}
+                  </div>
+                </div>
               `
             })
             .join('')
 
           return `
-            <section class="print-section">
+            <section class="allergen-section">
               <h2>${escapeHtml(sectie.title)}</h2>
-              <table class="allergen-table">
-                <thead>
-                  <tr>
-                    <th class="dish-head">Gerecht</th>
-                    ${ALLERGEN_PRINT_COLUMNS.map(
-                      (column) => `<th class="allergen-head">${escapeHtml(column.label)}</th>`
-                    ).join('')}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${
-                    rowsHtml ||
-                    `<tr><td class="empty-row" colspan="${ALLERGEN_PRINT_COLUMNS.length + 1}">Geen gerechten in deze sectie.</td></tr>`
-                  }
-                </tbody>
-              </table>
+              <div class="allergen-list">
+                ${rowsHtml}
+              </div>
             </section>
           `
         })
+        .filter(Boolean)
         .join('')
 
       printWindow.document.write(`
@@ -1636,71 +1665,73 @@ export default function Menukaarten() {
             <style>
               body {
                 font-family: Arial, sans-serif;
-                color: #111;
+                color: #1f2937;
                 background: #fff;
-                margin: 18px;
+                margin: 24px;
               }
               h1 {
-                margin: 0 0 18px;
-                font-size: 22px;
+                margin: 0 0 22px;
+                font-size: 24px;
+                font-weight: 700;
               }
               h2 {
-                margin: 0 0 8px;
-                font-size: 13px;
-                text-transform: uppercase;
-                letter-spacing: 0.06em;
-                border-bottom: 1px solid #111;
-                padding-bottom: 4px;
+                margin: 0 0 10px;
+                font-size: 17px;
+                font-weight: 700;
               }
-              .print-section {
-                margin-top: 18px;
+              .allergen-section {
+                margin-top: 22px;
                 page-break-inside: avoid;
                 break-inside: avoid;
               }
-              .allergen-table {
-                width: 100%;
-                border-collapse: collapse;
-                table-layout: fixed;
+              .allergen-list {
+                border: 1px solid #d1d5db;
+                border-radius: 0;
+                overflow: hidden;
               }
-              .allergen-table th,
-              .allergen-table td {
-                border: 1px solid #111;
-                padding: 4px 6px;
-                font-size: 11px;
-                line-height: 1.2;
+              .allergen-row {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 18px;
+                align-items: center;
+                padding: 10px 14px;
+                border-top: 1px solid #e5e7eb;
               }
-              .dish-head,
-              .dish-name {
-                text-align: left;
-                width: 26%;
+              .allergen-row:first-child {
+                border-top: 0;
               }
-              .dish-name {
+              .allergen-dish {
+                min-width: 0;
+              }
+              .allergen-dish-name {
                 font-weight: 600;
+                font-size: 14px;
+                line-height: 1.25;
+                color: #111827;
               }
-              .allergen-head,
-              .allergen-cell {
-                text-align: center;
-                width: 5.28%;
-                white-space: nowrap;
-              }
-              .allergen-head {
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 0.01em;
-              }
-              .allergen-cell {
+              .allergen-dish-description {
+                margin-top: 3px;
                 font-size: 12px;
-                font-weight: 700;
+                line-height: 1.35;
+                color: #6b7280;
               }
-              .empty-row {
-                text-align: left;
-                font-style: italic;
+              .allergen-icons {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                gap: 6px;
+                max-width: 320px;
+              }
+              .allergen-icon {
+                width: 32px;
+                height: 32px;
+                object-fit: contain;
               }
               @media print {
                 body {
                   margin: 10px;
                 }
-                .print-section {
+                .allergen-section {
                   page-break-inside: avoid;
                   break-inside: avoid;
                 }
@@ -1709,7 +1740,7 @@ export default function Menukaarten() {
           </head>
           <body>
             <h1>${escapeHtml(selectedMenukaart.name)} - Allergenenkaart</h1>
-            ${sectionsHtml || '<p>Geen secties of gerechten beschikbaar.</p>'}
+            ${sectionsHtml || '<p>Geen secties met gerechten beschikbaar.</p>'}
           </body>
         </html>
       `)
