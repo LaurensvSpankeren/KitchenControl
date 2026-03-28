@@ -216,6 +216,8 @@ export default function Menukaarten() {
   const [availableDishes, setAvailableDishes] = useState([])
   const [selectedDishId, setSelectedDishId] = useState('')
   const [selectedSectieId, setSelectedSectieId] = useState('')
+  const [editingSectieId, setEditingSectieId] = useState(null)
+  const [editingSectieTitle, setEditingSectieTitle] = useState('')
   const [moveDishState, setMoveDishState] = useState(null)
   const [dragDishState, setDragDishState] = useState(null)
   const [dragOverDishState, setDragOverDishState] = useState(null)
@@ -412,6 +414,78 @@ export default function Menukaarten() {
       lineHeight: 1.4
     }
   }
+  const sectieBlockStyles = {
+    summaryCard: {
+      display: 'grid',
+      gap: '0.9rem',
+      gridTemplateColumns: 'minmax(0, 1fr) auto',
+      alignItems: 'center',
+      padding: '0.9rem 1rem',
+      border: '1px solid #e5e7eb',
+      borderRadius: '12px',
+      background: '#fafafa'
+    },
+    titleInput: {
+      marginTop: '0.35rem',
+      maxWidth: '420px'
+    },
+    actionsWrap: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.8rem',
+      flexWrap: 'wrap',
+      justifyContent: 'flex-end'
+    },
+    orderWrap: {
+      display: 'grid',
+      gap: '0.25rem',
+      justifyItems: 'center'
+    },
+    orderLabel: {
+      fontSize: '0.75rem',
+      color: '#6b7280',
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em'
+    },
+    orderButtons: {
+      display: 'flex',
+      gap: '0.35rem'
+    },
+    iconButton: {
+      width: '2rem',
+      minWidth: '2rem',
+      height: '2rem',
+      minHeight: '2rem',
+      marginTop: 0,
+      padding: 0,
+      borderRadius: '0.65rem',
+      border: '1px solid #d1d5db',
+      background: '#fff',
+      color: '#374151',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '0.95rem',
+      lineHeight: 1
+    },
+    iconButtonDanger: {
+      width: '2rem',
+      minWidth: '2rem',
+      height: '2rem',
+      minHeight: '2rem',
+      marginTop: 0,
+      padding: 0,
+      borderRadius: '0.65rem',
+      border: '1px solid #e5e7eb',
+      background: '#fff',
+      color: '#6b7280',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '0.95rem',
+      lineHeight: 1
+    }
+  }
   const menukaartCategoryOptions = useMemo(() => menukaartCategories, [menukaartCategories])
   const supportsMenukaartCategories = true
 
@@ -490,6 +564,8 @@ export default function Menukaarten() {
     if (!selectedMenukaartId) {
       setSelectedMenukaart(null)
       setSelectedSectieId('')
+      setEditingSectieId(null)
+      setEditingSectieTitle('')
       setMoveDishState(null)
       setDragDishState(null)
       setDragOverDishState(null)
@@ -503,6 +579,8 @@ export default function Menukaarten() {
     setSelectedCategoryId(selectedMenukaart?.category_id != null ? String(selectedMenukaart.category_id) : '')
     setShowNewCategoryInput(false)
     setNewCategoryName('')
+    setEditingSectieId(null)
+    setEditingSectieTitle('')
   }, [selectedMenukaart])
 
   function openMenukaartModal(menukaartId) {
@@ -842,6 +920,63 @@ export default function Menukaarten() {
       setError(actionError?.message || 'Sectie bijwerken mislukt.')
     } finally {
       setIsSubmittingDetailAction(false)
+    }
+  }
+
+  function handleStartInlineSectieEdit(sectie) {
+    if (!selectedMenukaart || sectie.id == null || isSubmittingDetailAction) {
+      return
+    }
+
+    setEditingSectieId(sectie.id)
+    setEditingSectieTitle(sectie.title || '')
+  }
+
+  function handleCancelInlineSectieEdit() {
+    setEditingSectieId(null)
+    setEditingSectieTitle('')
+  }
+
+  async function handleSaveInlineSectieTitle(sectie) {
+    if (!selectedMenukaart || sectie.id == null || isSubmittingDetailAction) {
+      return
+    }
+
+    const title = editingSectieTitle.trim()
+    if (!title) {
+      setEditingSectieTitle(sectie.title || '')
+      setError('Sectienaam mag niet leeg zijn.')
+      return
+    }
+
+    if (title === sectie.title) {
+      handleCancelInlineSectieEdit()
+      return
+    }
+
+    setIsSubmittingDetailAction(true)
+    setError('')
+    setMessage('')
+    try {
+      await apiClient.updateMenukaartSectie(selectedMenukaart.id, sectie.id, { title })
+      handleCancelInlineSectieEdit()
+      await refreshAfterDetailMutation(selectedMenukaart.id, 'Sectie bijgewerkt.')
+    } catch (actionError) {
+      setError(actionError?.message || 'Sectie bijwerken mislukt.')
+    } finally {
+      setIsSubmittingDetailAction(false)
+    }
+  }
+
+  function handleInlineSectieTitleKeyDown(event, sectie) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      handleSaveInlineSectieTitle(sectie)
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      handleCancelInlineSectieEdit()
     }
   }
 
@@ -1769,13 +1904,14 @@ export default function Menukaarten() {
                       {!isSelectedArchived ? (
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
                           <p style={{ margin: 0, color: '#4b5563' }}>
-                            Beheer hier op hoog niveau de volgorde en opbouw van de secties.
+                            Verdeel hier de kaart in secties/groepen en zet in de juiste volgorde.
                           </p>
                           <button
                             type="button"
+                            className="primary-btn"
                             onClick={handleCreateSectie}
                             disabled={isSubmittingDetailAction}
-                            style={{ maxWidth: '220px' }}
+                            style={{ minWidth: '200px', minHeight: '2.5rem' }}
                           >
                             Sectie toevoegen
                           </button>
@@ -1789,58 +1925,72 @@ export default function Menukaarten() {
                           {selectedMenukaart.secties.map((sectie) => (
                             <div
                               key={`section-summary-${sectie.id ?? sectie.title}`}
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                gap: '1rem',
-                                flexWrap: 'wrap',
-                                alignItems: 'center',
-                                padding: '0.8rem 0.9rem',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '10px',
-                                background: '#fafafa'
-                              }}
+                              style={sectieBlockStyles.summaryCard}
                             >
                               <div>
-                                <div style={{ fontWeight: 600 }}>{sectie.title}</div>
+                                {editingSectieId === sectie.id && !isSelectedArchived ? (
+                                  <input
+                                    type="text"
+                                    value={editingSectieTitle}
+                                    autoFocus
+                                    style={sectieBlockStyles.titleInput}
+                                    onChange={(event) => setEditingSectieTitle(event.target.value)}
+                                    onBlur={() => handleSaveInlineSectieTitle(sectie)}
+                                    onKeyDown={(event) => handleInlineSectieTitleKeyDown(event, sectie)}
+                                  />
+                                ) : (
+                                  <div style={{ fontWeight: 600 }}>{sectie.title}</div>
+                                )}
                                 <div style={{ fontSize: '0.88rem', color: '#6b7280' }}>
                                   {sectie.gerechten?.length || 0} gerechten
                                 </div>
                               </div>
                               {sectie.id != null && !isSelectedArchived ? (
-                                <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                <div style={sectieBlockStyles.actionsWrap}>
+                                  <div style={sectieBlockStyles.orderWrap}>
+                                    <div style={sectieBlockStyles.orderLabel}>Volgorde</div>
+                                    <div style={sectieBlockStyles.orderButtons}>
+                                      <button
+                                        type="button"
+                                        aria-label="Sectie omhoog"
+                                        title="Omhoog"
+                                        onClick={() => handleMoveSectie(sectie, 'up')}
+                                        disabled={isSubmittingDetailAction}
+                                        style={sectieBlockStyles.iconButton}
+                                      >
+                                        ↑
+                                      </button>
+                                      <button
+                                        type="button"
+                                        aria-label="Sectie omlaag"
+                                        title="Omlaag"
+                                        onClick={() => handleMoveSectie(sectie, 'down')}
+                                        disabled={isSubmittingDetailAction}
+                                        style={sectieBlockStyles.iconButton}
+                                      >
+                                        ↓
+                                      </button>
+                                    </div>
+                                  </div>
                                   <button
                                     type="button"
-                                    onClick={() => handleMoveSectie(sectie, 'up')}
+                                    aria-label="Sectienaam bewerken"
+                                    title="Bewerken"
+                                    onClick={() => handleStartInlineSectieEdit(sectie)}
                                     disabled={isSubmittingDetailAction}
-                                    style={getToolActionButtonStyle()}
+                                    style={sectieBlockStyles.iconButton}
                                   >
-                                    Omhoog
+                                    ✎
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => handleMoveSectie(sectie, 'down')}
-                                    disabled={isSubmittingDetailAction}
-                                    style={getToolActionButtonStyle()}
-                                  >
-                                    Omlaag
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRenameSectie(sectie)}
-                                    disabled={isSubmittingDetailAction}
-                                    style={getToolActionButtonStyle()}
-                                  >
-                                    Hernoemen
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="secondary-btn"
+                                    aria-label="Sectie verwijderen"
+                                    title="Verwijderen"
                                     onClick={() => handleDeleteSectie(sectie)}
                                     disabled={isSubmittingDetailAction}
-                                    style={getToolActionButtonStyle('danger')}
+                                    style={sectieBlockStyles.iconButtonDanger}
                                   >
-                                    Verwijderen
+                                    🗑
                                   </button>
                                 </div>
                               ) : null}
