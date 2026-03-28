@@ -32,22 +32,29 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;')
 }
 
+const ALLERGEN_ASSET_BASE = import.meta.env.BASE_URL || '/'
+
 const ALLERGEN_ICON_MAP = [
   {
     key: 'gluten',
-    file: '/allergenen/2gluten.png',
+    file: `${ALLERGEN_ASSET_BASE}allergenen/2gluten.png`,
     label: 'Gluten',
     matches: ['gluten', 'tarwe', 'rogge', 'gerst', 'haver', 'spelt', 'kamut']
   },
-  { key: 'schaaldieren', file: '/allergenen/2schaald.png', label: 'Schaaldieren', matches: ['schaaldieren'] },
-  { key: 'ei', file: '/allergenen/2ei.png', label: 'Ei', matches: ['ei'] },
-  { key: 'vis', file: '/allergenen/2vis.png', label: 'Vis', matches: ['vis'] },
-  { key: 'pinda', file: '/allergenen/2pindas.png', label: 'Pinda', matches: ['pinda'] },
-  { key: 'soja', file: '/allergenen/2soja.png', label: 'Soja', matches: ['soja'] },
-  { key: 'melk', file: '/allergenen/2melk.png', label: 'Melk', matches: ['melk', 'lactose'] },
+  {
+    key: 'schaaldieren',
+    file: `${ALLERGEN_ASSET_BASE}allergenen/2schaald.png`,
+    label: 'Schaaldieren',
+    matches: ['schaaldieren']
+  },
+  { key: 'ei', file: `${ALLERGEN_ASSET_BASE}allergenen/2ei.png`, label: 'Ei', matches: ['ei'] },
+  { key: 'vis', file: `${ALLERGEN_ASSET_BASE}allergenen/2vis.png`, label: 'Vis', matches: ['vis'] },
+  { key: 'pinda', file: `${ALLERGEN_ASSET_BASE}allergenen/2pindas.png`, label: 'Pinda', matches: ['pinda'] },
+  { key: 'soja', file: `${ALLERGEN_ASSET_BASE}allergenen/2soja.png`, label: 'Soja', matches: ['soja'] },
+  { key: 'melk', file: `${ALLERGEN_ASSET_BASE}allergenen/2melk.png`, label: 'Melk', matches: ['melk', 'lactose'] },
   {
     key: 'noten',
-    file: '/allergenen/2noten.png',
+    file: `${ALLERGEN_ASSET_BASE}allergenen/2noten.png`,
     label: 'Noten',
     matches: [
       'noten',
@@ -62,17 +69,22 @@ const ALLERGEN_ICON_MAP = [
       'cashewnoten'
     ]
   },
-  { key: 'selderij', file: '/allergenen/2selderij.png', label: 'Selderij', matches: ['selderij'] },
-  { key: 'mosterd', file: '/allergenen/2mosterd.png', label: 'Mosterd', matches: ['mosterd'] },
-  { key: 'sesam', file: '/allergenen/2sesamsaad.png', label: 'Sesam', matches: ['sesam'] },
+  { key: 'selderij', file: `${ALLERGEN_ASSET_BASE}allergenen/2selderij.png`, label: 'Selderij', matches: ['selderij'] },
+  { key: 'mosterd', file: `${ALLERGEN_ASSET_BASE}allergenen/2mosterd.png`, label: 'Mosterd', matches: ['mosterd'] },
+  { key: 'sesam', file: `${ALLERGEN_ASSET_BASE}allergenen/2sesamsaad.png`, label: 'Sesam', matches: ['sesam'] },
   {
     key: 'sulfiet',
-    file: '/allergenen/2zwaveldioxid.png',
+    file: `${ALLERGEN_ASSET_BASE}allergenen/2zwaveldioxid.png`,
     label: 'Sulfiet',
     matches: ['sulfiet', 'sulfieten', 'zwaveldioxide en sulfieten']
   },
-  { key: 'lupine', file: '/allergenen/2lupine.png', label: 'Lupine', matches: ['lupine'] },
-  { key: 'weekdieren', file: '/allergenen/2weekdieren.png', label: 'Weekdieren', matches: ['weekdieren'] }
+  { key: 'lupine', file: `${ALLERGEN_ASSET_BASE}allergenen/2lupine.png`, label: 'Lupine', matches: ['lupine'] },
+  {
+    key: 'weekdieren',
+    file: `${ALLERGEN_ASSET_BASE}allergenen/2weekdieren.png`,
+    label: 'Weekdieren',
+    matches: ['weekdieren']
+  }
 ]
 
 function normalizeAllergenValue(value) {
@@ -101,6 +113,54 @@ function getAllergenIcons(allergensTotal) {
   const allergens = parseAllergenString(allergensTotal)
 
   return ALLERGEN_ICON_MAP.filter((item) => hasAllergenMatch(allergens, item))
+}
+
+function waitForPrintImages(printWindow, timeoutMs = 2000) {
+  const images = Array.from(printWindow.document.images || [])
+  if (images.length === 0) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve) => {
+    let resolved = false
+    let remaining = images.length
+
+    const finish = () => {
+      if (resolved) {
+        return
+      }
+      resolved = true
+      resolve()
+    }
+
+    const markDone = () => {
+      remaining -= 1
+      if (remaining <= 0) {
+        finish()
+      }
+    }
+
+    const timer = window.setTimeout(finish, timeoutMs)
+
+    images.forEach((image) => {
+      if (image.complete) {
+        markDone()
+        return
+      }
+
+      const handleSettled = () => {
+        image.removeEventListener('load', handleSettled)
+        image.removeEventListener('error', handleSettled)
+        markDone()
+        if (remaining <= 0) {
+          window.clearTimeout(timer)
+        }
+      }
+
+      image.addEventListener('load', handleSettled, { once: true })
+      image.addEventListener('error', handleSettled, { once: true })
+    })
+  })
 }
 
 function statusLabel(status) {
@@ -1745,6 +1805,7 @@ export default function Menukaarten() {
         </html>
       `)
       printWindow.document.close()
+      await waitForPrintImages(printWindow)
       printWindow.focus()
       printWindow.print()
     } catch {
