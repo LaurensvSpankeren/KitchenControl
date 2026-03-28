@@ -10,7 +10,8 @@ const navItems = [
   { to: '/halffabricaten', label: 'Halffabricaten' },
   { to: '/gerechten', label: 'Gerechten' },
   { to: '/menukaarten', label: 'Menukaarten' },
-  { to: '/buffetten', label: 'Buffetten' }
+  { to: '/buffetten', label: 'Buffetten' },
+  { to: '/instellingen', label: 'Instellingen', icon: '⚙' }
 ]
 
 export default function AppShell({ onLogout }) {
@@ -81,7 +82,12 @@ export default function AppShell({ onLogout }) {
                 `nav-link${isActive ? ' is-active' : ''}`
               }
             >
-              <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+              <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                {item.icon ? (
+                  <span aria-hidden="true" style={{ display: 'inline-flex', width: '1rem', justifyContent: 'center' }}>
+                    {item.icon}
+                  </span>
+                ) : null}
                 {item.label}
                 {item.to === '/importbeheer' && importAlertsLabel ? (
                   <span

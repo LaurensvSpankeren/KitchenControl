@@ -9,6 +9,7 @@ import Halffabricaten from './pages/Halffabricaten'
 import Gerechten from './pages/Gerechten'
 import Menukaarten from './pages/Menukaarten'
 import Buffetten from './pages/Buffetten'
+import Instellingen from './pages/Instellingen'
 import Login from './pages/Login'
 
 function ProtectedRoute({ isAuthenticated, children }) {
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="menukaarten" element={<Menukaarten />} />
           <Route path="menus" element={<Navigate to="/menukaarten" replace />} />
           <Route path="buffetten" element={<Buffetten />} />
+          <Route path="instellingen" element={<Instellingen />} />
         </Route>
 
         <Route path="*" element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />} />
