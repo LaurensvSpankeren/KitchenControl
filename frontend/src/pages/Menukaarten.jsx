@@ -100,18 +100,17 @@ function dateLabel(item) {
 function renderDateCell(item) {
   if (item.status === 'active') {
     return (
-      <div>
-        <div>{item.activated_at ? `Actief sinds ${formatDate(item.activated_at)}` : 'Actief'}</div>
+      <div style={{ display: 'grid', gap: '0.1rem' }}>
+        <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Actief sinds</div>
+        <div>{item.activated_at ? formatDate(item.activated_at) : '-'}</div>
         {item.active_days != null ? (
-          <div style={{ marginTop: '0.2rem', color: '#4b5563', fontSize: '0.92em' }}>
-            Draait {item.active_days} dagen
-          </div>
+          <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>{item.active_days} dagen</div>
         ) : null}
       </div>
     )
   }
 
-  return dateLabel(item)
+  return <span style={{ color: '#6b7280' }}>{dateLabel(item)}</span>
 }
 
 function formatPercent(value) {
@@ -1139,12 +1138,12 @@ export default function Menukaarten() {
             <table className="ingredients-table">
               <thead>
                 <tr>
-                  <th style={{ minWidth: '220px' }}>Naam</th>
+                  <th style={{ minWidth: '260px' }}>Naam</th>
                   <th>Status</th>
-                  <th style={{ minWidth: '220px' }}>Inhoud</th>
-                  <th>Aantal gerechten</th>
-                  <th>Binnen marge</th>
-                  <th>Datum</th>
+                  <th style={{ minWidth: '260px' }}>Inhoud</th>
+                  <th style={{ width: '140px' }}>Aantal gerechten</th>
+                  <th style={{ width: '90px', textAlign: 'center' }}>Marge</th>
+                  <th style={{ width: '160px' }}>Datum</th>
                   <th style={{ width: '120px' }}>Acties</th>
                 </tr>
               </thead>
@@ -1175,19 +1174,19 @@ export default function Menukaarten() {
                       )}
                     </td>
                     <td>{item.dish_count ?? 0}</td>
-                    <td>
+                    <td style={{ textAlign: 'center' }}>
                       {item.margin_status ? (
-                        <span
-                          title={`Gemiddelde marge: ${formatPercent(item.average_margin_percent)}`}
-                          style={{
-                            display: 'inline-block',
-                            width: '0.8rem',
-                            height: '0.8rem',
-                            borderRadius: '999px',
-                            background: getMarginDotColor(item.margin_status),
-                            verticalAlign: 'middle'
-                          }}
-                        />
+                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: '0.75rem',
+                              height: '0.75rem',
+                              borderRadius: '999px',
+                              background: getMarginDotColor(item.margin_status)
+                            }}
+                          />
+                        </div>
                       ) : (
                         '-'
                       )}
