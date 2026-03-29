@@ -1595,21 +1595,21 @@ export default function Halffabricaten() {
             <table className="ingredients-table">
               <thead>
                 <tr>
-                  <th>Naam</th>
-                  <th>Categorie</th>
-                  <th>Subcategorie</th>
-                  <th>Eindgewicht/eindinhoud</th>
-                  <th>Actie</th>
+                  <th className="text-left">Naam</th>
+                  <th className="text-center">Categorie</th>
+                  <th className="text-center">Subcategorie</th>
+                  <th className="text-center">Eindgewicht/eindinhoud</th>
+                  <th className="text-center">Actie</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleProducts.map((item) => (
                   <tr key={item.id}>
-                    <td>{item.name}</td>
-                    <td>{item.category || '-'}</td>
-                    <td>{item.subcategory || '-'}</td>
-                    <td>{formatYield(item.final_yield_amount, item.final_yield_unit)}</td>
-                    <td style={uiStyles.actionCell}>
+                    <td className="text-left">{item.name}</td>
+                    <td className="text-center">{item.category || '-'}</td>
+                    <td className="text-center">{item.subcategory || '-'}</td>
+                    <td className="text-center">{formatYield(item.final_yield_amount, item.final_yield_unit)}</td>
+                    <td className="text-center" style={uiStyles.actionCell}>
                       <div style={uiStyles.rowActionsWrap} ref={openActionsMenuId === item.id ? actionsMenuRef : null}>
                         <button
                           type="button"

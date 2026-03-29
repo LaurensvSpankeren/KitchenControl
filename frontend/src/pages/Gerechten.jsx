@@ -1580,39 +1580,39 @@ export default function Gerechten() {
             <table className="ingredients-table">
               <thead>
                 <tr>
-                  <th>Naam</th>
-                  <th>Categorie</th>
-                  <th>Subcategorie</th>
-                  <th style={{ minWidth: '95px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                  <th className="text-left">Naam</th>
+                  <th className="text-center">Categorie</th>
+                  <th className="text-center">Subcategorie</th>
+                  <th className="text-center" style={{ minWidth: '95px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                     Kostprijs
                   </th>
-                  <th style={{ minWidth: '120px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                  <th className="text-center" style={{ minWidth: '120px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                     Verkoopprijs incl BTW
                   </th>
-                  <th style={{ minWidth: '90px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                  <th className="text-center" style={{ minWidth: '90px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                     Marge %
                   </th>
-                  <th>Allergenen</th>
-                  <th>Actie</th>
+                  <th className="text-left">Allergenen</th>
+                  <th className="text-center">Actie</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleDishes.map((item) => (
                   <tr key={item.id}>
-                    <td>{item.name}</td>
-                    <td>{getCategoryNameById(item.category_id)}</td>
-                    <td>{getSubcategoryNameById(item.subcategory_id)}</td>
-                    <td style={{ minWidth: '95px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    <td className="text-left">{item.name}</td>
+                    <td className="text-center">{getCategoryNameById(item.category_id)}</td>
+                    <td className="text-center">{getSubcategoryNameById(item.subcategory_id)}</td>
+                    <td className="text-right" style={{ minWidth: '95px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                       {formatCurrency(item.estimated_cost_total)}
                     </td>
-                    <td style={{ minWidth: '120px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    <td className="text-right" style={{ minWidth: '120px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                       {formatCurrency(item.sale_price_incl_vat)}
                     </td>
-                    <td style={{ minWidth: '90px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    <td className="text-right" style={{ minWidth: '90px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                       {formatPercent(item.gross_margin_percent)}
                     </td>
-                    <td>{item.allergens_total || 'Geen brondata allergenen beschikbaar'}</td>
-                    <td style={uiStyles.actionCell}>
+                    <td className="text-left">{item.allergens_total || 'Geen brondata allergenen beschikbaar'}</td>
+                    <td className="text-center" style={uiStyles.actionCell}>
                       <div style={uiStyles.rowActionsWrap} ref={openActionsMenuId === item.id ? actionsMenuRef : null}>
                         <button
                           type="button"
