@@ -14,6 +14,8 @@ from app.models.recipe_step import RecipeStep
 from app.models.semi_finished_category import SemiFinishedCategory
 from app.models.semi_finished_product import SemiFinishedProduct
 from app.models.semi_finished_subcategory import SemiFinishedSubcategory
+from app.models.user import User
+from app.models.user_session import UserSession
 
 __all__ = [
     "Ingredient",
@@ -32,4 +34,6 @@ __all__ = [
     "RecipeStep",
     "SemiFinishedCategory",
     "SemiFinishedSubcategory",
+    "User",
+    "UserSession",
 ]

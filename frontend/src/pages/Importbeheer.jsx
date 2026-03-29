@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
 import { apiClient } from '../api/client'
+import { getCurrentUserRole } from '../utils/currentUser'
 
 function formatDateTime(value) {
   if (!value) {
@@ -90,6 +91,8 @@ export default function Importbeheer() {
   const [selectedManualMatchIngredient, setSelectedManualMatchIngredient] = useState(null)
   const [selectedImportMatchIngredient, setSelectedImportMatchIngredient] = useState(null)
   const [isLoadingMatchPreview, setIsLoadingMatchPreview] = useState(false)
+  const currentUserRole = useMemo(() => getCurrentUserRole(), [])
+  const canManageSupervisorImportActions = currentUserRole === 'Supervisor'
 
   const duplicateIssues = useMemo(
     () => issues.filter((issue) => issue.issue_type === 'duplicate_conflict_in_file'),
@@ -239,9 +242,17 @@ export default function Importbeheer() {
         await apiClient.reviewManualIngredient(ingredientId)
         setMessage('Handmatig ingrediënt gemarkeerd als reviewed.')
       } else if (action === 'archive') {
+        if (!canManageSupervisorImportActions) {
+          setError('Je hebt geen rechten om handmatige ingrediënten te archiveren.')
+          return
+        }
         await apiClient.archiveManualIngredient(ingredientId)
         setMessage('Handmatig ingrediënt gearchiveerd.')
       } else if (action === 'delete') {
+        if (!canManageSupervisorImportActions) {
+          setError('Je hebt geen rechten om handmatige ingrediënten te verwijderen.')
+          return
+        }
         await apiClient.deleteManualIngredient(ingredientId)
         setMessage('Handmatig ingrediënt verwijderd.')
       } else if (action === 'link-import') {
@@ -304,9 +315,17 @@ export default function Importbeheer() {
 
     try {
       if (action === 'archive') {
+        if (!canManageSupervisorImportActions) {
+          setStaleImportError('Je hebt geen rechten om importingrediënten te archiveren.')
+          return
+        }
         await apiClient.archiveImportIngredient(ingredientId)
         setStaleImportMessage('Importingrediënt gearchiveerd.')
       } else if (action === 'delete') {
+        if (!canManageSupervisorImportActions) {
+          setStaleImportError('Je hebt geen rechten om importingrediënten te verwijderen.')
+          return
+        }
         await apiClient.deleteImportIngredient(ingredientId)
         setStaleImportMessage('Importingrediënt verwijderd.')
       }
@@ -411,22 +430,26 @@ export default function Importbeheer() {
                                 Bekijk match
                               </button>
                             ) : null}
-                            <button
-                              type="button"
-                              className="secondary-btn"
-                              onClick={() => handleManualIngredientAction(ingredient.id, 'archive')}
-                              disabled={isBusy}
-                            >
-                              Archiveren
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-btn"
-                              onClick={() => handleManualIngredientAction(ingredient.id, 'delete')}
-                              disabled={isBusy}
-                            >
-                              Verwijderen
-                            </button>
+                            {canManageSupervisorImportActions ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="secondary-btn"
+                                  onClick={() => handleManualIngredientAction(ingredient.id, 'archive')}
+                                  disabled={isBusy}
+                                >
+                                  Archiveren
+                                </button>
+                                <button
+                                  type="button"
+                                  className="secondary-btn"
+                                  onClick={() => handleManualIngredientAction(ingredient.id, 'delete')}
+                                  disabled={isBusy}
+                                >
+                                  Verwijderen
+                                </button>
+                              </>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -504,22 +527,26 @@ export default function Importbeheer() {
                                 Koppel aan import
                               </button>
                             ) : null}
-                            <button
-                              type="button"
-                              className="secondary-btn"
-                              onClick={() => handleManualIngredientAction(ingredient.id, 'archive')}
-                              disabled={isBusy}
-                            >
-                              Archiveren
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-btn"
-                              onClick={() => handleManualIngredientAction(ingredient.id, 'delete')}
-                              disabled={isBusy}
-                            >
-                              Verwijderen
-                            </button>
+                            {canManageSupervisorImportActions ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="secondary-btn"
+                                  onClick={() => handleManualIngredientAction(ingredient.id, 'archive')}
+                                  disabled={isBusy}
+                                >
+                                  Archiveren
+                                </button>
+                                <button
+                                  type="button"
+                                  className="secondary-btn"
+                                  onClick={() => handleManualIngredientAction(ingredient.id, 'delete')}
+                                  disabled={isBusy}
+                                >
+                                  Verwijderen
+                                </button>
+                              </>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -576,22 +603,26 @@ export default function Importbeheer() {
                         <td>{formatDateTime(ingredient.supplier_last_imported_at)}</td>
                         <td>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <button
-                              type="button"
-                              className="secondary-btn"
-                              onClick={() => handleStaleImportIngredientAction(ingredient.id, 'archive')}
-                              disabled={isBusy}
-                            >
-                              Archiveren
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-btn"
-                              onClick={() => handleStaleImportIngredientAction(ingredient.id, 'delete')}
-                              disabled={isBusy}
-                            >
-                              Verwijderen
-                            </button>
+                            {canManageSupervisorImportActions ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="secondary-btn"
+                                  onClick={() => handleStaleImportIngredientAction(ingredient.id, 'archive')}
+                                  disabled={isBusy}
+                                >
+                                  Archiveren
+                                </button>
+                                <button
+                                  type="button"
+                                  className="secondary-btn"
+                                  onClick={() => handleStaleImportIngredientAction(ingredient.id, 'delete')}
+                                  disabled={isBusy}
+                                >
+                                  Verwijderen
+                                </button>
+                              </>
+                            ) : null}
                           </div>
                         </td>
                       </tr>

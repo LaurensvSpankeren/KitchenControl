@@ -11,6 +11,7 @@ from app.api.semi_finished_products import (
     _extract_clean_allergens,
     _to_calculation_quantity,
 )
+from app.api.auth import get_current_user, require_supervisor
 from app.db.session import get_db
 from app.models.dish import Dish
 from app.models.ingredient import Ingredient
@@ -424,7 +425,10 @@ def _get_link_in_sectie(db: Session, menukaart_id: int, sectie_id: int, gerecht_
 
 
 @router.get("/api/menukaarten", tags=["menukaarten"])
-def list_menukaarten(db: Session = Depends(get_db)) -> list[dict]:
+def list_menukaarten(
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> list[dict]:
     items = (
         db.query(Menukaart)
         .options(
@@ -466,6 +470,44 @@ def create_menukaart_category(payload: dict, db: Session = Depends(get_db)) -> d
     return {"id": category.id, "name": category.name}
 
 
+@router.put("/api/menukaart-categories/{category_id}", tags=["menukaarten"])
+def rename_menukaart_category(
+    category_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user=Depends(require_supervisor),
+) -> dict:
+    name = _normalize_name(payload.get("name"))
+    if not name:
+        raise HTTPException(status_code=400, detail="Category name is required")
+
+    category = (
+        db.query(MenukaartCategory)
+        .filter(MenukaartCategory.id == category_id)
+        .first()
+    )
+    if category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    existing = (
+        db.query(MenukaartCategory)
+        .filter(
+            func.lower(MenukaartCategory.name) == name.lower(),
+            MenukaartCategory.id != category_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        raise HTTPException(status_code=400, detail="Category already exists")
+
+    category.name = name
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+
+    return {"id": category.id, "name": category.name}
+
+
 @router.get("/api/menukaarten/archived", tags=["menukaarten"])
 def list_archived_menukaarten(db: Session = Depends(get_db)) -> list[dict]:
     items = (
@@ -483,7 +525,11 @@ def list_archived_menukaarten(db: Session = Depends(get_db)) -> list[dict]:
 
 
 @router.get("/api/menukaarten/{menukaart_id}", tags=["menukaarten"])
-def get_menukaart(menukaart_id: int, db: Session = Depends(get_db)) -> dict:
+def get_menukaart(
+    menukaart_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     return _serialize_menukaart_detail(db, _get_menukaart(db, menukaart_id))
 
 

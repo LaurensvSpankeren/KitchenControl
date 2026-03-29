@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import AppShell from './components/AppShell'
+import { apiClient, AUTH_UNAUTHORIZED_EVENT } from './api/client'
 import Dashboard from './pages/Dashboard'
 import Ingredientenbeheer from './pages/Ingredientenbeheer'
 import Importbeheer from './pages/Importbeheer'
@@ -21,6 +22,100 @@ function ProtectedRoute({ isAuthenticated, children }) {
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthLoading, setIsAuthLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState(null)
+
+  useEffect(() => {
+    function handleUnauthorizedSession() {
+      apiClient.clearAuthSession()
+      setCurrentUser(null)
+      setIsAuthenticated(false)
+      setIsAuthLoading(false)
+    }
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorizedSession)
+
+    return () => {
+      window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorizedSession)
+    }
+  }, [])
+
+  useEffect(() => {
+    let isCancelled = false
+
+    async function restoreSession() {
+      const token = apiClient.getAuthToken()
+      if (!token) {
+        if (!isCancelled) {
+          setIsAuthenticated(false)
+          setCurrentUser(null)
+          setIsAuthLoading(false)
+        }
+        return
+      }
+
+      try {
+        const user = await apiClient.getMe(token)
+        if (!isCancelled) {
+          apiClient.setAuthSession(token, user)
+          setCurrentUser(user)
+          setIsAuthenticated(true)
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          if (error?.status === 401) {
+            apiClient.clearAuthSession()
+          }
+          setCurrentUser(null)
+          setIsAuthenticated(false)
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsAuthLoading(false)
+        }
+      }
+    }
+
+    restoreSession()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
+
+  async function handleLogin(email, password) {
+    const payload = await apiClient.login({ email, password })
+    apiClient.setAuthSession(payload.token, payload.user)
+    setCurrentUser(payload.user)
+    setIsAuthenticated(true)
+  }
+
+  async function handleLogout() {
+    const token = apiClient.getAuthToken()
+
+    try {
+      if (token) {
+        await apiClient.logout(token)
+      }
+    } catch (error) {
+      console.error('Logout mislukt, lokale sessie wordt alsnog beëindigd.', error)
+    } finally {
+      apiClient.clearAuthSession()
+      setCurrentUser(null)
+      setIsAuthenticated(false)
+    }
+  }
+
+  if (isAuthLoading) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <h1>KitchenControl</h1>
+          <p>Sessie herstellen...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <BrowserRouter>
@@ -31,7 +126,7 @@ export default function App() {
             isAuthenticated ? (
               <Navigate to="/" replace />
             ) : (
-              <Login onLogin={() => setIsAuthenticated(true)} />
+              <Login onLogin={handleLogin} />
             )
           }
         />
@@ -40,7 +135,7 @@ export default function App() {
           path="/"
           element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <AppShell onLogout={() => setIsAuthenticated(false)} />
+              <AppShell onLogout={handleLogout} currentUser={currentUser} />
             </ProtectedRoute>
           }
         >

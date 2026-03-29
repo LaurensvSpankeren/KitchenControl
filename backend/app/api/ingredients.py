@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user, require_supervisor
 from app.db.session import get_db
 from app.models.ingredient import Ingredient
 from app.models.recipe_line import RecipeLine
@@ -71,6 +72,10 @@ def _normalize_unit(value: str | None) -> str | None:
         "pc": "stuk",
     }
     return mapping.get(unit, unit)
+
+
+def _normalize_category_name(value: str | None) -> str:
+    return str(value or "").strip()
 
 
 def _derive_calculation_values(
@@ -282,7 +287,10 @@ def _serialize_ingredient_with_match(db: Session, ingredient: Ingredient) -> dic
 
 
 @router.get("/api/ingredients", tags=["ingredients"])
-def list_ingredients(db: Session = Depends(get_db)) -> list[dict]:
+def list_ingredients(
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> list[dict]:
     ingredients = (
         db.query(Ingredient)
         .filter(Ingredient.is_archived.is_(False))
@@ -292,8 +300,72 @@ def list_ingredients(db: Session = Depends(get_db)) -> list[dict]:
     return [_serialize_ingredient(ingredient) for ingredient in ingredients]
 
 
+@router.get("/api/ingredient-categories", tags=["ingredients"])
+def list_ingredient_categories(
+    db: Session = Depends(get_db),
+    _current_user=Depends(require_supervisor),
+) -> list[dict]:
+    rows = (
+        db.query(
+            func.trim(Ingredient.category).label("name"),
+            func.count(Ingredient.id).label("ingredient_count"),
+        )
+        .filter(Ingredient.category.is_not(None))
+        .filter(func.trim(Ingredient.category) != "")
+        .group_by(func.trim(Ingredient.category))
+        .order_by(func.lower(func.trim(Ingredient.category)).asc())
+        .all()
+    )
+    return [
+        {"name": row.name, "ingredient_count": row.ingredient_count}
+        for row in rows
+    ]
+
+
+@router.post("/api/ingredient-categories/rename", tags=["ingredients"])
+def rename_ingredient_category(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user=Depends(require_supervisor),
+) -> dict:
+    current_name = _normalize_category_name(payload.get("current_name"))
+    next_name = _normalize_category_name(payload.get("name"))
+
+    if not current_name or not next_name:
+        raise HTTPException(status_code=400, detail="Current category name and new name are required")
+
+    existing_rows = (
+        db.query(Ingredient)
+        .filter(func.trim(Ingredient.category) == current_name)
+        .all()
+    )
+    if not existing_rows:
+        raise HTTPException(status_code=404, detail="Ingredient category not found")
+
+    duplicate_exists = (
+        db.query(Ingredient.id)
+        .filter(func.lower(func.trim(Ingredient.category)) == next_name.lower())
+        .filter(func.lower(func.trim(Ingredient.category)) != current_name.lower())
+        .first()
+        is not None
+    )
+    if duplicate_exists:
+        raise HTTPException(status_code=400, detail="Ingredient category already exists")
+
+    for ingredient in existing_rows:
+        ingredient.category = next_name
+        db.add(ingredient)
+
+    db.commit()
+    return {"name": next_name, "ingredient_count": len(existing_rows)}
+
+
 @router.get("/api/ingredients/{ingredient_id}", tags=["ingredients"])
-def get_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+def get_ingredient(
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -311,7 +383,11 @@ def get_manual_ingredient_match_debug(ingredient_id: int, db: Session = Depends(
 
 
 @router.post("/api/ingredients", tags=["ingredients"])
-def create_ingredient(payload: dict, db: Session = Depends(get_db)) -> dict:
+def create_ingredient(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     required_fields = [
         "supplier_name",
         "supplier_product_code",
@@ -337,7 +413,12 @@ def create_ingredient(payload: dict, db: Session = Depends(get_db)) -> dict:
 
 
 @router.put("/api/ingredients/{ingredient_id}", tags=["ingredients"])
-def update_ingredient(ingredient_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
+def update_ingredient(
+    ingredient_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -366,7 +447,11 @@ def update_ingredient(ingredient_id: int, payload: dict, db: Session = Depends(g
 
 
 @router.post("/api/manual-ingredients", tags=["ingredients"])
-def create_manual_ingredient(payload: dict, db: Session = Depends(get_db)) -> dict:
+def create_manual_ingredient(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     required_fields = [
         "supplier_name",
         "supplier_product_name",
@@ -406,7 +491,10 @@ def create_manual_ingredient(payload: dict, db: Session = Depends(get_db)) -> di
 
 
 @router.get("/api/manual-ingredients/review", tags=["ingredients"])
-def list_manual_ingredients_for_review(db: Session = Depends(get_db)) -> list[dict]:
+def list_manual_ingredients_for_review(
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> list[dict]:
     threshold = datetime.now(timezone.utc) - timedelta(days=45)
     ingredients = (
         db.query(Ingredient)
@@ -433,7 +521,10 @@ def list_manual_ingredients_for_review(db: Session = Depends(get_db)) -> list[di
 
 
 @router.get("/api/manual-ingredients/matches", tags=["ingredients"])
-def list_manual_ingredients_with_matches(db: Session = Depends(get_db)) -> list[dict]:
+def list_manual_ingredients_with_matches(
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> list[dict]:
     ingredients = (
         db.query(Ingredient)
         .filter(
@@ -453,7 +544,10 @@ def list_manual_ingredients_with_matches(db: Session = Depends(get_db)) -> list[
 
 
 @router.get("/api/import-ingredients/stale", tags=["ingredients"])
-def list_stale_import_ingredients(db: Session = Depends(get_db)) -> list[dict]:
+def list_stale_import_ingredients(
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> list[dict]:
     threshold = datetime.now(timezone.utc) - timedelta(days=45)
     ingredients = (
         db.query(Ingredient)
@@ -475,7 +569,11 @@ def list_stale_import_ingredients(db: Session = Depends(get_db)) -> list[dict]:
 
 
 @router.delete("/api/manual-ingredients/{ingredient_id}", tags=["ingredients"])
-def delete_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_manual_ingredient(
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -500,7 +598,11 @@ def delete_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) 
 
 
 @router.delete("/api/import-ingredients/{ingredient_id}", tags=["ingredients"])
-def delete_import_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_import_ingredient(
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -525,7 +627,11 @@ def delete_import_ingredient(ingredient_id: int, db: Session = Depends(get_db)) 
 
 
 @router.post("/api/manual-ingredients/{ingredient_id}/archive", tags=["ingredients"])
-def archive_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+def archive_manual_ingredient(
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -540,7 +646,11 @@ def archive_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db))
 
 
 @router.post("/api/import-ingredients/{ingredient_id}/archive", tags=["ingredients"])
-def archive_import_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+def archive_import_ingredient(
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -555,7 +665,11 @@ def archive_import_ingredient(ingredient_id: int, db: Session = Depends(get_db))
 
 
 @router.post("/api/manual-ingredients/{ingredient_id}/review", tags=["ingredients"])
-def review_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+def review_manual_ingredient(
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -569,7 +683,11 @@ def review_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) 
 
 
 @router.post("/api/manual-ingredients/{ingredient_id}/link-import", tags=["ingredients"])
-def link_manual_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+def link_manual_ingredient(
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     try:
         return link_manual_ingredient_to_import(db, ingredient_id)
     except LookupError as exc:

@@ -4,6 +4,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user, require_supervisor
 from app.db.session import get_db
 from app.models.ingredient import Ingredient
 from app.models.recipe_line import RecipeLine
@@ -452,7 +453,10 @@ def _build_semi_finished_detail(
 
 
 @router.get("/api/semi-finished-products", tags=["semi-finished-products"])
-def list_semi_finished_products(db: Session = Depends(get_db)) -> list[dict]:
+def list_semi_finished_products(
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> list[dict]:
     items = (
         db.query(SemiFinishedProduct)
         .filter(SemiFinishedProduct.is_archived.is_(False))
@@ -471,7 +475,10 @@ def list_semi_finished_products(db: Session = Depends(get_db)) -> list[dict]:
 
 
 @router.get("/api/semi-finished-products/archived", tags=["semi-finished-products"])
-def list_archived_semi_finished_products(db: Session = Depends(get_db)) -> list[dict]:
+def list_archived_semi_finished_products(
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> list[dict]:
     items = (
         db.query(SemiFinishedProduct)
         .filter(SemiFinishedProduct.is_archived.is_(True))
@@ -490,7 +497,11 @@ def list_archived_semi_finished_products(db: Session = Depends(get_db)) -> list[
 
 
 @router.post("/api/semi-finished-products", tags=["semi-finished-products"])
-def create_semi_finished_product(payload: dict, db: Session = Depends(get_db)) -> dict:
+def create_semi_finished_product(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     item = SemiFinishedProduct(name="tmp")
     _apply_semi_finished_payload(item, payload)
 
@@ -502,7 +513,10 @@ def create_semi_finished_product(payload: dict, db: Session = Depends(get_db)) -
 
 @router.put("/api/semi-finished-products/{semi_finished_product_id}", tags=["semi-finished-products"])
 def update_semi_finished_product(
-    semi_finished_product_id: int, payload: dict, db: Session = Depends(get_db)
+    semi_finished_product_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
@@ -519,7 +533,10 @@ def update_semi_finished_product(
     tags=["semi-finished-products"],
 )
 def add_semi_finished_product_recipe_line(
-    semi_finished_product_id: int, payload: dict, db: Session = Depends(get_db)
+    semi_finished_product_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     item_type = (payload.get("item_type") or "").strip()
     if item_type not in {"ingredient", "semi_finished_product"}:
@@ -576,6 +593,7 @@ def update_semi_finished_product_recipe_line(
     recipe_line_id: int,
     payload: dict,
     db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     parent = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if parent is None:
@@ -632,6 +650,7 @@ def delete_semi_finished_product_recipe_line(
     semi_finished_product_id: int,
     recipe_line_id: int,
     db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     parent = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if parent is None:
@@ -656,7 +675,10 @@ def delete_semi_finished_product_recipe_line(
 
 @router.put("/api/semi-finished-products/{semi_finished_product_id}/recipe-steps", tags=["semi-finished-products"])
 def replace_recipe_steps(
-    semi_finished_product_id: int, payload: dict, db: Session = Depends(get_db)
+    semi_finished_product_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
@@ -714,7 +736,9 @@ def replace_recipe_steps(
 
 @router.put("/api/semi-finished-products/{semi_finished_product_id}/archive", tags=["semi-finished-products"])
 def archive_semi_finished_product(
-    semi_finished_product_id: int, db: Session = Depends(get_db)
+    semi_finished_product_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
 ) -> dict:
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
@@ -728,7 +752,9 @@ def archive_semi_finished_product(
 
 @router.put("/api/semi-finished-products/{semi_finished_product_id}/restore", tags=["semi-finished-products"])
 def restore_semi_finished_product(
-    semi_finished_product_id: int, db: Session = Depends(get_db)
+    semi_finished_product_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
 ) -> dict:
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
@@ -745,7 +771,9 @@ def restore_semi_finished_product(
     tags=["semi-finished-products"],
 )
 def duplicate_semi_finished_product(
-    semi_finished_product_id: int, db: Session = Depends(get_db)
+    semi_finished_product_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
 ) -> dict:
     original = (
         db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
@@ -823,7 +851,9 @@ def duplicate_semi_finished_product(
 
 @router.delete("/api/semi-finished-products/{semi_finished_product_id}", tags=["semi-finished-products"])
 def delete_semi_finished_product(
-    semi_finished_product_id: int, db: Session = Depends(get_db)
+    semi_finished_product_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
 ) -> dict:
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
@@ -852,7 +882,11 @@ def delete_semi_finished_product(
 
 
 @router.get("/api/semi-finished-products/{semi_finished_product_id}", tags=["semi-finished-products"])
-def get_semi_finished_product_detail(semi_finished_product_id: int, db: Session = Depends(get_db)) -> dict:
+def get_semi_finished_product_detail(
+    semi_finished_product_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")

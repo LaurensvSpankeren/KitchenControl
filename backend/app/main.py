@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.api.import_issues import router as import_issues_router
 from app.api.dish_categories import router as dish_categories_router
@@ -13,8 +14,10 @@ from app.api.ingredients import router as ingredients_router
 from app.api.menukaarten import router as menukaarten_router
 from app.api.semi_finished_categories import router as semi_finished_categories_router
 from app.api.semi_finished_products import router as semi_finished_products_router
+from app.api.users import router as users_router
 from app.db.base import Base
-from app.db.session import engine
+from app.db.session import SessionLocal, engine
+from app.services.user_bootstrap import bootstrap_supervisor_if_needed
 
 app = FastAPI(title="KitchenControl API")
 UPLOADS_DIR = Path("uploads")
@@ -35,6 +38,11 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        bootstrap_supervisor_if_needed(db)
+    finally:
+        db.close()
 
 
 @app.get("/")
@@ -43,6 +51,7 @@ def root() -> dict[str, str]:
 
 
 app.include_router(health_router)
+app.include_router(auth_router)
 app.include_router(import_issues_router)
 app.include_router(dish_categories_router)
 app.include_router(dishes_router)
@@ -51,4 +60,5 @@ app.include_router(imports_router)
 app.include_router(menukaarten_router)
 app.include_router(semi_finished_categories_router)
 app.include_router(semi_finished_products_router)
+app.include_router(users_router)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")

@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user, require_supervisor
 from app.db.session import get_db
 from app.models.dish import Dish
 from app.models.ingredient import Ingredient
@@ -342,7 +343,10 @@ def _build_dish_detail(db: Session, item: Dish) -> dict:
 
 
 @router.get("/api/dishes", tags=["dishes"])
-def list_dishes(db: Session = Depends(get_db)) -> list[dict]:
+def list_dishes(
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> list[dict]:
     items = db.query(Dish).filter(Dish.is_archived.is_(False)).order_by(Dish.name.asc()).all()
     return [_serialize_dish(item) for item in items]
 
@@ -354,7 +358,11 @@ def list_archived_dishes(db: Session = Depends(get_db)) -> list[dict]:
 
 
 @router.post("/api/dishes", tags=["dishes"])
-def create_dish(payload: dict, db: Session = Depends(get_db)) -> dict:
+def create_dish(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     item = Dish(name="tmp")
     _apply_dish_payload(item, payload)
 
@@ -365,7 +373,12 @@ def create_dish(payload: dict, db: Session = Depends(get_db)) -> dict:
 
 
 @router.put("/api/dishes/{dish_id}", tags=["dishes"])
-def update_dish(dish_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
+def update_dish(
+    dish_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -381,6 +394,7 @@ def upload_dish_photo(
     dish_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
@@ -397,7 +411,12 @@ def upload_dish_photo(
 
 
 @router.post("/api/dishes/{dish_id}/recipe-lines", tags=["dishes"])
-def add_dish_recipe_line(dish_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
+def add_dish_recipe_line(
+    dish_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     item_type = (payload.get("item_type") or "").strip()
     if item_type not in {"ingredient", "semi_finished_product"}:
         raise HTTPException(
@@ -450,6 +469,7 @@ def update_dish_recipe_line(
     recipe_line_id: int,
     payload: dict,
     db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     parent = db.query(Dish).filter(Dish.id == dish_id).first()
     if parent is None:
@@ -503,6 +523,7 @@ def delete_dish_recipe_line(
     dish_id: int,
     recipe_line_id: int,
     db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     parent = db.query(Dish).filter(Dish.id == dish_id).first()
     if parent is None:
@@ -526,7 +547,12 @@ def delete_dish_recipe_line(
 
 
 @router.put("/api/dishes/{dish_id}/recipe-steps", tags=["dishes"])
-def replace_dish_recipe_steps(dish_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
+def replace_dish_recipe_steps(
+    dish_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -580,7 +606,11 @@ def replace_dish_recipe_steps(dish_id: int, payload: dict, db: Session = Depends
 
 
 @router.put("/api/dishes/{dish_id}/archive", tags=["dishes"])
-def archive_dish(dish_id: int, db: Session = Depends(get_db)) -> dict:
+def archive_dish(
+    dish_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -592,7 +622,11 @@ def archive_dish(dish_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.put("/api/dishes/{dish_id}/restore", tags=["dishes"])
-def restore_dish(dish_id: int, db: Session = Depends(get_db)) -> dict:
+def restore_dish(
+    dish_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -604,7 +638,11 @@ def restore_dish(dish_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/api/dishes/{dish_id}/duplicate", tags=["dishes"])
-def duplicate_dish(dish_id: int, db: Session = Depends(get_db)) -> dict:
+def duplicate_dish(
+    dish_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     original = db.query(Dish).filter(Dish.id == dish_id).first()
     if original is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -666,7 +704,11 @@ def duplicate_dish(dish_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.delete("/api/dishes/{dish_id}", tags=["dishes"])
-def delete_dish(dish_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_dish(
+    dish_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -688,7 +730,11 @@ def delete_dish(dish_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/api/dishes/{dish_id}", tags=["dishes"])
-def get_dish_detail(dish_id: int, db: Session = Depends(get_db)) -> dict:
+def get_dish_detail(
+    dish_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")

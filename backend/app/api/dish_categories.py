@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.api.auth import require_supervisor
 from app.db.session import get_db
 from app.models.dish_category import DishCategory
 from app.models.dish_subcategory import DishSubcategory
@@ -61,6 +62,40 @@ def create_dish_category(payload: dict, db: Session = Depends(get_db)) -> dict:
     return {"id": category.id, "name": category.name}
 
 
+@router.put("/api/dish-categories/{category_id}", tags=["dish-categories"])
+def rename_dish_category(
+    category_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user=Depends(require_supervisor),
+) -> dict:
+    name = _normalize_name(payload.get("name"))
+    if not name:
+        raise HTTPException(status_code=400, detail="Category name is required")
+
+    category = db.query(DishCategory).filter(DishCategory.id == category_id).first()
+    if category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    existing = (
+        db.query(DishCategory)
+        .filter(
+            func.lower(DishCategory.name) == name.lower(),
+            DishCategory.id != category_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        raise HTTPException(status_code=400, detail="Category already exists")
+
+    category.name = name
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+
+    return {"id": category.id, "name": category.name}
+
+
 @router.post("/api/dish-categories/{category_id}/subcategories", tags=["dish-categories"])
 def create_dish_subcategory(
     category_id: int, payload: dict, db: Session = Depends(get_db)
@@ -85,6 +120,45 @@ def create_dish_subcategory(
         raise HTTPException(status_code=400, detail="Subcategory already exists for this category")
 
     subcategory = DishSubcategory(category_id=category_id, name=name)
+    db.add(subcategory)
+    db.commit()
+    db.refresh(subcategory)
+
+    return {
+        "id": subcategory.id,
+        "category_id": subcategory.category_id,
+        "name": subcategory.name,
+    }
+
+
+@router.put("/api/dish-subcategories/{subcategory_id}", tags=["dish-categories"])
+def rename_dish_subcategory(
+    subcategory_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user=Depends(require_supervisor),
+) -> dict:
+    name = _normalize_name(payload.get("name"))
+    if not name:
+        raise HTTPException(status_code=400, detail="Subcategory name is required")
+
+    subcategory = db.query(DishSubcategory).filter(DishSubcategory.id == subcategory_id).first()
+    if subcategory is None:
+        raise HTTPException(status_code=404, detail="Subcategory not found")
+
+    existing = (
+        db.query(DishSubcategory)
+        .filter(
+            DishSubcategory.category_id == subcategory.category_id,
+            func.lower(DishSubcategory.name) == name.lower(),
+            DishSubcategory.id != subcategory_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        raise HTTPException(status_code=400, detail="Subcategory already exists for this category")
+
+    subcategory.name = name
     db.add(subcategory)
     db.commit()
     db.refresh(subcategory)

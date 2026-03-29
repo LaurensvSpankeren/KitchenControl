@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { apiClient } from '../api/client'
+import { getCurrentUserRole } from '../utils/currentUser'
 
 const initialForm = {
   name: '',
@@ -328,6 +329,8 @@ export default function Gerechten() {
   const actionsMenuRef = useRef(null)
   const nameInputRef = useRef(null)
   const isReadOnlyModal = isSelectedArchived
+  const currentUserRole = useMemo(() => getCurrentUserRole(), [])
+  const canManageSupervisorDishActions = currentUserRole === 'Supervisor'
 
   const uiStyles = {
     viewModeSwitch: { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' },
@@ -1181,6 +1184,10 @@ export default function Gerechten() {
     if (!dishId) {
       return
     }
+    if (!canManageSupervisorDishActions) {
+      setErrorMessage('Je hebt geen rechten om dit gerecht te archiveren.')
+      return
+    }
     const confirmed = window.confirm('Weet je zeker dat je dit gerecht wilt archiveren?')
     if (!confirmed) {
       return
@@ -1207,6 +1214,10 @@ export default function Gerechten() {
 
   async function handleRestoreById(dishId) {
     if (!dishId) {
+      return
+    }
+    if (!canManageSupervisorDishActions) {
+      setErrorMessage('Je hebt geen rechten om dit gerecht te herstellen.')
       return
     }
 
@@ -1242,6 +1253,10 @@ export default function Gerechten() {
     if (!dishId) {
       return
     }
+    if (!canManageSupervisorDishActions) {
+      setErrorMessage('Je hebt geen rechten om dit gerecht te verwijderen.')
+      return
+    }
 
     const confirmed = window.confirm('Weet je zeker dat je dit gerecht definitief wilt verwijderen?')
     if (!confirmed) {
@@ -1262,6 +1277,10 @@ export default function Gerechten() {
     if (!selectedDishId || !isSelectedArchived) {
       return
     }
+    if (!canManageSupervisorDishActions) {
+      setErrorMessage('Je hebt geen rechten om dit gerecht te verwijderen.')
+      return
+    }
 
     const confirmed = window.confirm('Weet je zeker dat je dit gerecht definitief wilt verwijderen?')
     if (!confirmed) {
@@ -1279,6 +1298,10 @@ export default function Gerechten() {
   }
 
   async function handleDuplicateDish(item) {
+    if (!canManageSupervisorDishActions) {
+      setErrorMessage('Je hebt geen rechten om dit gerecht te dupliceren.')
+      return
+    }
     try {
       const duplicate = await apiClient.duplicateDish(item.id)
       await loadDishes()
@@ -1615,37 +1638,45 @@ export default function Gerechten() {
                           <div style={uiStyles.rowMenu} onClick={(event) => event.stopPropagation()}>
                             {viewMode === 'active' ? (
                               <>
-                                <button
-                                  type="button"
-                                  style={uiStyles.rowMenuItem}
-                                  onClick={() => handleDuplicateDish(item)}
-                                >
-                                  ⧉ Dupliceren
-                                </button>
-                                <button
-                                  type="button"
-                                  style={uiStyles.rowMenuItem}
-                                  onClick={() => handleArchiveById(item.id)}
-                                >
-                                  <span style={{ color: '#d97706' }}>🗄</span> Archiveren
-                                </button>
+                                {canManageSupervisorDishActions ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      style={uiStyles.rowMenuItem}
+                                      onClick={() => handleDuplicateDish(item)}
+                                    >
+                                      ⧉ Dupliceren
+                                    </button>
+                                    <button
+                                      type="button"
+                                      style={uiStyles.rowMenuItem}
+                                      onClick={() => handleArchiveById(item.id)}
+                                    >
+                                      <span style={{ color: '#d97706' }}>🗄</span> Archiveren
+                                    </button>
+                                  </>
+                                ) : null}
                               </>
                             ) : (
                               <>
-                                <button
-                                  type="button"
-                                  style={uiStyles.rowMenuItem}
-                                  onClick={() => handleRestoreById(item.id)}
-                                >
-                                  ♻️ Herstellen
-                                </button>
-                                <button
-                                  type="button"
-                                  style={uiStyles.rowMenuItem}
-                                  onClick={() => handleDeleteById(item.id)}
-                                >
-                                  🗑 Verwijderen
-                                </button>
+                                {canManageSupervisorDishActions ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      style={uiStyles.rowMenuItem}
+                                      onClick={() => handleRestoreById(item.id)}
+                                    >
+                                      ♻️ Herstellen
+                                    </button>
+                                    <button
+                                      type="button"
+                                      style={uiStyles.rowMenuItem}
+                                      onClick={() => handleDeleteById(item.id)}
+                                    >
+                                      🗑 Verwijderen
+                                    </button>
+                                  </>
+                                ) : null}
                               </>
                             )}
                           </div>
@@ -2234,7 +2265,7 @@ export default function Gerechten() {
                 ) : null}
                 {!isSelectedArchived ? (
                   <>
-                    {selectedDishId ? (
+                    {selectedDishId && canManageSupervisorDishActions ? (
                       <button type="button" className="table-action-btn" onClick={handleArchiveDish}>
                         Archiveren
                       </button>
@@ -2245,12 +2276,16 @@ export default function Gerechten() {
                   </>
                 ) : (
                   <>
-                    <button type="button" className="primary-btn" onClick={handleRestoreDish}>
-                      Herstellen
-                    </button>
-                    <button type="button" className="table-action-btn" onClick={handleDeleteDish}>
-                      Verwijderen
-                    </button>
+                    {canManageSupervisorDishActions ? (
+                      <>
+                        <button type="button" className="primary-btn" onClick={handleRestoreDish}>
+                          Herstellen
+                        </button>
+                        <button type="button" className="table-action-btn" onClick={handleDeleteDish}>
+                          Verwijderen
+                        </button>
+                      </>
+                    ) : null}
                   </>
                 )}
                 <button type="button" className="secondary-btn" onClick={closeModal}>

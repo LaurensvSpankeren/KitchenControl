@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { apiClient } from '../api/client'
+import { getCurrentUserRole } from '../utils/currentUser'
 
 const initialForm = {
   photo_url: '',
@@ -371,6 +372,8 @@ export default function Halffabricaten() {
   const actionsMenuRef = useRef(null)
   const nameInputRef = useRef(null)
   const isReadOnlyModal = isSelectedArchived
+  const currentUserRole = useMemo(() => getCurrentUserRole(), [])
+  const canManageSupervisorProductActions = currentUserRole === 'Supervisor'
   const uiStyles = {
     viewModeSwitch: { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' },
     photoPreviewWrap: { marginTop: '0.5rem' },
@@ -742,6 +745,10 @@ export default function Halffabricaten() {
     if (!selectedProductId) {
       return
     }
+    if (!canManageSupervisorProductActions) {
+      setErrorMessage('Je hebt geen rechten om dit halffabricaat te herstellen.')
+      return
+    }
 
     try {
       await apiClient.restoreSemiFinishedProduct(selectedProductId)
@@ -759,6 +766,10 @@ export default function Halffabricaten() {
     if (!productId) {
       return
     }
+    if (!canManageSupervisorProductActions) {
+      setErrorMessage('Je hebt geen rechten om dit halffabricaat te herstellen.')
+      return
+    }
 
     try {
       await apiClient.restoreSemiFinishedProduct(productId)
@@ -773,6 +784,10 @@ export default function Halffabricaten() {
 
   async function handleDeleteProduct() {
     if (!selectedProductId || !isSelectedArchived) {
+      return
+    }
+    if (!canManageSupervisorProductActions) {
+      setErrorMessage('Je hebt geen rechten om dit halffabricaat te verwijderen.')
       return
     }
 
@@ -795,6 +810,10 @@ export default function Halffabricaten() {
     if (!productId) {
       return
     }
+    if (!canManageSupervisorProductActions) {
+      setErrorMessage('Je hebt geen rechten om dit halffabricaat te verwijderen.')
+      return
+    }
 
     const confirmed = window.confirm('Weet je zeker dat je dit halffabricaat definitief wilt verwijderen?')
     if (!confirmed) {
@@ -813,6 +832,10 @@ export default function Halffabricaten() {
 
   async function handleArchiveById(productId, options = {}) {
     if (!productId) {
+      return
+    }
+    if (!canManageSupervisorProductActions) {
+      setErrorMessage('Je hebt geen rechten om dit halffabricaat te archiveren.')
       return
     }
     const confirmed = window.confirm('Weet je zeker dat je dit halffabricaat wilt archiveren?')
@@ -836,6 +859,10 @@ export default function Halffabricaten() {
   }
 
   async function handleDuplicateProduct(item) {
+    if (!canManageSupervisorProductActions) {
+      setErrorMessage('Je hebt geen rechten om dit halffabricaat te dupliceren.')
+      return
+    }
     try {
       const duplicate = await apiClient.duplicateSemiFinishedProduct(item.id)
       await loadProducts()
@@ -1616,13 +1643,15 @@ export default function Halffabricaten() {
                           <div style={uiStyles.rowMenu} onClick={(event) => event.stopPropagation()}>
                             {viewMode === 'active' ? (
                               <>
-                                <button
-                                  type="button"
-                                  style={uiStyles.rowMenuItem}
-                                  onClick={() => handleDuplicateProduct(item)}
-                                >
-                                  ⧉ Dupliceren
-                                </button>
+                                {canManageSupervisorProductActions ? (
+                                  <button
+                                    type="button"
+                                    style={uiStyles.rowMenuItem}
+                                    onClick={() => handleDuplicateProduct(item)}
+                                  >
+                                    ⧉ Dupliceren
+                                  </button>
+                                ) : null}
                                 <button
                                   type="button"
                                   style={uiStyles.rowMenuItem}
@@ -1630,30 +1659,36 @@ export default function Halffabricaten() {
                                 >
                                   🏷 Dagetiket
                                 </button>
-                                <button
-                                  type="button"
-                                  style={uiStyles.rowMenuItem}
-                                  onClick={() => handleArchiveById(item.id)}
-                                >
-                                  <span style={{ color: '#d97706' }}>🗄</span> Archiveren
-                                </button>
+                                {canManageSupervisorProductActions ? (
+                                  <button
+                                    type="button"
+                                    style={uiStyles.rowMenuItem}
+                                    onClick={() => handleArchiveById(item.id)}
+                                  >
+                                    <span style={{ color: '#d97706' }}>🗄</span> Archiveren
+                                  </button>
+                                ) : null}
                               </>
                             ) : (
                               <>
-                                <button
-                                  type="button"
-                                  style={uiStyles.rowMenuItem}
-                                  onClick={() => handleRestoreById(item.id)}
-                                >
-                                  ♻️ Herstellen
-                                </button>
-                                <button
-                                  type="button"
-                                  style={uiStyles.rowMenuItem}
-                                  onClick={() => handleDeleteById(item.id)}
-                                >
-                                  🗑 Verwijderen
-                                </button>
+                                {canManageSupervisorProductActions ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      style={uiStyles.rowMenuItem}
+                                      onClick={() => handleRestoreById(item.id)}
+                                    >
+                                      ♻️ Herstellen
+                                    </button>
+                                    <button
+                                      type="button"
+                                      style={uiStyles.rowMenuItem}
+                                      onClick={() => handleDeleteById(item.id)}
+                                    >
+                                      🗑 Verwijderen
+                                    </button>
+                                  </>
+                                ) : null}
                               </>
                             )}
                           </div>
@@ -2185,7 +2220,9 @@ export default function Halffabricaten() {
                 <button type="button" className="table-action-btn" onClick={openLabelModal}>Print dagetiket</button>
               </div>
               <div style={uiStyles.modalActionsRight}>
-                {selectedProductId && !isSelectedArchived ? (
+                {selectedProductId &&
+                !isSelectedArchived &&
+                canManageSupervisorProductActions ? (
                   <button type="button" className="table-action-btn" onClick={handleArchiveProduct}>
                     Archiveren
                   </button>
@@ -2196,12 +2233,16 @@ export default function Halffabricaten() {
                   </button>
                 ) : (
                   <>
-                    <button type="button" className="primary-btn" onClick={handleRestoreProduct}>
-                      Herstellen
-                    </button>
-                    <button type="button" className="table-action-btn" onClick={handleDeleteProduct}>
-                      Verwijderen
-                    </button>
+                    {canManageSupervisorProductActions ? (
+                      <>
+                        <button type="button" className="primary-btn" onClick={handleRestoreProduct}>
+                          Herstellen
+                        </button>
+                        <button type="button" className="table-action-btn" onClick={handleDeleteProduct}>
+                          Verwijderen
+                        </button>
+                      </>
+                    ) : null}
                   </>
                 )}
                 <button type="button" className="secondary-btn" onClick={closeModal}>Sluiten</button>

@@ -19,4 +19,6 @@ from app.models import (  # noqa: E402,F401
     SemiFinishedCategory,
     SemiFinishedProduct,
     SemiFinishedSubcategory,
+    User,
+    UserSession,
 )
