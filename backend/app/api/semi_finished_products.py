@@ -464,14 +464,7 @@ def list_semi_finished_products(
         .all()
     )
 
-    result = []
-    for item in items:
-        serialized = _serialize_semi_finished_product(item)
-        lines_data = _build_recipe_lines_detail(db, item.id)
-        serialized["estimated_cost_total"] = lines_data["estimated_cost_total"]
-        serialized["allergens_total"] = lines_data["allergens_total"]
-        result.append(serialized)
-    return result
+    return [_serialize_semi_finished_product(item) for item in items]
 
 
 @router.get("/api/semi-finished-products/archived", tags=["semi-finished-products"])
@@ -486,14 +479,7 @@ def list_archived_semi_finished_products(
         .all()
     )
 
-    result = []
-    for item in items:
-        serialized = _serialize_semi_finished_product(item)
-        lines_data = _build_recipe_lines_detail(db, item.id)
-        serialized["estimated_cost_total"] = lines_data["estimated_cost_total"]
-        serialized["allergens_total"] = lines_data["allergens_total"]
-        result.append(serialized)
-    return result
+    return [_serialize_semi_finished_product(item) for item in items]
 
 
 @router.post("/api/semi-finished-products", tags=["semi-finished-products"])
