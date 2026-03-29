@@ -430,25 +430,10 @@ export default function Gerechten() {
     modalActionsRight: { display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }
   }
 
-  async function enrichDishesWithDetail(items) {
-    const source = Array.isArray(items) ? items : []
-    const detailedItems = await Promise.all(
-      source.map(async (item) => {
-        try {
-          const loadedDetail = await apiClient.getDishDetail(item.id)
-          return { ...item, ...loadedDetail }
-        } catch {
-          return item
-        }
-      })
-    )
-    return detailedItems
-  }
-
   async function loadDishes() {
     try {
       const data = await apiClient.getDishes()
-      setDishes(await enrichDishesWithDetail(data))
+      setDishes(Array.isArray(data) ? data : [])
     } catch {
       setDishes([])
     }
@@ -457,7 +442,7 @@ export default function Gerechten() {
   async function loadArchivedDishes() {
     try {
       const data = await apiClient.getArchivedDishes()
-      setArchivedDishes(await enrichDishesWithDetail(data))
+      setArchivedDishes(Array.isArray(data) ? data : [])
     } catch {
       setArchivedDishes([])
     }
