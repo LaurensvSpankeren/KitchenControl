@@ -77,6 +77,37 @@ const INITIAL_PERMISSIONS = {
   }
 }
 
+function flattenPermissions(nested) {
+  const flat = {}
+
+  Object.entries(nested || {}).forEach(([domain, actions]) => {
+    Object.entries(actions || {}).forEach(([action, roles]) => {
+      flat[`${domain}.${action}`] = roles
+    })
+  })
+
+  return flat
+}
+
+function unflattenPermissions(flat) {
+  const nested = {}
+
+  Object.entries(flat || {}).forEach(([key, roles]) => {
+    const [domain, action] = String(key).split('.')
+    if (!domain || !action) {
+      return
+    }
+
+    if (!nested[domain]) {
+      nested[domain] = {}
+    }
+
+    nested[domain][action] = roles
+  })
+
+  return nested
+}
+
 export default function Instellingen() {
   const [activeTab, setActiveTab] = useState(TABS[0].id)
   const [users, setUsers] = useState([])
@@ -327,9 +358,13 @@ export default function Instellingen() {
         throw new Error(errorData?.detail || `Failed to fetch permissions: ${response.status}`)
       }
       const data = await response.json()
-      const nextPermissions =
+      const nestedPermissions =
         data?.permissions && typeof data.permissions === 'object'
-          ? data.permissions
+          ? unflattenPermissions(data.permissions)
+          : INITIAL_PERMISSIONS
+      const nextPermissions =
+        nestedPermissions && Object.keys(nestedPermissions).length > 0
+          ? nestedPermissions
           : INITIAL_PERMISSIONS
       setPermissions(nextPermissions)
       storePermissionsLocally(nextPermissions)
@@ -518,7 +553,7 @@ export default function Instellingen() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ permissions })
+        body: JSON.stringify({ permissions: flattenPermissions(permissions) })
       })
       if (!response.ok) {
         const errorData = await response.json().catch(() => null)
