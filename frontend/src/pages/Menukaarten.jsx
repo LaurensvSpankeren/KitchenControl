@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
-import { apiClient } from '../api/client'
+import { apiClient, API_BASE_URL } from '../api/client'
 import { getCurrentUser } from '../utils/currentUser'
 
 const defaultPermissions = {
@@ -33,7 +33,26 @@ const defaultPermissions = {
   }
 }
 
-const storedPermissions = (() => {
+function unflattenPermissions(flat) {
+  const nested = {}
+
+  Object.entries(flat || {}).forEach(([key, roles]) => {
+    const [domain, action] = String(key).split('.')
+    if (!domain || !action) {
+      return
+    }
+
+    if (!nested[domain]) {
+      nested[domain] = {}
+    }
+
+    nested[domain][action] = roles
+  })
+
+  return nested
+}
+
+function readStoredPermissions() {
   if (typeof window === 'undefined') {
     return null
   }
@@ -43,11 +62,20 @@ const storedPermissions = (() => {
   } catch {
     return null
   }
-})()
+}
 
-const permissions = storedPermissions || defaultPermissions
+function storePermissionsLocally(nextPermissions) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    localStorage.setItem('permissions', JSON.stringify(nextPermissions))
+  } catch {
+    // Ignore storage errors and keep defaults as fallback.
+  }
+}
 
-function hasPermission(domain, action, role) {
+function hasPermission(permissions, domain, action, role) {
   return permissions?.[domain]?.[action]?.includes(role)
 }
 
@@ -322,6 +350,8 @@ function splitSectionsSummary(value) {
 }
 
 export default function Menukaarten() {
+  const [permissions, setPermissions] = useState(defaultPermissions)
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false)
   const currentUser = getCurrentUser()
   const role = currentUser?.role
   const [activeTab, setActiveTab] = useState('active')
@@ -434,6 +464,55 @@ export default function Menukaarten() {
     () => editableSecties.find((sectie) => String(sectie.id) === String(selectedSectieId)) || null,
     [editableSecties, selectedSectieId]
   )
+
+  useEffect(() => {
+    let isCancelled = false
+
+    async function loadPermissions() {
+      setIsLoadingPermissions(true)
+      try {
+        const token = apiClient.getAuthToken()
+        const response = await fetch(`${API_BASE_URL}/api/permissions`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        })
+        if (!response.ok) {
+          throw new Error(`Failed to fetch permissions: ${response.status}`)
+        }
+
+        const data = await response.json()
+        const nextPermissions =
+          data?.permissions && typeof data.permissions === 'object'
+            ? unflattenPermissions(data.permissions)
+            : defaultPermissions
+        const resolvedPermissions =
+          nextPermissions && Object.keys(nextPermissions).length > 0 ? nextPermissions : defaultPermissions
+
+        if (!isCancelled) {
+          setPermissions(resolvedPermissions)
+          storePermissionsLocally(resolvedPermissions)
+        }
+      } catch {
+        const fallbackPermissions = readStoredPermissions()
+        if (!isCancelled) {
+          setPermissions(
+            fallbackPermissions && typeof fallbackPermissions === 'object'
+              ? fallbackPermissions
+              : defaultPermissions
+          )
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingPermissions(false)
+        }
+      }
+    }
+
+    loadPermissions()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
   const availableDishOptions = useMemo(
     () => availableDishes.filter((dish) => !dish?.is_archived),
     [availableDishes]
@@ -1958,14 +2037,16 @@ export default function Menukaarten() {
                               style={archivedActionUiStyles.rowMenu}
                               onClick={(event) => event.stopPropagation()}
                             >
-                              <button
-                                type="button"
-                                style={archivedActionUiStyles.rowMenuItem}
-                                onClick={() => handleRestore(item)}
-                              >
-                                ♻️ Herstellen
-                              </button>
-                              {hasPermission('menukaarten', 'verwijderen', role) ? (
+                              {!isLoadingPermissions && hasPermission(permissions, 'menukaarten', 'herstellen', role) ? (
+                                <button
+                                  type="button"
+                                  style={archivedActionUiStyles.rowMenuItem}
+                                  onClick={() => handleRestore(item)}
+                                >
+                                  ♻️ Herstellen
+                                </button>
+                              ) : null}
+                              {hasPermission(permissions, 'menukaarten', 'verwijderen', role) ? (
                                 <button
                                   type="button"
                                   style={archivedActionUiStyles.rowMenuItem}
@@ -2007,13 +2088,15 @@ export default function Menukaarten() {
                               style={archivedActionUiStyles.rowMenu}
                               onClick={(event) => event.stopPropagation()}
                             >
-                              <button
-                                type="button"
-                                style={archivedActionUiStyles.rowMenuItem}
-                                onClick={() => handleDuplicate(item)}
-                              >
-                                ⧉ Dupliceren
-                              </button>
+                              {hasPermission(permissions, 'menukaarten', 'dupliceren', role) ? (
+                                <button
+                                  type="button"
+                                  style={archivedActionUiStyles.rowMenuItem}
+                                  onClick={() => handleDuplicate(item)}
+                                >
+                                  ⧉ Dupliceren
+                                </button>
+                              ) : null}
                               {item.status === 'active' ? (
                                 <button
                                   type="button"
@@ -2031,7 +2114,7 @@ export default function Menukaarten() {
                                   ✅ Actief maken
                                 </button>
                               )}
-                              {hasPermission('menukaarten', 'archiveren', role) ? (
+                              {hasPermission(permissions, 'menukaarten', 'archiveren', role) ? (
                                 <button
                                   type="button"
                                   style={archivedActionUiStyles.rowMenuItem}
@@ -2231,13 +2314,15 @@ export default function Menukaarten() {
                           ) : null}
                           {isSelectedArchived ? (
                             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                              <button
-                                type="button"
-                                onClick={() => handleRestore(selectedMenukaart)}
-                                style={{ maxWidth: '180px' }}
-                              >
-                                Herstellen
-                              </button>
+                              {!isLoadingPermissions && hasPermission(permissions, 'menukaarten', 'herstellen', role) ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRestore(selectedMenukaart)}
+                                  style={{ maxWidth: '180px' }}
+                                >
+                                  Herstellen
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 className="secondary-btn"
@@ -2386,7 +2471,7 @@ export default function Menukaarten() {
                                     >
                                       ✎
                                     </button>
-                                    {hasPermission('menukaarten', 'verwijderen', role) ? (
+                                    {hasPermission(permissions, 'menukaarten', 'verwijderen', role) ? (
                                       <button
                                         type="button"
                                         aria-label="Sectie verwijderen"
@@ -2660,7 +2745,7 @@ export default function Menukaarten() {
                                           >
                                             ↓
                                           </button>
-                                          {hasPermission('menukaarten', 'verwijderen', role) ? (
+                                          {hasPermission(permissions, 'menukaarten', 'verwijderen', role) ? (
                                             <button
                                               type="button"
                                               aria-label="Gerecht verwijderen"

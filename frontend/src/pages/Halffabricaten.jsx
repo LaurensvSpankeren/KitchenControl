@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
-import { apiClient } from '../api/client'
+import { apiClient, API_BASE_URL } from '../api/client'
 import { getCurrentUser, getCurrentUserRole } from '../utils/currentUser'
 
 const defaultPermissions = {
@@ -33,7 +33,26 @@ const defaultPermissions = {
   }
 }
 
-const storedPermissions = (() => {
+function unflattenPermissions(flat) {
+  const nested = {}
+
+  Object.entries(flat || {}).forEach(([key, roles]) => {
+    const [domain, action] = String(key).split('.')
+    if (!domain || !action) {
+      return
+    }
+
+    if (!nested[domain]) {
+      nested[domain] = {}
+    }
+
+    nested[domain][action] = roles
+  })
+
+  return nested
+}
+
+function readStoredPermissions() {
   if (typeof window === 'undefined') {
     return null
   }
@@ -43,9 +62,18 @@ const storedPermissions = (() => {
   } catch {
     return null
   }
-})()
+}
 
-const permissions = storedPermissions || defaultPermissions
+function storePermissionsLocally(nextPermissions) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    localStorage.setItem('permissions', JSON.stringify(nextPermissions))
+  } catch {
+    // Ignore storage errors and keep defaults as fallback.
+  }
+}
 
 const initialForm = {
   photo_url: '',
@@ -142,7 +170,7 @@ function getIngredientUnitOptions(ingredient) {
   return options
 }
 
-function hasPermission(domain, action, role) {
+function hasPermission(permissions, domain, action, role) {
   return permissions?.[domain]?.[action]?.includes(role)
 }
 
@@ -372,6 +400,8 @@ function mapFormToPayload(form) {
 }
 
 export default function Halffabricaten() {
+  const [permissions, setPermissions] = useState(defaultPermissions)
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false)
   const [products, setProducts] = useState([])
   const [archivedProducts, setArchivedProducts] = useState([])
   const [ingredients, setIngredients] = useState([])
@@ -582,6 +612,55 @@ export default function Halffabricaten() {
       setDetail(null)
     }
   }
+
+  useEffect(() => {
+    let isCancelled = false
+
+    async function loadPermissions() {
+      setIsLoadingPermissions(true)
+      try {
+        const token = apiClient.getAuthToken()
+        const response = await fetch(`${API_BASE_URL}/api/permissions`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        })
+        if (!response.ok) {
+          throw new Error(`Failed to fetch permissions: ${response.status}`)
+        }
+
+        const data = await response.json()
+        const nextPermissions =
+          data?.permissions && typeof data.permissions === 'object'
+            ? unflattenPermissions(data.permissions)
+            : defaultPermissions
+        const resolvedPermissions =
+          nextPermissions && Object.keys(nextPermissions).length > 0 ? nextPermissions : defaultPermissions
+
+        if (!isCancelled) {
+          setPermissions(resolvedPermissions)
+          storePermissionsLocally(resolvedPermissions)
+        }
+      } catch {
+        const fallbackPermissions = readStoredPermissions()
+        if (!isCancelled) {
+          setPermissions(
+            fallbackPermissions && typeof fallbackPermissions === 'object'
+              ? fallbackPermissions
+              : defaultPermissions
+          )
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingPermissions(false)
+        }
+      }
+    }
+
+    loadPermissions()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     loadProducts()
@@ -1694,7 +1773,7 @@ export default function Halffabricaten() {
                           <div style={uiStyles.rowMenu} onClick={(event) => event.stopPropagation()}>
                             {viewMode === 'active' ? (
                               <>
-                                {canManageSupervisorProductActions && hasPermission('halffabricaten', 'dupliceren', role) ? (
+                                {hasPermission(permissions, 'halffabricaten', 'dupliceren', role) ? (
                                   <button
                                     type="button"
                                     style={uiStyles.rowMenuItem}
@@ -1710,7 +1789,7 @@ export default function Halffabricaten() {
                                 >
                                   🏷 Dagetiket
                                 </button>
-                                {canManageSupervisorProductActions && hasPermission('halffabricaten', 'archiveren', role) ? (
+                                {hasPermission(permissions, 'halffabricaten', 'archiveren', role) ? (
                                   <button
                                     type="button"
                                     style={uiStyles.rowMenuItem}
@@ -1722,8 +1801,8 @@ export default function Halffabricaten() {
                               </>
                             ) : (
                               <>
-                                {canManageSupervisorProductActions ? (
                                   <>
+                                    {!isLoadingPermissions && hasPermission(permissions, 'halffabricaten', 'herstellen', role) ? (
                                     <button
                                       type="button"
                                       style={uiStyles.rowMenuItem}
@@ -1731,7 +1810,8 @@ export default function Halffabricaten() {
                                     >
                                       ♻️ Herstellen
                                     </button>
-                                    {hasPermission('halffabricaten', 'verwijderen', role) ? (
+                                    ) : null}
+                                    {hasPermission(permissions, 'halffabricaten', 'verwijderen', role) ? (
                                       <button
                                         type="button"
                                         style={uiStyles.rowMenuItem}
@@ -1741,7 +1821,6 @@ export default function Halffabricaten() {
                                       </button>
                                     ) : null}
                                   </>
-                                ) : null}
                               </>
                             )}
                           </div>
@@ -2275,7 +2354,7 @@ export default function Halffabricaten() {
               <div style={uiStyles.modalActionsRight}>
                 {selectedProductId &&
                 !isSelectedArchived &&
-                hasPermission('halffabricaten', 'archiveren', role) ? (
+                hasPermission(permissions, 'halffabricaten', 'archiveren', role) ? (
                   <button type="button" className="table-action-btn" onClick={handleArchiveProduct}>
                     Archiveren
                   </button>
@@ -2286,12 +2365,12 @@ export default function Halffabricaten() {
                   </button>
                 ) : (
                   <>
-                    {canManageSupervisorProductActions ? (
+                    {!isLoadingPermissions && hasPermission(permissions, 'halffabricaten', 'herstellen', role) ? (
                       <>
                         <button type="button" className="primary-btn" onClick={handleRestoreProduct}>
                           Herstellen
                         </button>
-                        {hasPermission('halffabricaten', 'verwijderen', role) ? (
+                        {hasPermission(permissions, 'halffabricaten', 'verwijderen', role) ? (
                           <button type="button" className="table-action-btn" onClick={handleDeleteProduct}>
                             Verwijderen
                           </button>
