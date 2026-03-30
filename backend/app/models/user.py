@@ -12,7 +12,7 @@ USER_ROLES = (
     "Keukenhulp",
     "Bediening",
 )
-PERMISSIONS = {
+DEFAULT_PERMISSIONS = {
     "gerechten.verwijderen": ["Supervisor"],
     "gerechten.archiveren": ["Supervisor"],
     "gerechten.dupliceren": ["Supervisor", "Chef", "Kok"],
@@ -26,6 +26,7 @@ PERMISSIONS = {
     "menukaarten.dupliceren": ["Supervisor", "Chef", "Kok"],
     "menukaarten.herstellen": ["Supervisor"],
 }
+PERMISSIONS = DEFAULT_PERMISSIONS
 SUPERVISOR_ROLE = "Supervisor"
 
 

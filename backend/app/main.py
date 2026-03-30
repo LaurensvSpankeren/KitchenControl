@@ -14,6 +14,7 @@ from app.api.dishes import router as dishes_router
 from app.api.imports import router as imports_router
 from app.api.ingredients import router as ingredients_router
 from app.api.menukaarten import router as menukaarten_router
+from app.api.permissions import router as permissions_router
 from app.api.semi_finished_categories import router as semi_finished_categories_router
 from app.api.semi_finished_products import router as semi_finished_products_router
 from app.api.users import router as users_router
@@ -61,6 +62,7 @@ app.include_router(dishes_router)
 app.include_router(ingredients_router)
 app.include_router(imports_router)
 app.include_router(menukaarten_router)
+app.include_router(permissions_router)
 app.include_router(semi_finished_categories_router)
 app.include_router(semi_finished_products_router)
 app.include_router(users_router)
