@@ -1,3 +1,4 @@
+from app.models.activation_code import ActivationCode
 from app.models.dish import Dish
 from app.models.dish_category import DishCategory
 from app.models.dish_subcategory import DishSubcategory
@@ -18,6 +19,7 @@ from app.models.user import User
 from app.models.user_session import UserSession
 
 __all__ = [
+    "ActivationCode",
     "Ingredient",
     "IngredientImportBatch",
     "IngredientImportIssue",

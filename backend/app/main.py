@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.activation_codes import auth_router as activation_codes_auth_router
+from app.api.activation_codes import router as activation_codes_router
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.api.import_issues import router as import_issues_router
@@ -52,6 +54,7 @@ def root() -> dict[str, str]:
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(activation_codes_auth_router)
 app.include_router(import_issues_router)
 app.include_router(dish_categories_router)
 app.include_router(dishes_router)
@@ -61,4 +64,5 @@ app.include_router(menukaarten_router)
 app.include_router(semi_finished_categories_router)
 app.include_router(semi_finished_products_router)
 app.include_router(users_router)
+app.include_router(activation_codes_router)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
