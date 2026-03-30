@@ -11,6 +11,8 @@ from app.api.auth import get_current_user, require_supervisor
 from app.db.session import get_db
 from app.models.dish import Dish
 from app.models.ingredient import Ingredient
+from app.models.menukaart import Menukaart
+from app.models.menukaart_gerecht import MenukaartGerecht
 from app.models.recipe_line import RecipeLine
 from app.models.recipe_step import RecipeStep
 from app.models.semi_finished_product import SemiFinishedProduct
@@ -24,6 +26,7 @@ from app.api.semi_finished_products import (
 router = APIRouter()
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DISHES_DIR = UPLOADS_DIR / "dishes"
+ACTIVE_MENU_STATUSES = {"active", "concept"}
 
 
 def _parse_optional_float(payload: dict, field_name: str) -> float | None:
@@ -136,6 +139,16 @@ def _build_duplicate_name(db: Session, original_name: str) -> str:
         if exists is None:
             return candidate
         index += 1
+
+
+def _format_blocking_names(names: list[str], max_items: int = 3) -> str:
+    unique_names = [name for name in dict.fromkeys([str(name or "").strip() for name in names]) if name]
+    if not unique_names:
+        return ""
+    visible = unique_names[:max_items]
+    if len(unique_names) > max_items:
+        return f"{', '.join(visible)} en meer"
+    return ", ".join(visible)
 
 
 def _save_dish_photo(dish_id: int, uploaded_file: UploadFile) -> str:
@@ -614,6 +627,29 @@ def archive_dish(
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
+
+    blocking_menu_names = [
+        row.name
+        for row in (
+            db.query(Menukaart.name)
+            .join(MenukaartGerecht, MenukaartGerecht.menukaart_id == Menukaart.id)
+            .filter(
+                MenukaartGerecht.gerecht_id == dish_id,
+                Menukaart.is_archived.is_(False),
+                Menukaart.status.in_(ACTIVE_MENU_STATUSES),
+            )
+            .order_by(Menukaart.name.asc())
+            .all()
+        )
+    ]
+    if blocking_menu_names:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Kan gerecht niet archiveren, wordt gebruikt in: "
+                f"{_format_blocking_names(blocking_menu_names)}"
+            ),
+        )
 
     item.is_archived = True
     db.commit()

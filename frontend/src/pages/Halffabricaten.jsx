@@ -477,7 +477,7 @@ export default function Halffabricaten() {
   async function loadProducts() {
     try {
       const data = await apiClient.getSemiFinishedProducts()
-      setProducts(Array.isArray(data) ? data : [])
+      setProducts(Array.isArray(data) ? data.filter((item) => !item?.is_archived) : [])
     } catch {
       setProducts([])
     }
@@ -652,6 +652,7 @@ export default function Halffabricaten() {
       return []
     }
     return products
+      .filter((item) => !item?.is_archived)
       .filter((item) => item.id !== selectedProductId)
       .filter((item) => String(item.name || '').toLowerCase().includes(term))
       .slice(0, 25)

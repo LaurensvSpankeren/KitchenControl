@@ -383,7 +383,10 @@ export default function Menukaarten() {
     () => editableSecties.find((sectie) => String(sectie.id) === String(selectedSectieId)) || null,
     [editableSecties, selectedSectieId]
   )
-  const availableDishOptions = useMemo(() => availableDishes, [availableDishes])
+  const availableDishOptions = useMemo(
+    () => availableDishes.filter((dish) => !dish?.is_archived),
+    [availableDishes]
+  )
   const availableDishById = useMemo(() => {
     const next = new Map()
     availableDishes.forEach((dish) => {
@@ -778,7 +781,7 @@ export default function Menukaarten() {
   async function loadAvailableDishes() {
     try {
       const data = await apiClient.getDishes()
-      setAvailableDishes(Array.isArray(data) ? data : [])
+      setAvailableDishes(Array.isArray(data) ? data.filter((item) => !item?.is_archived) : [])
     } catch {
       setAvailableDishes([])
     }

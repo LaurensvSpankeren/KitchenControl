@@ -475,7 +475,9 @@ export default function Gerechten() {
   async function loadSemiFinishedProducts() {
     try {
       const data = await apiClient.getSemiFinishedProducts()
-      setSemiFinishedProducts(Array.isArray(data) ? data : [])
+      setSemiFinishedProducts(
+        Array.isArray(data) ? data.filter((item) => !item?.is_archived) : []
+      )
     } catch {
       setSemiFinishedProducts([])
     }
@@ -734,6 +736,7 @@ export default function Gerechten() {
       return []
     }
     return semiFinishedProducts
+      .filter((item) => !item?.is_archived)
       .filter((item) => String(item.name || '').toLowerCase().includes(term))
       .slice(0, 25)
   }, [semiFinishedSearch, semiFinishedProducts])

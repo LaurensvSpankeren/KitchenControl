@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user, require_supervisor
 from app.db.session import get_db
+from app.models.dish import Dish
 from app.models.ingredient import Ingredient
 from app.models.recipe_line import RecipeLine
 from app.models.recipe_step import RecipeStep
@@ -45,6 +46,16 @@ KNOWN_ALLERGENS = {
     "lactose",
     "boomnoten",
 }
+
+
+def _format_blocking_names(names: list[str], max_items: int = 3) -> str:
+    unique_names = [name for name in dict.fromkeys([str(name or "").strip() for name in names]) if name]
+    if not unique_names:
+        return ""
+    visible = unique_names[:max_items]
+    if len(unique_names) > max_items:
+        return f"{', '.join(visible)} en meer"
+    return ", ".join(visible)
 
 
 def _normalize_unit(value: str | None) -> str | None:
@@ -729,6 +740,55 @@ def archive_semi_finished_product(
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
+
+    blocking_dish_names = [
+        row.name
+        for row in (
+            db.query(Dish.name)
+            .join(RecipeLine, RecipeLine.parent_id == Dish.id)
+            .filter(
+                RecipeLine.parent_type == "dish",
+                RecipeLine.item_type == "semi_finished_product",
+                RecipeLine.item_id == semi_finished_product_id,
+                Dish.is_archived.is_(False),
+            )
+            .order_by(Dish.name.asc())
+            .all()
+        )
+    ]
+    if blocking_dish_names:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Kan halffabricaat niet archiveren, wordt gebruikt in: "
+                f"{_format_blocking_names(blocking_dish_names)}"
+            ),
+        )
+
+    blocking_product_names = [
+        row.name
+        for row in (
+            db.query(SemiFinishedProduct.name)
+            .join(RecipeLine, RecipeLine.parent_id == SemiFinishedProduct.id)
+            .filter(
+                RecipeLine.parent_type == "semi_finished_product",
+                RecipeLine.item_type == "semi_finished_product",
+                RecipeLine.item_id == semi_finished_product_id,
+                RecipeLine.parent_id != semi_finished_product_id,
+                SemiFinishedProduct.is_archived.is_(False),
+            )
+            .order_by(SemiFinishedProduct.name.asc())
+            .all()
+        )
+    ]
+    if blocking_product_names:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Kan halffabricaat niet archiveren, wordt gebruikt in: "
+                f"{_format_blocking_names(blocking_product_names)}"
+            ),
+        )
 
     item.is_archived = True
     db.commit()
