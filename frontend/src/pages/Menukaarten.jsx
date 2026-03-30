@@ -1,6 +1,55 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { apiClient } from '../api/client'
+import { getCurrentUser } from '../utils/currentUser'
+
+const defaultPermissions = {
+  gerechten: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor'],
+    herstellen: ['Supervisor'],
+    dupliceren: ['Supervisor', 'Chef', 'Kok']
+  },
+  halffabricaten: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor'],
+    herstellen: ['Supervisor'],
+    dupliceren: ['Supervisor', 'Chef', 'Kok']
+  },
+  menukaarten: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor'],
+    herstellen: ['Supervisor'],
+    dupliceren: ['Supervisor', 'Chef', 'Kok']
+  }
+}
+
+const storedPermissions = (() => {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    const raw = localStorage.getItem('permissions')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+})()
+
+const permissions = storedPermissions || defaultPermissions
+
+function hasPermission(domain, action, role) {
+  return permissions?.[domain]?.[action]?.includes(role)
+}
 
 function formatDate(value) {
   if (!value) {
@@ -273,6 +322,8 @@ function splitSectionsSummary(value) {
 }
 
 export default function Menukaarten() {
+  const currentUser = getCurrentUser()
+  const role = currentUser?.role
   const [activeTab, setActiveTab] = useState('active')
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -1914,13 +1965,15 @@ export default function Menukaarten() {
                               >
                                 ♻️ Herstellen
                               </button>
-                              <button
-                                type="button"
-                                style={archivedActionUiStyles.rowMenuItem}
-                                onClick={() => handleDeleteArchived(item)}
-                              >
-                                🗑 Verwijderen
-                              </button>
+                              {hasPermission('menukaarten', 'verwijderen', role) ? (
+                                <button
+                                  type="button"
+                                  style={archivedActionUiStyles.rowMenuItem}
+                                  onClick={() => handleDeleteArchived(item)}
+                                >
+                                  🗑 Verwijderen
+                                </button>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>
@@ -1978,13 +2031,15 @@ export default function Menukaarten() {
                                   ✅ Actief maken
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                style={archivedActionUiStyles.rowMenuItem}
-                                onClick={() => handleArchive(item)}
-                              >
-                                <span style={{ color: '#d97706' }}>🗄</span> Archiveren
-                              </button>
+                              {hasPermission('menukaarten', 'archiveren', role) ? (
+                                <button
+                                  type="button"
+                                  style={archivedActionUiStyles.rowMenuItem}
+                                  onClick={() => handleArchive(item)}
+                                >
+                                  <span style={{ color: '#d97706' }}>🗄</span> Archiveren
+                                </button>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>
@@ -2331,16 +2386,18 @@ export default function Menukaarten() {
                                     >
                                       ✎
                                     </button>
-                                    <button
-                                      type="button"
-                                      aria-label="Sectie verwijderen"
-                                      title="Verwijderen"
-                                      onClick={() => handleDeleteSectie(sectie)}
-                                      disabled={isSubmittingDetailAction}
-                                      style={sectieBlockStyles.iconButtonDanger}
-                                    >
-                                      🗑
-                                    </button>
+                                    {hasPermission('menukaarten', 'verwijderen', role) ? (
+                                      <button
+                                        type="button"
+                                        aria-label="Sectie verwijderen"
+                                        title="Verwijderen"
+                                        onClick={() => handleDeleteSectie(sectie)}
+                                        disabled={isSubmittingDetailAction}
+                                        style={sectieBlockStyles.iconButtonDanger}
+                                      >
+                                        🗑
+                                      </button>
+                                    ) : null}
                                   </div>
                                 </div>
                               ) : null}
@@ -2603,16 +2660,18 @@ export default function Menukaarten() {
                                           >
                                             ↓
                                           </button>
-                                          <button
-                                            type="button"
-                                            aria-label="Gerecht verwijderen"
-                                            title="Verwijderen"
-                                            onClick={() => handleRemoveDish(gerecht.id)}
-                                            disabled={isSubmittingDetailAction}
-                                            style={sectieBlockStyles.iconButtonDanger}
-                                          >
-                                            🗑
-                                          </button>
+                                          {hasPermission('menukaarten', 'verwijderen', role) ? (
+                                            <button
+                                              type="button"
+                                              aria-label="Gerecht verwijderen"
+                                              title="Verwijderen"
+                                              onClick={() => handleRemoveDish(gerecht.id)}
+                                              disabled={isSubmittingDetailAction}
+                                              style={sectieBlockStyles.iconButtonDanger}
+                                            >
+                                              🗑
+                                            </button>
+                                          ) : null}
                                         </div>
                                       </td>
                                     ) : null}

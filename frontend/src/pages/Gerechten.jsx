@@ -1,7 +1,51 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { apiClient } from '../api/client'
-import { getCurrentUserRole } from '../utils/currentUser'
+import { getCurrentUser, getCurrentUserRole } from '../utils/currentUser'
+
+const defaultPermissions = {
+  gerechten: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor'],
+    herstellen: ['Supervisor'],
+    dupliceren: ['Supervisor', 'Chef', 'Kok']
+  },
+  halffabricaten: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor'],
+    herstellen: ['Supervisor'],
+    dupliceren: ['Supervisor', 'Chef', 'Kok']
+  },
+  menukaarten: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor'],
+    herstellen: ['Supervisor'],
+    dupliceren: ['Supervisor', 'Chef', 'Kok']
+  }
+}
+
+const storedPermissions = (() => {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    const raw = localStorage.getItem('permissions')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+})()
+
+const permissions = storedPermissions || defaultPermissions
 
 const initialForm = {
   name: '',
@@ -81,6 +125,10 @@ function getIngredientUnitOptions(ingredient) {
   addOption(calculation)
 
   return options
+}
+
+function hasPermission(domain, action, role) {
+  return permissions?.[domain]?.[action]?.includes(role)
 }
 
 function formatCurrency(value, digits = 2) {
@@ -329,6 +377,8 @@ export default function Gerechten() {
   const actionsMenuRef = useRef(null)
   const nameInputRef = useRef(null)
   const isReadOnlyModal = isSelectedArchived
+  const currentUser = getCurrentUser()
+  const role = currentUser?.role
   const currentUserRole = useMemo(() => getCurrentUserRole(), [])
   const canManageSupervisorDishActions = currentUserRole === 'Supervisor'
 
@@ -1651,6 +1701,7 @@ export default function Gerechten() {
                               <>
                                 {canManageSupervisorDishActions ? (
                                   <>
+                                    {hasPermission('gerechten', 'dupliceren', role) ? (
                                     <button
                                       type="button"
                                       style={uiStyles.rowMenuItem}
@@ -1658,6 +1709,8 @@ export default function Gerechten() {
                                     >
                                       ⧉ Dupliceren
                                     </button>
+                                    ) : null}
+                                    {hasPermission('gerechten', 'archiveren', role) ? (
                                     <button
                                       type="button"
                                       style={uiStyles.rowMenuItem}
@@ -1665,6 +1718,7 @@ export default function Gerechten() {
                                     >
                                       <span style={{ color: '#d97706' }}>🗄</span> Archiveren
                                     </button>
+                                    ) : null}
                                   </>
                                 ) : null}
                               </>
@@ -1679,13 +1733,15 @@ export default function Gerechten() {
                                     >
                                       ♻️ Herstellen
                                     </button>
-                                    <button
-                                      type="button"
-                                      style={uiStyles.rowMenuItem}
-                                      onClick={() => handleDeleteById(item.id)}
-                                    >
-                                      🗑 Verwijderen
-                                    </button>
+                                    {hasPermission('gerechten', 'verwijderen', role) ? (
+                                      <button
+                                        type="button"
+                                        style={uiStyles.rowMenuItem}
+                                        onClick={() => handleDeleteById(item.id)}
+                                      >
+                                        🗑 Verwijderen
+                                      </button>
+                                    ) : null}
                                   </>
                                 ) : null}
                               </>
@@ -2276,7 +2332,7 @@ export default function Gerechten() {
                 ) : null}
                 {!isSelectedArchived ? (
                   <>
-                    {selectedDishId && canManageSupervisorDishActions ? (
+                    {selectedDishId && hasPermission('gerechten', 'archiveren', role) ? (
                       <button type="button" className="table-action-btn" onClick={handleArchiveDish}>
                         Archiveren
                       </button>
@@ -2292,9 +2348,11 @@ export default function Gerechten() {
                         <button type="button" className="primary-btn" onClick={handleRestoreDish}>
                           Herstellen
                         </button>
-                        <button type="button" className="table-action-btn" onClick={handleDeleteDish}>
-                          Verwijderen
-                        </button>
+                        {hasPermission('gerechten', 'verwijderen', role) ? (
+                          <button type="button" className="table-action-btn" onClick={handleDeleteDish}>
+                            Verwijderen
+                          </button>
+                        ) : null}
                       </>
                     ) : null}
                   </>

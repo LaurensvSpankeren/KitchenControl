@@ -445,6 +445,7 @@ export default function Instellingen() {
   }
 
   function handleSavePermissions() {
+    localStorage.setItem('permissions', JSON.stringify(permissions))
     console.log(permissions)
   }
 
