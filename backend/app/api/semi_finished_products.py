@@ -4,13 +4,14 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user, require_supervisor
+from app.api.auth import get_current_user
 from app.db.session import get_db
 from app.models.dish import Dish
 from app.models.ingredient import Ingredient
 from app.models.recipe_line import RecipeLine
 from app.models.recipe_step import RecipeStep
 from app.models.semi_finished_product import SemiFinishedProduct
+from app.models.user import has_permission
 
 router = APIRouter()
 
@@ -784,8 +785,11 @@ def replace_recipe_steps(
 def archive_semi_finished_product(
     semi_finished_product_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.archiveren"):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
@@ -804,11 +808,17 @@ def archive_semi_finished_product(
 def get_semi_finished_product_archive_check(
     semi_finished_product_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
+
+    if not has_permission(current_user, "halffabricaten.archiveren"):
+        return {
+            "can_archive": False,
+            "reason": "Je hebt geen rechten om deze actie uit te voeren",
+        }
 
     reason = _get_semi_finished_product_archive_block_reason(db, semi_finished_product_id)
     return {
@@ -821,8 +831,11 @@ def get_semi_finished_product_archive_check(
 def restore_semi_finished_product(
     semi_finished_product_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.herstellen"):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
@@ -840,8 +853,11 @@ def restore_semi_finished_product(
 def duplicate_semi_finished_product(
     semi_finished_product_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.dupliceren"):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     original = (
         db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     )
@@ -920,8 +936,11 @@ def duplicate_semi_finished_product(
 def delete_semi_finished_product(
     semi_finished_product_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.verwijderen"):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")

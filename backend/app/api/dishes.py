@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user, require_supervisor
+from app.api.auth import get_current_user
 from app.db.session import get_db
 from app.models.dish import Dish
 from app.models.ingredient import Ingredient
@@ -649,7 +649,7 @@ def archive_dish(
     current_user = Depends(get_current_user),
 ) -> dict:
     if not has_permission(current_user, "gerechten.archiveren"):
-        raise HTTPException(status_code=403, detail="Geen rechten")
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
@@ -669,11 +669,17 @@ def archive_dish(
 def get_dish_archive_check(
     dish_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
+
+    if not has_permission(current_user, "gerechten.archiveren"):
+        return {
+            "can_archive": False,
+            "reason": "Je hebt geen rechten om deze actie uit te voeren",
+        }
 
     reason = _get_dish_archive_block_reason(db, dish_id)
     return {
@@ -686,8 +692,11 @@ def get_dish_archive_check(
 def restore_dish(
     dish_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.herstellen"):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -705,7 +714,7 @@ def duplicate_dish(
     current_user = Depends(get_current_user),
 ) -> dict:
     if not has_permission(current_user, "gerechten.dupliceren"):
-        raise HTTPException(status_code=403, detail="Geen rechten")
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     original = db.query(Dish).filter(Dish.id == dish_id).first()
     if original is None:
@@ -774,7 +783,7 @@ def delete_dish(
     current_user = Depends(get_current_user),
 ) -> dict:
     if not has_permission(current_user, "gerechten.verwijderen"):
-        raise HTTPException(status_code=403, detail="Geen rechten")
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
