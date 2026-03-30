@@ -5,11 +5,77 @@ import { getCurrentUser, getCurrentUserRole } from '../utils/currentUser'
 
 const TABS = [
   { id: 'gebruikersbeheer', label: 'Gebruikersbeheer' },
+  { id: 'rechtenbeheer', label: 'Rechtenbeheer' },
   { id: 'ingredient-categories', label: 'Ingrediënten categorieën' },
   { id: 'semi-finished-categories', label: 'Halffabricaten categorieën' },
   { id: 'dish-categories', label: 'Gerechten categorieën' },
   { id: 'menu-categories', label: 'Menukaarten categorieën' }
 ]
+
+const PERMISSION_ROLES = ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening']
+const PERMISSION_ACTIONS = [
+  'bekijken',
+  'aanmaken',
+  'wijzigen',
+  'archiveren',
+  'verwijderen',
+  'herstellen',
+  'dupliceren'
+]
+const PERMISSION_DOMAIN_LABELS = {
+  gerechten: 'Gerechten',
+  halffabricaten: 'Halffabricaten',
+  ingredienten: 'Ingrediënten',
+  menukaarten: 'Menukaarten',
+  importbeheer: 'Importbeheer'
+}
+const INITIAL_PERMISSIONS = {
+  gerechten: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor'],
+    herstellen: ['Supervisor'],
+    dupliceren: ['Supervisor', 'Chef', 'Kok']
+  },
+  halffabricaten: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor'],
+    herstellen: ['Supervisor'],
+    dupliceren: ['Supervisor', 'Chef', 'Kok']
+  },
+  ingredienten: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor'],
+    herstellen: ['Supervisor'],
+    dupliceren: ['Supervisor', 'Chef', 'Kok']
+  },
+  menukaarten: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor'],
+    herstellen: ['Supervisor'],
+    dupliceren: ['Supervisor', 'Chef', 'Kok']
+  },
+  importbeheer: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor'],
+    herstellen: ['Supervisor'],
+    dupliceren: ['Supervisor', 'Chef', 'Kok']
+  }
+}
 
 export default function Instellingen() {
   const [activeTab, setActiveTab] = useState(TABS[0].id)
@@ -78,11 +144,13 @@ export default function Instellingen() {
   const [editingMenuCategoryId, setEditingMenuCategoryId] = useState(null)
   const [menuCategoryForm, setMenuCategoryForm] = useState({ name: '' })
   const [activeMenuCategoryActionId, setActiveMenuCategoryActionId] = useState(null)
+  const [permissions, setPermissions] = useState(INITIAL_PERMISSIONS)
   const currentUser = useMemo(() => getCurrentUser(), [])
   const role = useMemo(() => getCurrentUserRole(), [])
   const hasAccess = role === 'Supervisor'
   const activeTabRecord = TABS.find((tab) => tab.id === activeTab) || TABS[0]
   const isUsersTab = activeTab === 'gebruikersbeheer'
+  const isPermissionsTab = activeTab === 'rechtenbeheer'
   const isIngredientCategoriesTab = activeTab === 'ingredient-categories'
   const isSemiFinishedCategoriesTab = activeTab === 'semi-finished-categories'
   const isDishCategoriesTab = activeTab === 'dish-categories'
@@ -356,6 +424,28 @@ export default function Instellingen() {
     } finally {
       setIsCreatingActivationCode(false)
     }
+  }
+
+  function handlePermissionToggle(domain, action, permissionRole) {
+    setPermissions((current) => {
+      const currentRoles = current[domain]?.[action] || []
+      const hasRole = currentRoles.includes(permissionRole)
+      const nextRoles = hasRole
+        ? currentRoles.filter((item) => item !== permissionRole)
+        : [...currentRoles, permissionRole]
+
+      return {
+        ...current,
+        [domain]: {
+          ...current[domain],
+          [action]: nextRoles
+        }
+      }
+    })
+  }
+
+  function handleSavePermissions() {
+    console.log(permissions)
   }
 
   async function handleUserStatusAction(user) {
@@ -1026,6 +1116,65 @@ export default function Instellingen() {
                     </table>
                   </div>
                 )}
+              </div>
+            ) : isPermissionsTab ? (
+              <div style={{ display: 'grid', gap: '1rem' }}>
+                <div style={{ display: 'grid', gap: '0.35rem' }}>
+                  <h4 style={{ margin: 0 }}>Rechtenbeheer</h4>
+                  <p style={{ margin: 0, color: '#6b7280' }}>
+                    Stel in welke rollen welke acties mogen uitvoeren per onderdeel.
+                  </p>
+                </div>
+
+                {Object.entries(PERMISSION_DOMAIN_LABELS).map(([domainKey, domainLabel]) => (
+                  <div
+                    key={domainKey}
+                    style={{
+                      display: 'grid',
+                      gap: '0.75rem',
+                      padding: '1rem',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '10px',
+                      background: '#fff'
+                    }}
+                  >
+                    <h4 style={{ margin: 0 }}>{domainLabel}</h4>
+                    <div className="table-scroll">
+                      <table className="ingredients-table">
+                        <thead>
+                          <tr>
+                            <th>Actie</th>
+                            {PERMISSION_ROLES.map((permissionRole) => (
+                              <th key={permissionRole}>{permissionRole}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {PERMISSION_ACTIONS.map((action) => (
+                            <tr key={`${domainKey}-${action}`}>
+                              <td style={{ textTransform: 'capitalize' }}>{action}</td>
+                              {PERMISSION_ROLES.map((permissionRole) => (
+                                <td key={`${domainKey}-${action}-${permissionRole}`} style={{ textAlign: 'center' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={(permissions[domainKey]?.[action] || []).includes(permissionRole)}
+                                    onChange={() => handlePermissionToggle(domainKey, action, permissionRole)}
+                                  />
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="button" className="primary-btn" onClick={handleSavePermissions}>
+                    Opslaan
+                  </button>
+                </div>
               </div>
             ) : isIngredientCategoriesTab ? (
               <div style={{ display: 'grid', gap: '0.75rem' }}>
