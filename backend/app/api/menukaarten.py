@@ -444,12 +444,19 @@ def list_menukaarten(
 
 
 @router.get("/api/menukaart-categories", tags=["menukaarten"])
-def list_menukaart_categories(db: Session = Depends(get_db)) -> list[dict]:
+def list_menukaart_categories(
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> list[dict]:
     return _list_menukaart_categories(db)
 
 
 @router.post("/api/menukaart-categories", tags=["menukaarten"])
-def create_menukaart_category(payload: dict, db: Session = Depends(get_db)) -> dict:
+def create_menukaart_category(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     name = _normalize_name(payload.get("name"))
     if not name:
         raise HTTPException(status_code=400, detail="Category name is required")
@@ -509,7 +516,10 @@ def rename_menukaart_category(
 
 
 @router.get("/api/menukaarten/archived", tags=["menukaarten"])
-def list_archived_menukaarten(db: Session = Depends(get_db)) -> list[dict]:
+def list_archived_menukaarten(
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> list[dict]:
     items = (
         db.query(Menukaart)
         .options(
@@ -534,7 +544,11 @@ def get_menukaart(
 
 
 @router.post("/api/menukaarten", tags=["menukaarten"])
-def create_menukaart(payload: dict, db: Session = Depends(get_db)) -> dict:
+def create_menukaart(
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Missing required field: name")
@@ -559,7 +573,11 @@ def create_menukaart(payload: dict, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/api/menukaarten/{menukaart_id}/duplicate", tags=["menukaarten"])
-def duplicate_menukaart(menukaart_id: int, db: Session = Depends(get_db)) -> dict:
+def duplicate_menukaart(
+    menukaart_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     source = _get_menukaart(db, menukaart_id)
 
     duplicate = Menukaart(
@@ -600,7 +618,12 @@ def duplicate_menukaart(menukaart_id: int, db: Session = Depends(get_db)) -> dic
 
 
 @router.patch("/api/menukaarten/{menukaart_id}", tags=["menukaarten"])
-def update_menukaart(menukaart_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
+def update_menukaart(
+    menukaart_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     item = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
@@ -638,7 +661,12 @@ def update_menukaart(menukaart_id: int, payload: dict, db: Session = Depends(get
 
 
 @router.post("/api/menukaarten/{menukaart_id}/secties", tags=["menukaarten"])
-def create_menukaart_sectie(menukaart_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
+def create_menukaart_sectie(
+    menukaart_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     menukaart = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if menukaart is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
@@ -663,7 +691,13 @@ def create_menukaart_sectie(menukaart_id: int, payload: dict, db: Session = Depe
 
 
 @router.patch("/api/menukaarten/{menukaart_id}/secties/{sectie_id}", tags=["menukaarten"])
-def update_menukaart_sectie(menukaart_id: int, sectie_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
+def update_menukaart_sectie(
+    menukaart_id: int,
+    sectie_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     sectie = _get_sectie(db, menukaart_id, sectie_id)
     title = (payload.get("title") or "").strip()
     if not title:
@@ -675,7 +709,12 @@ def update_menukaart_sectie(menukaart_id: int, sectie_id: int, payload: dict, db
 
 
 @router.post("/api/menukaarten/{menukaart_id}/secties/{sectie_id}/move-up", tags=["menukaarten"])
-def move_menukaart_sectie_up(menukaart_id: int, sectie_id: int, db: Session = Depends(get_db)) -> dict:
+def move_menukaart_sectie_up(
+    menukaart_id: int,
+    sectie_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     sectie = _get_sectie(db, menukaart_id, sectie_id)
     previous_sectie = (
         db.query(MenukaartSectie)
@@ -695,7 +734,12 @@ def move_menukaart_sectie_up(menukaart_id: int, sectie_id: int, db: Session = De
 
 
 @router.post("/api/menukaarten/{menukaart_id}/secties/{sectie_id}/move-down", tags=["menukaarten"])
-def move_menukaart_sectie_down(menukaart_id: int, sectie_id: int, db: Session = Depends(get_db)) -> dict:
+def move_menukaart_sectie_down(
+    menukaart_id: int,
+    sectie_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     sectie = _get_sectie(db, menukaart_id, sectie_id)
     next_sectie = (
         db.query(MenukaartSectie)
@@ -715,7 +759,12 @@ def move_menukaart_sectie_down(menukaart_id: int, sectie_id: int, db: Session = 
 
 
 @router.delete("/api/menukaarten/{menukaart_id}/secties/{sectie_id}", tags=["menukaarten"])
-def delete_menukaart_sectie(menukaart_id: int, sectie_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_menukaart_sectie(
+    menukaart_id: int,
+    sectie_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     sectie = _get_sectie(db, menukaart_id, sectie_id)
     if sectie.gerechten:
         raise HTTPException(status_code=400, detail="Sectie is niet leeg en kan niet worden verwijderd.")
@@ -726,7 +775,12 @@ def delete_menukaart_sectie(menukaart_id: int, sectie_id: int, db: Session = Dep
 
 
 @router.post("/api/menukaarten/{menukaart_id}/gerechten", tags=["menukaarten"])
-def add_gerecht_to_menukaart(menukaart_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
+def add_gerecht_to_menukaart(
+    menukaart_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     menukaart = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if menukaart is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
@@ -776,6 +830,7 @@ def move_menukaart_gerecht_up(
     sectie_id: int,
     gerecht_id: int,
     db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     _get_sectie(db, menukaart_id, sectie_id)
     link = _get_link_in_sectie(db, menukaart_id, sectie_id, gerecht_id)
@@ -803,6 +858,7 @@ def move_menukaart_gerecht_down(
     sectie_id: int,
     gerecht_id: int,
     db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     _get_sectie(db, menukaart_id, sectie_id)
     link = _get_link_in_sectie(db, menukaart_id, sectie_id, gerecht_id)
@@ -830,6 +886,7 @@ def move_menukaart_gerecht_to_sectie(
     gerecht_id: int,
     payload: dict,
     db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     menukaart = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if menukaart is None:
@@ -866,7 +923,12 @@ def move_menukaart_gerecht_to_sectie(
 
 
 @router.delete("/api/menukaarten/{menukaart_id}/gerechten/{gerecht_id}", tags=["menukaarten"])
-def remove_gerecht_from_menukaart(menukaart_id: int, gerecht_id: int, db: Session = Depends(get_db)) -> dict:
+def remove_gerecht_from_menukaart(
+    menukaart_id: int,
+    gerecht_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     menukaart = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if menukaart is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
@@ -888,7 +950,11 @@ def remove_gerecht_from_menukaart(menukaart_id: int, gerecht_id: int, db: Sessio
 
 
 @router.delete("/api/menukaarten/{menukaart_id}", tags=["menukaarten"])
-def archive_menukaart(menukaart_id: int, db: Session = Depends(get_db)) -> dict:
+def archive_menukaart(
+    menukaart_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     item = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
@@ -906,7 +972,11 @@ def archive_menukaart(menukaart_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.put("/api/menukaarten/{menukaart_id}/restore", tags=["menukaarten"])
-def restore_menukaart(menukaart_id: int, db: Session = Depends(get_db)) -> dict:
+def restore_menukaart(
+    menukaart_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     item = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
