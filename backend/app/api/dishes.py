@@ -648,7 +648,7 @@ def archive_dish(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "gerechten.archiveren"):
+    if not has_permission(current_user, "gerechten.archiveren", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     item = db.query(Dish).filter(Dish.id == dish_id).first()
@@ -675,7 +675,7 @@ def get_dish_archive_check(
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
 
-    if not has_permission(current_user, "gerechten.archiveren"):
+    if not has_permission(current_user, "gerechten.archiveren", db):
         return {
             "can_archive": False,
             "reason": "Je hebt geen rechten om deze actie uit te voeren",
@@ -694,7 +694,7 @@ def restore_dish(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "gerechten.herstellen"):
+    if not has_permission(current_user, "gerechten.herstellen", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     item = db.query(Dish).filter(Dish.id == dish_id).first()
@@ -713,7 +713,7 @@ def duplicate_dish(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "gerechten.dupliceren"):
+    if not has_permission(current_user, "gerechten.dupliceren", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     original = db.query(Dish).filter(Dish.id == dish_id).first()
@@ -782,7 +782,7 @@ def delete_dish(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "gerechten.verwijderen"):
+    if not has_permission(current_user, "gerechten.verwijderen", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     item = db.query(Dish).filter(Dish.id == dish_id).first()

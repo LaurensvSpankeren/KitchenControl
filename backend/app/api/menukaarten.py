@@ -579,7 +579,7 @@ def duplicate_menukaart(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "menukaarten.dupliceren"):
+    if not has_permission(current_user, "menukaarten.dupliceren", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     source = _get_menukaart(db, menukaart_id)
@@ -769,7 +769,7 @@ def delete_menukaart_sectie(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "menukaarten.verwijderen"):
+    if not has_permission(current_user, "menukaarten.verwijderen", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     sectie = _get_sectie(db, menukaart_id, sectie_id)
@@ -936,7 +936,7 @@ def remove_gerecht_from_menukaart(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "menukaarten.verwijderen"):
+    if not has_permission(current_user, "menukaarten.verwijderen", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     menukaart = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
@@ -970,13 +970,13 @@ def archive_menukaart(
         raise HTTPException(status_code=404, detail="Menukaart not found")
 
     if item.is_archived:
-        if not has_permission(current_user, "menukaarten.verwijderen"):
+        if not has_permission(current_user, "menukaarten.verwijderen", db):
             raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
         db.delete(item)
         db.commit()
         return {"status": "deleted", "menukaart_id": menukaart_id}
 
-    if not has_permission(current_user, "menukaarten.archiveren"):
+    if not has_permission(current_user, "menukaarten.archiveren", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     item.is_archived = True
@@ -992,7 +992,7 @@ def restore_menukaart(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "menukaarten.herstellen"):
+    if not has_permission(current_user, "menukaarten.herstellen", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     item = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()

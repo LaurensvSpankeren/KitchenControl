@@ -1,9 +1,11 @@
+import json
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, String, func
-from sqlalchemy.orm import Mapped, mapped_column, validates
+from sqlalchemy.orm import Mapped, Session, mapped_column, validates
 
 from app.db.base_class import Base
+from app.models.app_setting import AppSetting
 
 USER_ROLES = (
     "Supervisor",
@@ -30,10 +32,27 @@ PERMISSIONS = DEFAULT_PERMISSIONS
 SUPERVISOR_ROLE = "Supervisor"
 
 
-def has_permission(user, permission_key: str) -> bool:
+def get_permissions_from_db(db: Session) -> dict:
+    setting = db.query(AppSetting).filter(AppSetting.key == "permissions").first()
+    if setting is None:
+        return DEFAULT_PERMISSIONS
+
+    try:
+        permissions = json.loads(setting.value_json)
+    except (TypeError, ValueError):
+        return DEFAULT_PERMISSIONS
+
+    if not isinstance(permissions, dict):
+        return DEFAULT_PERMISSIONS
+
+    return permissions
+
+
+def has_permission(user, permission_key: str, db: Session) -> bool:
     if not user:
         return False
-    allowed_roles = PERMISSIONS.get(permission_key, [])
+    permissions = get_permissions_from_db(db)
+    allowed_roles = permissions.get(permission_key, [])
     return user.role in allowed_roles
 
 

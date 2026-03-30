@@ -787,7 +787,7 @@ def archive_semi_finished_product(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "halffabricaten.archiveren"):
+    if not has_permission(current_user, "halffabricaten.archiveren", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
@@ -814,7 +814,7 @@ def get_semi_finished_product_archive_check(
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
 
-    if not has_permission(current_user, "halffabricaten.archiveren"):
+    if not has_permission(current_user, "halffabricaten.archiveren", db):
         return {
             "can_archive": False,
             "reason": "Je hebt geen rechten om deze actie uit te voeren",
@@ -833,7 +833,7 @@ def restore_semi_finished_product(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "halffabricaten.herstellen"):
+    if not has_permission(current_user, "halffabricaten.herstellen", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
@@ -855,7 +855,7 @@ def duplicate_semi_finished_product(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "halffabricaten.dupliceren"):
+    if not has_permission(current_user, "halffabricaten.dupliceren", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     original = (
@@ -938,7 +938,7 @@ def delete_semi_finished_product(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "halffabricaten.verwijderen"):
+    if not has_permission(current_user, "halffabricaten.verwijderen", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
