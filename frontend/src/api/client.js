@@ -991,7 +991,8 @@ export const apiClient = {
       method: 'PUT'
     })
     if (!response.ok) {
-      throw new Error(`Failed to archive dish: ${response.status}`)
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to archive dish: ${response.status}`)
     }
     return response.json()
   },
