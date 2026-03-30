@@ -839,6 +839,13 @@ export default function Halffabricaten() {
       setErrorMessage('Je hebt geen rechten om dit halffabricaat te archiveren.')
       return
     }
+
+    const archiveCheck = await apiClient.archiveSemiFinishedProductCheck(productId)
+    if (!archiveCheck?.can_archive) {
+      setErrorMessage(archiveCheck?.reason || 'Archiveren mislukt.')
+      return
+    }
+
     const confirmed = window.confirm('Weet je zeker dat je dit halffabricaat wilt archiveren?')
     if (!confirmed) {
       return

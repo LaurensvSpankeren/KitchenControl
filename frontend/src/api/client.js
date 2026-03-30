@@ -660,6 +660,13 @@ export const apiClient = {
     }
     return response.json()
   },
+  async archiveSemiFinishedProductCheck(id) {
+    const response = await apiFetch(`${API_BASE_URL}/api/semi-finished-products/${id}/archive-check`)
+    if (!response.ok) {
+      throw new Error(`Failed to check semi-finished product archive: ${response.status}`)
+    }
+    return response.json()
+  },
   async archiveSemiFinishedProduct(id) {
     const response = await apiFetch(`${API_BASE_URL}/api/semi-finished-products/${id}/archive`, {
       method: 'PUT'
@@ -993,6 +1000,13 @@ export const apiClient = {
     if (!response.ok) {
       const errorData = await response.json().catch(() => null)
       throw new Error(errorData?.detail || `Failed to archive dish: ${response.status}`)
+    }
+    return response.json()
+  },
+  async archiveDishCheck(id) {
+    const response = await apiFetch(`${API_BASE_URL}/api/dishes/${id}/archive-check`)
+    if (!response.ok) {
+      throw new Error(`Failed to check dish archive: ${response.status}`)
     }
     return response.json()
   },
