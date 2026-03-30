@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
-import { apiClient } from '../api/client'
+import { apiClient, API_BASE_URL } from '../api/client'
 import { getCurrentUser, getCurrentUserRole } from '../utils/currentUser'
 
 const TABS = [
@@ -18,6 +18,13 @@ export default function Instellingen() {
   const [usersError, setUsersError] = useState('')
   const [usersMessage, setUsersMessage] = useState('')
   const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false)
+  const [activationCodes, setActivationCodes] = useState([])
+  const [isLoadingActivationCodes, setIsLoadingActivationCodes] = useState(false)
+  const [activationCodesError, setActivationCodesError] = useState('')
+  const [activationCodesMessage, setActivationCodesMessage] = useState('')
+  const [isCreateActivationCodeModalOpen, setIsCreateActivationCodeModalOpen] = useState(false)
+  const [activationCodeForm, setActivationCodeForm] = useState({ role: 'Kok' })
+  const [isCreatingActivationCode, setIsCreatingActivationCode] = useState(false)
   const [activeUserActionId, setActiveUserActionId] = useState(null)
   const [editingUserId, setEditingUserId] = useState(null)
   const [editingPasswordUserId, setEditingPasswordUserId] = useState(null)
@@ -81,6 +88,43 @@ export default function Instellingen() {
   const isDishCategoriesTab = activeTab === 'dish-categories'
   const isMenuCategoriesTab = activeTab === 'menu-categories'
   const currentUserId = Number(currentUser?.id) || null
+  const openActivationCodes = useMemo(
+    () => activationCodes.filter((item) => !item?.is_used),
+    [activationCodes]
+  )
+  const usedActivationCodes = useMemo(
+    () => activationCodes.filter((item) => item?.is_used),
+    [activationCodes]
+  )
+
+  function formatDateTime(value) {
+    if (!value) {
+      return '-'
+    }
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) {
+      return value
+    }
+    return date.toLocaleString('nl-NL')
+  }
+
+  async function activationCodesFetch(path, options = {}) {
+    const token = apiClient.getAuthToken()
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(options.headers || {})
+      }
+    })
+    if (response.status === 401) {
+      apiClient.clearAuthSession()
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new window.Event('kc:auth:unauthorized'))
+      }
+    }
+    return response
+  }
 
   async function loadUsers() {
     setIsLoadingUsers(true)
@@ -160,12 +204,32 @@ export default function Instellingen() {
     }
   }
 
+  async function loadActivationCodes() {
+    setIsLoadingActivationCodes(true)
+    setActivationCodesError('')
+    try {
+      const response = await activationCodesFetch('/api/activation-codes')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.detail || `Failed to fetch activation codes: ${response.status}`)
+      }
+      const data = await response.json()
+      setActivationCodes(Array.isArray(data) ? data : [])
+    } catch (error) {
+      setActivationCodes([])
+      setActivationCodesError(error?.message || 'Activatiecodes laden mislukt.')
+    } finally {
+      setIsLoadingActivationCodes(false)
+    }
+  }
+
   useEffect(() => {
     if (!hasAccess || activeTab !== 'gebruikersbeheer') {
       return
     }
 
     loadUsers()
+    loadActivationCodes()
   }, [activeTab, hasAccess])
 
   useEffect(() => {
@@ -242,6 +306,56 @@ export default function Instellingen() {
     setIsCreateUserModalOpen(false)
     setCreateUserError('')
     setCreateUserMessage('')
+  }
+
+  function openCreateActivationCodeModal() {
+    setActivationCodesError('')
+    setActivationCodesMessage('')
+    setIsCreateActivationCodeModalOpen(true)
+  }
+
+  function closeCreateActivationCodeModal() {
+    if (isCreatingActivationCode) {
+      return
+    }
+    setIsCreateActivationCodeModalOpen(false)
+    setActivationCodesError('')
+    setActivationCodesMessage('')
+  }
+
+  async function handleCreateActivationCode(event) {
+    event.preventDefault()
+    if (isCreatingActivationCode) {
+      return
+    }
+
+    setActivationCodesError('')
+    setActivationCodesMessage('')
+    setIsCreatingActivationCode(true)
+
+    try {
+      const response = await activationCodesFetch('/api/activation-codes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(activationCodeForm)
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.detail || `Failed to create activation code: ${response.status}`)
+      }
+
+      const payload = await response.json()
+      setActivationCodesMessage(`Activatiecode gegenereerd: ${payload.code}`)
+      setActivationCodeForm({ role: 'Kok' })
+      await loadActivationCodes()
+      setIsCreateActivationCodeModalOpen(false)
+    } catch (error) {
+      setActivationCodesError(error?.message || 'Activatiecode genereren mislukt.')
+    } finally {
+      setIsCreatingActivationCode(false)
+    }
   }
 
   async function handleUserStatusAction(user) {
@@ -650,9 +764,14 @@ export default function Instellingen() {
                         Beheer medewerkers en accountacties vanuit een centraal overzicht.
                       </p>
                     </div>
-                    <button type="button" className="primary-btn" onClick={openCreateUserModal}>
-                      Nieuwe medewerker aanmaken
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <button type="button" className="primary-btn" onClick={openCreateUserModal}>
+                        Nieuwe medewerker aanmaken
+                      </button>
+                      <button type="button" className="table-action-btn" onClick={openCreateActivationCodeModal}>
+                        Activatiecode genereren
+                      </button>
+                    </div>
                   </div>
                 </div>
                 {usersMessage ? (
@@ -841,6 +960,68 @@ export default function Instellingen() {
                             </tr>
                           )
                         })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {activationCodesMessage ? (
+                  <p className="form-info inline-message" style={{ margin: 0 }}>
+                    {activationCodesMessage}
+                  </p>
+                ) : null}
+                {activationCodesError ? (
+                  <p style={{ margin: 0, color: '#b91c1c' }}>{activationCodesError}</p>
+                ) : null}
+                <h4 style={{ margin: 0 }}>Open activatiecodes</h4>
+                {isLoadingActivationCodes ? (
+                  <p style={{ margin: 0, color: '#6b7280' }}>Activatiecodes laden...</p>
+                ) : openActivationCodes.length === 0 ? (
+                  <p style={{ margin: 0, color: '#6b7280' }}>Nog geen open activatiecodes gevonden.</p>
+                ) : (
+                  <div className="table-scroll">
+                    <table className="ingredients-table">
+                      <thead>
+                        <tr>
+                          <th>Code</th>
+                          <th>Rol</th>
+                          <th>Aangemaakt op</th>
+                          <th>Verloopt op</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {openActivationCodes.map((item) => (
+                          <tr key={item.id}>
+                            <td>{item.code || '-'}</td>
+                            <td>{item.role || '-'}</td>
+                            <td>{formatDateTime(item.created_at)}</td>
+                            <td>{formatDateTime(item.expires_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <h4 style={{ margin: 0 }}>Gebruikte activatiecodes</h4>
+                {isLoadingActivationCodes ? null : usedActivationCodes.length === 0 ? (
+                  <p style={{ margin: 0, color: '#6b7280' }}>Nog geen gebruikte activatiecodes gevonden.</p>
+                ) : (
+                  <div className="table-scroll">
+                    <table className="ingredients-table">
+                      <thead>
+                        <tr>
+                          <th>Code</th>
+                          <th>Rol</th>
+                          <th>Gebruikt op</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {usedActivationCodes.map((item) => (
+                          <tr key={item.id}>
+                            <td>{item.code || '-'}</td>
+                            <td>{item.role || '-'}</td>
+                            <td>{formatDateTime(item.used_at)}</td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -1519,6 +1700,58 @@ export default function Instellingen() {
                   </button>
                   <button type="submit" className="primary-btn" disabled={isCreatingUser}>
                     {isCreatingUser ? 'Aanmaken...' : 'Gebruiker aanmaken'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCreateActivationCodeModalOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Activatiecode genereren">
+          <div className="modal-card modal-wide sfp-modal">
+            <div className="modal-header">
+              <h3>Activatiecode genereren</h3>
+            </div>
+
+            <div className="modal-body">
+              {activationCodesError ? <div className="modal-validation-banner">{activationCodesError}</div> : null}
+
+              <form onSubmit={handleCreateActivationCode} style={{ display: 'grid', gap: '1rem' }}>
+                <section className="modal-section">
+                  <h4>Basis</h4>
+                  <div className="modal-grid two-col calm-grid">
+                    <label>
+                      Rol
+                      <select
+                        value={activationCodeForm.role}
+                        onChange={(event) =>
+                          setActivationCodeForm({ role: event.target.value })
+                        }
+                        disabled={isCreatingActivationCode}
+                      >
+                        <option value="Supervisor">Supervisor</option>
+                        <option value="Chef">Chef</option>
+                        <option value="Kok">Kok</option>
+                        <option value="Keukenhulp">Keukenhulp</option>
+                        <option value="Bediening">Bediening</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="table-action-btn"
+                    onClick={closeCreateActivationCodeModal}
+                    disabled={isCreatingActivationCode}
+                  >
+                    Sluiten
+                  </button>
+                  <button type="submit" className="primary-btn" disabled={isCreatingActivationCode}>
+                    {isCreatingActivationCode ? 'Genereren...' : 'Genereren'}
                   </button>
                 </div>
               </form>
