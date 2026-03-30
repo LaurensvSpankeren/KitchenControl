@@ -1206,8 +1206,8 @@ export default function Gerechten() {
         setViewMode('active')
       }
       setPageMessage('Gerecht gearchiveerd.')
-    } catch {
-      setErrorMessage('Archiveren mislukt.')
+    } catch (error) {
+      setErrorMessage(error?.message || 'Archiveren mislukt.')
     }
   }
 
