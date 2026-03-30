@@ -21,6 +21,7 @@ from app.models.menukaart_gerecht import MenukaartGerecht
 from app.models.menukaart_sectie import MenukaartSectie
 from app.models.recipe_line import RecipeLine
 from app.models.semi_finished_product import SemiFinishedProduct
+from app.models.user import has_permission
 
 router = APIRouter()
 VALID_STATUSES = {"concept", "active"}
@@ -763,8 +764,11 @@ def delete_menukaart_sectie(
     menukaart_id: int,
     sectie_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.verwijderen"):
+        raise HTTPException(status_code=403, detail="Geen rechten")
+
     sectie = _get_sectie(db, menukaart_id, sectie_id)
     if sectie.gerechten:
         raise HTTPException(status_code=400, detail="Sectie is niet leeg en kan niet worden verwijderd.")
@@ -927,8 +931,11 @@ def remove_gerecht_from_menukaart(
     menukaart_id: int,
     gerecht_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.verwijderen"):
+        raise HTTPException(status_code=403, detail="Geen rechten")
+
     menukaart = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if menukaart is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
@@ -953,16 +960,21 @@ def remove_gerecht_from_menukaart(
 def archive_menukaart(
     menukaart_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
     item = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
 
     if item.is_archived:
+        if not has_permission(current_user, "menukaarten.verwijderen"):
+            raise HTTPException(status_code=403, detail="Geen rechten")
         db.delete(item)
         db.commit()
         return {"status": "deleted", "menukaart_id": menukaart_id}
+
+    if not has_permission(current_user, "menukaarten.archiveren"):
+        raise HTTPException(status_code=403, detail="Geen rechten")
 
     item.is_archived = True
     db.commit()

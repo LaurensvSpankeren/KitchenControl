@@ -16,6 +16,9 @@ PERMISSIONS = {
     "gerechten.verwijderen": ["Supervisor"],
     "gerechten.archiveren": ["Supervisor"],
     "gerechten.dupliceren": ["Supervisor", "Chef", "Kok"],
+    "menukaarten.verwijderen": ["Supervisor"],
+    "menukaarten.archiveren": ["Supervisor"],
+    "menukaarten.dupliceren": ["Supervisor", "Chef", "Kok"],
 }
 SUPERVISOR_ROLE = "Supervisor"
 
