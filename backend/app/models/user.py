@@ -12,7 +12,19 @@ USER_ROLES = (
     "Keukenhulp",
     "Bediening",
 )
+PERMISSIONS = {
+    "gerechten.verwijderen": ["Supervisor"],
+    "gerechten.archiveren": ["Supervisor"],
+    "gerechten.dupliceren": ["Supervisor", "Chef", "Kok"],
+}
 SUPERVISOR_ROLE = "Supervisor"
+
+
+def has_permission(user, permission_key: str) -> bool:
+    if not user:
+        return False
+    allowed_roles = PERMISSIONS.get(permission_key, [])
+    return user.role in allowed_roles
 
 
 class User(Base):

@@ -16,6 +16,7 @@ from app.models.menukaart_gerecht import MenukaartGerecht
 from app.models.recipe_line import RecipeLine
 from app.models.recipe_step import RecipeStep
 from app.models.semi_finished_product import SemiFinishedProduct
+from app.models.user import has_permission
 from app.api.semi_finished_products import (
     _build_semi_finished_detail,
     _convert_quantity_to_unit,
@@ -645,8 +646,11 @@ def replace_dish_recipe_steps(
 def archive_dish(
     dish_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.archiveren"):
+        raise HTTPException(status_code=403, detail="Geen rechten")
+
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -698,8 +702,11 @@ def restore_dish(
 def duplicate_dish(
     dish_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.dupliceren"):
+        raise HTTPException(status_code=403, detail="Geen rechten")
+
     original = db.query(Dish).filter(Dish.id == dish_id).first()
     if original is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -764,8 +771,11 @@ def duplicate_dish(
 def delete_dish(
     dish_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.verwijderen"):
+        raise HTTPException(status_code=403, detail="Geen rechten")
+
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
