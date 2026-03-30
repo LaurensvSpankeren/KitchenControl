@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user, require_supervisor
 from app.db.session import get_db
 from app.models.ingredient_import_issue import IngredientImportIssue
 from app.services.ingredient_import_issue_service import resolve_issue
@@ -31,6 +32,7 @@ def list_import_issues(
     status: str | None = None,
     issue_type: str | None = None,
     db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> list[dict]:
     query = db.query(IngredientImportIssue)
     if status:
@@ -43,7 +45,11 @@ def list_import_issues(
 
 
 @router.get("/api/import-issues/{issue_id}", tags=["import-issues"])
-def get_import_issue(issue_id: int, db: Session = Depends(get_db)) -> dict:
+def get_import_issue(
+    issue_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     issue = db.query(IngredientImportIssue).filter(IngredientImportIssue.id == issue_id).first()
     if issue is None:
         raise HTTPException(status_code=404, detail="Import issue not found")
@@ -51,7 +57,12 @@ def get_import_issue(issue_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/api/import-issues/{issue_id}/resolve", tags=["import-issues"])
-def resolve_import_issue(issue_id: int, payload: dict, db: Session = Depends(get_db)) -> dict:
+def resolve_import_issue(
+    issue_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     try:
         issue = resolve_issue(
             db=db,
@@ -68,5 +79,8 @@ def resolve_import_issue(issue_id: int, payload: dict, db: Session = Depends(get
 
 
 @router.post("/api/import-issues/cleanup-legacy-variants", tags=["import-issues"])
-def cleanup_legacy_variant_duplicates(db: Session = Depends(get_db)) -> dict:
+def cleanup_legacy_variant_duplicates(
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     return archive_legacy_variant_duplicates(db)

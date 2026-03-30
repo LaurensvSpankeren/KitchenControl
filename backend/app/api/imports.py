@@ -4,6 +4,7 @@ import tempfile
 from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
+from app.api.auth import require_supervisor
 from app.db.session import get_db
 from app.services.ingredient_import import import_ingredients_from_csv
 
@@ -11,7 +12,11 @@ router = APIRouter()
 
 
 @router.post("/api/imports/ingredients", tags=["imports"])
-async def import_ingredients(file: UploadFile = File(...), db: Session = Depends(get_db)) -> dict:
+async def import_ingredients(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
     temp_file_path = ""
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
