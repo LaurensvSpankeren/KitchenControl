@@ -2,7 +2,7 @@ const CURRENT_USER_STORAGE_KEYS = ['currentUser', 'user', 'kc_user', 'kitchencon
 
 export function getCurrentUser() {
   if (typeof window === 'undefined') {
-    return { role: 'Supervisor' }
+    return null
   }
 
   for (const key of CURRENT_USER_STORAGE_KEYS) {
@@ -21,7 +21,7 @@ export function getCurrentUser() {
     }
   }
 
-  return { role: 'Supervisor' }
+  return null
 }
 
 export function getCurrentUserRole() {
