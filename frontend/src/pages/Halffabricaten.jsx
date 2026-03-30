@@ -1591,6 +1591,7 @@ export default function Halffabricaten() {
         </div>
 
         {pageMessage ? <p className="form-info inline-message">{pageMessage}</p> : null}
+        {errorMessage ? <div style={{ color: 'red' }}>{errorMessage}</div> : null}
 
         {visibleProducts.length === 0 ? (
           <p>
