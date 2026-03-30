@@ -58,6 +58,55 @@ def _format_blocking_names(names: list[str], max_items: int = 3) -> str:
     return ", ".join(visible)
 
 
+def _get_semi_finished_product_archive_block_reason(
+    db: Session, semi_finished_product_id: int
+) -> str | None:
+    blocking_dish_names = [
+        row.name
+        for row in (
+            db.query(Dish.name)
+            .join(RecipeLine, RecipeLine.parent_id == Dish.id)
+            .filter(
+                RecipeLine.parent_type == "dish",
+                RecipeLine.item_type == "semi_finished_product",
+                RecipeLine.item_id == semi_finished_product_id,
+                Dish.is_archived.is_(False),
+            )
+            .order_by(Dish.name.asc())
+            .all()
+        )
+    ]
+    if blocking_dish_names:
+        return (
+            "Kan halffabricaat niet archiveren, wordt gebruikt in: "
+            f"{_format_blocking_names(blocking_dish_names)}"
+        )
+
+    blocking_product_names = [
+        row.name
+        for row in (
+            db.query(SemiFinishedProduct.name)
+            .join(RecipeLine, RecipeLine.parent_id == SemiFinishedProduct.id)
+            .filter(
+                RecipeLine.parent_type == "semi_finished_product",
+                RecipeLine.item_type == "semi_finished_product",
+                RecipeLine.item_id == semi_finished_product_id,
+                RecipeLine.parent_id != semi_finished_product_id,
+                SemiFinishedProduct.is_archived.is_(False),
+            )
+            .order_by(SemiFinishedProduct.name.asc())
+            .all()
+        )
+    ]
+    if blocking_product_names:
+        return (
+            "Kan halffabricaat niet archiveren, wordt gebruikt in: "
+            f"{_format_blocking_names(blocking_product_names)}"
+        )
+
+    return None
+
+
 def _normalize_unit(value: str | None) -> str | None:
     if value is None:
         return None
@@ -741,59 +790,31 @@ def archive_semi_finished_product(
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
 
-    blocking_dish_names = [
-        row.name
-        for row in (
-            db.query(Dish.name)
-            .join(RecipeLine, RecipeLine.parent_id == Dish.id)
-            .filter(
-                RecipeLine.parent_type == "dish",
-                RecipeLine.item_type == "semi_finished_product",
-                RecipeLine.item_id == semi_finished_product_id,
-                Dish.is_archived.is_(False),
-            )
-            .order_by(Dish.name.asc())
-            .all()
-        )
-    ]
-    if blocking_dish_names:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Kan halffabricaat niet archiveren, wordt gebruikt in: "
-                f"{_format_blocking_names(blocking_dish_names)}"
-            ),
-        )
-
-    blocking_product_names = [
-        row.name
-        for row in (
-            db.query(SemiFinishedProduct.name)
-            .join(RecipeLine, RecipeLine.parent_id == SemiFinishedProduct.id)
-            .filter(
-                RecipeLine.parent_type == "semi_finished_product",
-                RecipeLine.item_type == "semi_finished_product",
-                RecipeLine.item_id == semi_finished_product_id,
-                RecipeLine.parent_id != semi_finished_product_id,
-                SemiFinishedProduct.is_archived.is_(False),
-            )
-            .order_by(SemiFinishedProduct.name.asc())
-            .all()
-        )
-    ]
-    if blocking_product_names:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Kan halffabricaat niet archiveren, wordt gebruikt in: "
-                f"{_format_blocking_names(blocking_product_names)}"
-            ),
-        )
+    reason = _get_semi_finished_product_archive_block_reason(db, semi_finished_product_id)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
 
     item.is_archived = True
     db.commit()
     db.refresh(item)
     return _serialize_semi_finished_product(item)
+
+
+@router.get("/api/semi-finished-products/{semi_finished_product_id}/archive-check", tags=["semi-finished-products"])
+def get_semi_finished_product_archive_check(
+    semi_finished_product_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
+    item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Semi finished product not found")
+
+    reason = _get_semi_finished_product_archive_block_reason(db, semi_finished_product_id)
+    return {
+        "can_archive": reason is None,
+        "reason": reason,
+    }
 
 
 @router.put("/api/semi-finished-products/{semi_finished_product_id}/restore", tags=["semi-finished-products"])

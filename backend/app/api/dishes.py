@@ -151,6 +151,29 @@ def _format_blocking_names(names: list[str], max_items: int = 3) -> str:
     return ", ".join(visible)
 
 
+def _get_dish_archive_block_reason(db: Session, dish_id: int) -> str | None:
+    blocking_menu_names = [
+        row.name
+        for row in (
+            db.query(Menukaart.name)
+            .join(MenukaartGerecht, MenukaartGerecht.menukaart_id == Menukaart.id)
+            .filter(
+                MenukaartGerecht.gerecht_id == dish_id,
+                Menukaart.is_archived.is_(False),
+                Menukaart.status.in_(ACTIVE_MENU_STATUSES),
+            )
+            .order_by(Menukaart.name.asc())
+            .all()
+        )
+    ]
+    if not blocking_menu_names:
+        return None
+    return (
+        "Kan gerecht niet archiveren, wordt gebruikt in: "
+        f"{_format_blocking_names(blocking_menu_names)}"
+    )
+
+
 def _save_dish_photo(dish_id: int, uploaded_file: UploadFile) -> str:
     try:
         raw_bytes = uploaded_file.file.read()
@@ -628,33 +651,31 @@ def archive_dish(
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
 
-    blocking_menu_names = [
-        row.name
-        for row in (
-            db.query(Menukaart.name)
-            .join(MenukaartGerecht, MenukaartGerecht.menukaart_id == Menukaart.id)
-            .filter(
-                MenukaartGerecht.gerecht_id == dish_id,
-                Menukaart.is_archived.is_(False),
-                Menukaart.status.in_(ACTIVE_MENU_STATUSES),
-            )
-            .order_by(Menukaart.name.asc())
-            .all()
-        )
-    ]
-    if blocking_menu_names:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Kan gerecht niet archiveren, wordt gebruikt in: "
-                f"{_format_blocking_names(blocking_menu_names)}"
-            ),
-        )
+    reason = _get_dish_archive_block_reason(db, dish_id)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
 
     item.is_archived = True
     db.commit()
     db.refresh(item)
     return _serialize_dish(item)
+
+
+@router.get("/api/dishes/{dish_id}/archive-check", tags=["dishes"])
+def get_dish_archive_check(
+    dish_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_supervisor),
+) -> dict:
+    item = db.query(Dish).filter(Dish.id == dish_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Dish not found")
+
+    reason = _get_dish_archive_block_reason(db, dish_id)
+    return {
+        "can_archive": reason is None,
+        "reason": reason,
+    }
 
 
 @router.put("/api/dishes/{dish_id}/restore", tags=["dishes"])
