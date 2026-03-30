@@ -1575,6 +1575,7 @@ export default function Gerechten() {
         </div>
 
         {pageMessage ? <p className="form-info inline-message">{pageMessage}</p> : null}
+        {errorMessage ? <div style={{ color: 'red' }}>{errorMessage}</div> : null}
 
         {visibleDishes.length === 0 ? (
           <p>Nog geen gerechten gevonden.</p>
