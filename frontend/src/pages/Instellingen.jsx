@@ -144,6 +144,9 @@ export default function Instellingen() {
   const [editingMenuCategoryId, setEditingMenuCategoryId] = useState(null)
   const [menuCategoryForm, setMenuCategoryForm] = useState({ name: '' })
   const [activeMenuCategoryActionId, setActiveMenuCategoryActionId] = useState(null)
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false)
+  const [permissionsError, setPermissionsError] = useState('')
+  const [permissionsMessage, setPermissionsMessage] = useState('')
   const [permissions, setPermissions] = useState(INITIAL_PERMISSIONS)
   const currentUser = useMemo(() => getCurrentUser(), [])
   const role = useMemo(() => getCurrentUserRole(), [])
@@ -192,6 +195,29 @@ export default function Instellingen() {
       }
     }
     return response
+  }
+
+  function readStoredPermissions() {
+    if (typeof window === 'undefined') {
+      return null
+    }
+    try {
+      const raw = localStorage.getItem('permissions')
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  }
+
+  function storePermissionsLocally(nextPermissions) {
+    if (typeof window === 'undefined') {
+      return
+    }
+    try {
+      localStorage.setItem('permissions', JSON.stringify(nextPermissions))
+    } catch {
+      // Ignore storage errors and keep backend as primary source.
+    }
   }
 
   async function loadUsers() {
@@ -291,6 +317,35 @@ export default function Instellingen() {
     }
   }
 
+  async function loadPermissions() {
+    setIsLoadingPermissions(true)
+    setPermissionsError('')
+    try {
+      const response = await activationCodesFetch('/api/permissions')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.detail || `Failed to fetch permissions: ${response.status}`)
+      }
+      const data = await response.json()
+      const nextPermissions =
+        data?.permissions && typeof data.permissions === 'object'
+          ? data.permissions
+          : INITIAL_PERMISSIONS
+      setPermissions(nextPermissions)
+      storePermissionsLocally(nextPermissions)
+    } catch (error) {
+      const fallbackPermissions = readStoredPermissions()
+      setPermissions(
+        fallbackPermissions && typeof fallbackPermissions === 'object'
+          ? fallbackPermissions
+          : INITIAL_PERMISSIONS
+      )
+      setPermissionsError(error?.message || 'Rechten laden mislukt.')
+    } finally {
+      setIsLoadingPermissions(false)
+    }
+  }
+
   useEffect(() => {
     if (!hasAccess || activeTab !== 'gebruikersbeheer') {
       return
@@ -298,6 +353,14 @@ export default function Instellingen() {
 
     loadUsers()
     loadActivationCodes()
+  }, [activeTab, hasAccess])
+
+  useEffect(() => {
+    if (!hasAccess || (activeTab !== 'gebruikersbeheer' && activeTab !== 'rechtenbeheer')) {
+      return
+    }
+
+    loadPermissions()
   }, [activeTab, hasAccess])
 
   useEffect(() => {
@@ -444,9 +507,29 @@ export default function Instellingen() {
     })
   }
 
-  function handleSavePermissions() {
-    localStorage.setItem('permissions', JSON.stringify(permissions))
+  async function handleSavePermissions() {
+    setPermissionsError('')
+    setPermissionsMessage('')
     console.log(permissions)
+
+    try {
+      const response = await activationCodesFetch('/api/permissions', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ permissions })
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.detail || `Failed to save permissions: ${response.status}`)
+      }
+
+      storePermissionsLocally(permissions)
+      setPermissionsMessage('Rechten opgeslagen.')
+    } catch (error) {
+      setPermissionsError(error?.message || 'Rechten opslaan mislukt.')
+    }
   }
 
   async function handleUserStatusAction(user) {
@@ -1126,6 +1209,18 @@ export default function Instellingen() {
                     Stel in welke rollen welke acties mogen uitvoeren per onderdeel.
                   </p>
                 </div>
+
+                {permissionsMessage ? (
+                  <p className="form-info inline-message" style={{ margin: 0 }}>
+                    {permissionsMessage}
+                  </p>
+                ) : null}
+                {permissionsError ? (
+                  <p style={{ margin: 0, color: '#b91c1c' }}>{permissionsError}</p>
+                ) : null}
+                {isLoadingPermissions ? (
+                  <p style={{ margin: 0, color: '#6b7280' }}>Rechten laden...</p>
+                ) : null}
 
                 {Object.entries(PERMISSION_DOMAIN_LABELS).map(([domainKey, domainLabel]) => (
                   <div
