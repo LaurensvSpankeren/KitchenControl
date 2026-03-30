@@ -17,6 +17,7 @@ export default function Instellingen() {
   const [isLoadingUsers, setIsLoadingUsers] = useState(false)
   const [usersError, setUsersError] = useState('')
   const [usersMessage, setUsersMessage] = useState('')
+  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false)
   const [activeUserActionId, setActiveUserActionId] = useState(null)
   const [editingUserId, setEditingUserId] = useState(null)
   const [editingPasswordUserId, setEditingPasswordUserId] = useState(null)
@@ -226,6 +227,21 @@ export default function Instellingen() {
     } finally {
       setIsCreatingUser(false)
     }
+  }
+
+  function openCreateUserModal() {
+    setCreateUserError('')
+    setCreateUserMessage('')
+    setIsCreateUserModalOpen(true)
+  }
+
+  function closeCreateUserModal() {
+    if (isCreatingUser) {
+      return
+    }
+    setIsCreateUserModalOpen(false)
+    setCreateUserError('')
+    setCreateUserMessage('')
   }
 
   async function handleUserStatusAction(user) {
@@ -617,8 +633,7 @@ export default function Instellingen() {
             <h3 style={{ marginBottom: '0.5rem' }}>{activeTabRecord.label}</h3>
             {isUsersTab ? (
               <div style={{ display: 'grid', gap: '0.75rem' }}>
-                <form
-                  onSubmit={handleCreateUser}
+                <div
                   style={{
                     display: 'grid',
                     gap: '0.75rem',
@@ -628,77 +643,25 @@ export default function Instellingen() {
                     background: '#fff'
                   }}
                 >
-                  <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-                    <label style={{ display: 'grid', gap: '0.35rem' }}>
-                      Naam
-                      <input
-                        type="text"
-                        value={createForm.name}
-                        onChange={(event) =>
-                          setCreateForm((current) => ({ ...current, name: event.target.value }))
-                        }
-                        disabled={isCreatingUser}
-                      />
-                    </label>
-                    <label style={{ display: 'grid', gap: '0.35rem' }}>
-                      E-mail
-                      <input
-                        type="email"
-                        value={createForm.email}
-                        onChange={(event) =>
-                          setCreateForm((current) => ({ ...current, email: event.target.value }))
-                        }
-                        disabled={isCreatingUser}
-                      />
-                    </label>
-                    <label style={{ display: 'grid', gap: '0.35rem' }}>
-                      Wachtwoord
-                      <input
-                        type="password"
-                        value={createForm.password}
-                        onChange={(event) =>
-                          setCreateForm((current) => ({ ...current, password: event.target.value }))
-                        }
-                        disabled={isCreatingUser}
-                      />
-                    </label>
-                    <label style={{ display: 'grid', gap: '0.35rem' }}>
-                      Rol
-                      <select
-                        value={createForm.role}
-                        onChange={(event) =>
-                          setCreateForm((current) => ({ ...current, role: event.target.value }))
-                        }
-                        disabled={isCreatingUser}
-                      >
-                        <option value="Supervisor">Supervisor</option>
-                        <option value="Chef">Chef</option>
-                        <option value="Kok">Kok</option>
-                        <option value="Keukenhulp">Keukenhulp</option>
-                        <option value="Bediening">Bediening</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <button type="submit" className="primary-btn" disabled={isCreatingUser}>
-                      {isCreatingUser ? 'Aanmaken...' : 'Gebruiker aanmaken'}
-                    </button>
-                    {createUserMessage ? (
-                      <p className="form-info inline-message" style={{ margin: 0 }}>
-                        {createUserMessage}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ display: 'grid', gap: '0.25rem' }}>
+                      <h4 style={{ margin: 0 }}>Gebruikersbeheer</h4>
+                      <p style={{ margin: 0, color: '#6b7280' }}>
+                        Beheer medewerkers en accountacties vanuit een centraal overzicht.
                       </p>
-                    ) : null}
-                    {createUserError ? (
-                      <p style={{ margin: 0, color: '#b91c1c' }}>{createUserError}</p>
-                    ) : null}
+                    </div>
+                    <button type="button" className="primary-btn" onClick={openCreateUserModal}>
+                      Nieuwe medewerker aanmaken
+                    </button>
                   </div>
-                </form>
+                </div>
                 {usersMessage ? (
                   <p className="form-info inline-message" style={{ margin: 0 }}>
                     {usersMessage}
                   </p>
                 ) : null}
                 {usersError ? <p style={{ margin: 0, color: '#b91c1c' }}>{usersError}</p> : null}
+                <h4 style={{ margin: 0 }}>Gebruikersoverzicht</h4>
                 {isLoadingUsers ? (
                   <p style={{ margin: 0, color: '#6b7280' }}>Gebruikers laden...</p>
                 ) : users.length === 0 ? (
@@ -824,30 +787,40 @@ export default function Instellingen() {
                                         type="button"
                                         className="table-action-btn"
                                         onClick={() => startEditingUser(user)}
+                                        title="Gebruiker bewerken"
+                                        aria-label={`Bewerk ${user.name || 'gebruiker'}`}
                                         disabled={
                                           isLoadingUsers ||
                                           Boolean(activeUserActionId) ||
                                           Boolean(editingPasswordUserId)
                                         }
                                       >
-                                        Bewerken
+                                        ✏️
                                       </button>
                                       <button
                                         type="button"
                                         className="table-action-btn"
                                         onClick={() => startEditingPassword(user)}
+                                        title="Nieuw wachtwoord instellen"
+                                        aria-label={`Nieuw wachtwoord voor ${user.name || 'gebruiker'}`}
                                         disabled={
                                           isLoadingUsers ||
                                           Boolean(activeUserActionId) ||
                                           Boolean(editingUserId)
                                         }
                                       >
-                                        Wachtwoord
+                                        🔑
                                       </button>
                                       <button
                                         type="button"
                                         className="table-action-btn"
                                         onClick={() => handleUserStatusAction(user)}
+                                        title={user.is_active ? 'Gebruiker deactiveren' : 'Gebruiker reactiveren'}
+                                        aria-label={
+                                          user.is_active
+                                            ? `Deactiveer ${user.name || 'gebruiker'}`
+                                            : `Reactiveer ${user.name || 'gebruiker'}`
+                                        }
                                         disabled={
                                           isLoadingUsers ||
                                           Boolean(activeUserActionId) ||
@@ -858,8 +831,8 @@ export default function Instellingen() {
                                         {isBusy
                                           ? 'Bezig...'
                                           : user.is_active
-                                            ? 'Deactiveren'
-                                            : 'Reactiveren'}
+                                            ? '⛔'
+                                            : '♻️'}
                                       </button>
                                     </>
                                   )}
@@ -1465,6 +1438,94 @@ export default function Instellingen() {
           </div>
         </section>
       )}
+
+      {isCreateUserModalOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Nieuwe medewerker aanmaken">
+          <div className="modal-card modal-wide sfp-modal">
+            <div className="modal-header">
+              <h3>Nieuwe medewerker aanmaken</h3>
+            </div>
+
+            <div className="modal-body">
+              {createUserError ? <div className="modal-validation-banner">{createUserError}</div> : null}
+              {createUserMessage ? (
+                <p className="form-info inline-message">{createUserMessage}</p>
+              ) : null}
+
+              <form onSubmit={handleCreateUser} style={{ display: 'grid', gap: '1rem' }}>
+                <section className="modal-section">
+                  <h4>Basis</h4>
+                  <div className="modal-grid two-col calm-grid">
+                    <label>
+                      Naam
+                      <input
+                        type="text"
+                        value={createForm.name}
+                        onChange={(event) =>
+                          setCreateForm((current) => ({ ...current, name: event.target.value }))
+                        }
+                        disabled={isCreatingUser}
+                      />
+                    </label>
+                    <label>
+                      E-mail
+                      <input
+                        type="email"
+                        value={createForm.email}
+                        onChange={(event) =>
+                          setCreateForm((current) => ({ ...current, email: event.target.value }))
+                        }
+                        disabled={isCreatingUser}
+                      />
+                    </label>
+                    <label>
+                      Wachtwoord
+                      <input
+                        type="password"
+                        value={createForm.password}
+                        onChange={(event) =>
+                          setCreateForm((current) => ({ ...current, password: event.target.value }))
+                        }
+                        disabled={isCreatingUser}
+                      />
+                    </label>
+                    <label>
+                      Rol
+                      <select
+                        value={createForm.role}
+                        onChange={(event) =>
+                          setCreateForm((current) => ({ ...current, role: event.target.value }))
+                        }
+                        disabled={isCreatingUser}
+                      >
+                        <option value="Supervisor">Supervisor</option>
+                        <option value="Chef">Chef</option>
+                        <option value="Kok">Kok</option>
+                        <option value="Keukenhulp">Keukenhulp</option>
+                        <option value="Bediening">Bediening</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="table-action-btn"
+                    onClick={closeCreateUserModal}
+                    disabled={isCreatingUser}
+                  >
+                    Sluiten
+                  </button>
+                  <button type="submit" className="primary-btn" disabled={isCreatingUser}>
+                    {isCreatingUser ? 'Aanmaken...' : 'Gebruiker aanmaken'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
