@@ -1,6 +1,63 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
-import { apiClient } from '../api/client'
+import { apiClient, API_BASE_URL } from '../api/client'
+import { getCurrentUser } from '../utils/currentUser'
+
+const defaultPermissions = {
+  ingredienten: {
+    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
+    aanmaken: ['Supervisor', 'Chef', 'Kok'],
+    wijzigen: ['Supervisor', 'Chef', 'Kok'],
+    archiveren: ['Supervisor'],
+    verwijderen: ['Supervisor']
+  }
+}
+
+function unflattenPermissions(flat) {
+  const nested = {}
+
+  Object.entries(flat || {}).forEach(([key, roles]) => {
+    const [domain, action] = String(key).split('.')
+    if (!domain || !action) {
+      return
+    }
+
+    if (!nested[domain]) {
+      nested[domain] = {}
+    }
+
+    nested[domain][action] = roles
+  })
+
+  return nested
+}
+
+function readStoredPermissions() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    const raw = localStorage.getItem('permissions')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function storePermissionsLocally(nextPermissions) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    localStorage.setItem('permissions', JSON.stringify(nextPermissions))
+  } catch {
+    // Ignore storage errors and keep defaults as fallback.
+  }
+}
+
+function hasPermission(permissions, domain, action, role) {
+  return permissions?.[domain]?.[action]?.includes(role)
+}
 
 const requiredLabels = {
   name: 'Naam',
@@ -271,6 +328,8 @@ function mapFormToPayload(formData, derivedCalculation) {
 }
 
 export default function Ingredientenbeheer() {
+  const [permissions, setPermissions] = useState(defaultPermissions)
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false)
   const [ingredients, setIngredients] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -280,6 +339,8 @@ export default function Ingredientenbeheer() {
   const [saveMessage, setSaveMessage] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const modalBodyRef = useRef(null)
+  const currentUser = getCurrentUser()
+  const role = currentUser?.role
 
   const derivedCalculation = useMemo(
     () =>
@@ -299,6 +360,57 @@ export default function Ingredientenbeheer() {
       setIngredients([])
     }
   }
+
+  useEffect(() => {
+    let isCancelled = false
+
+    async function loadPermissions() {
+      setIsLoadingPermissions(true)
+      try {
+        const token = apiClient.getAuthToken()
+        const response = await fetch(`${API_BASE_URL}/api/permissions`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        })
+        if (!response.ok) {
+          throw new Error(`Failed to fetch permissions: ${response.status}`)
+        }
+
+        const data = await response.json()
+        const nextPermissions =
+          data?.permissions && typeof data.permissions === 'object'
+            ? unflattenPermissions(data.permissions)
+            : defaultPermissions
+        const resolvedPermissions =
+          nextPermissions && Object.keys(nextPermissions).length > 0
+            ? nextPermissions
+            : defaultPermissions
+
+        if (!isCancelled) {
+          setPermissions(resolvedPermissions)
+          storePermissionsLocally(resolvedPermissions)
+        }
+      } catch {
+        const fallbackPermissions = readStoredPermissions()
+        if (!isCancelled) {
+          setPermissions(
+            fallbackPermissions && typeof fallbackPermissions === 'object'
+              ? fallbackPermissions
+              : defaultPermissions
+          )
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingPermissions(false)
+        }
+      }
+    }
+
+    loadPermissions()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     loadIngredients()
@@ -420,9 +532,11 @@ export default function Ingredientenbeheer() {
       <section className="card">
         <div className="ingredient-header-row">
           <h3>Ingrediëntenoverzicht</h3>
-          <button type="button" className="open-modal-btn" onClick={openCreateModal}>
-            Handmatig ingrediënt toevoegen
-          </button>
+          {!isLoadingPermissions && hasPermission(permissions, 'ingredienten', 'aanmaken', role) ? (
+            <button type="button" className="open-modal-btn" onClick={openCreateModal}>
+              Handmatig ingrediënt toevoegen
+            </button>
+          ) : null}
         </div>
 
         <input
@@ -461,13 +575,15 @@ export default function Ingredientenbeheer() {
                     <td>{formatPackagingText(ingredient)}</td>
                     <td>{formatNetContentText(ingredient)}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="table-action-btn"
-                        onClick={() => openEditModal(ingredient)}
-                      >
-                        Bewerken
-                      </button>
+                      {!isLoadingPermissions && hasPermission(permissions, 'ingredienten', 'wijzigen', role) ? (
+                        <button
+                          type="button"
+                          className="table-action-btn"
+                          onClick={() => openEditModal(ingredient)}
+                        >
+                          Bewerken
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))}

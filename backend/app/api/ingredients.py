@@ -8,6 +8,7 @@ from app.api.auth import get_current_user, require_supervisor
 from app.db.session import get_db
 from app.models.ingredient import Ingredient
 from app.models.recipe_line import RecipeLine
+from app.models.user import has_permission
 from app.services.ingredient_import_match_service import (
     build_import_match_debug_for_manual_ingredient,
     detect_import_match_for_manual_ingredient,
@@ -289,8 +290,11 @@ def _serialize_ingredient_with_match(db: Session, ingredient: Ingredient) -> dic
 @router.get("/api/ingredients", tags=["ingredients"])
 def list_ingredients(
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> list[dict]:
+    if not has_permission(current_user, "ingredienten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     ingredients = (
         db.query(Ingredient)
         .filter(Ingredient.is_archived.is_(False))
@@ -364,8 +368,11 @@ def rename_ingredient_category(
 def get_ingredient(
     ingredient_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "ingredienten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -373,7 +380,11 @@ def get_ingredient(
 
 
 @router.get("/api/manual-ingredients/{ingredient_id}/match-debug", tags=["ingredients"])
-def get_manual_ingredient_match_debug(ingredient_id: int, db: Session = Depends(get_db)) -> dict:
+def get_manual_ingredient_match_debug(
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    _current_user=Depends(get_current_user),
+) -> dict:
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -386,8 +397,11 @@ def get_manual_ingredient_match_debug(ingredient_id: int, db: Session = Depends(
 def create_ingredient(
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "ingredienten.aanmaken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     required_fields = [
         "supplier_name",
         "supplier_product_code",
@@ -417,8 +431,11 @@ def update_ingredient(
     ingredient_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "ingredienten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -450,8 +467,11 @@ def update_ingredient(
 def create_manual_ingredient(
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "ingredienten.aanmaken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     required_fields = [
         "supplier_name",
         "supplier_product_name",
@@ -572,8 +592,11 @@ def list_stale_import_ingredients(
 def delete_manual_ingredient(
     ingredient_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "ingredienten.verwijderen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -601,8 +624,11 @@ def delete_manual_ingredient(
 def delete_import_ingredient(
     ingredient_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "ingredienten.verwijderen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -630,8 +656,11 @@ def delete_import_ingredient(
 def archive_manual_ingredient(
     ingredient_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "ingredienten.archiveren", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -649,8 +678,11 @@ def archive_manual_ingredient(
 def archive_import_ingredient(
     ingredient_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "ingredienten.archiveren", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
