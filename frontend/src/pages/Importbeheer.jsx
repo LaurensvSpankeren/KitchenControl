@@ -1,7 +1,63 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
-import { apiClient } from '../api/client'
-import { getCurrentUserRole } from '../utils/currentUser'
+import { apiClient, API_BASE_URL } from '../api/client'
+import { getCurrentUser } from '../utils/currentUser'
+
+const defaultPermissions = {
+  importbeheer: {
+    bekijken: ['Supervisor', 'Chef', 'Kok'],
+    importeren: ['Supervisor', 'Chef'],
+    matchen: ['Supervisor', 'Chef', 'Kok'],
+    opschonen: ['Supervisor'],
+    samenvoegen: ['Supervisor']
+  }
+}
+
+function unflattenPermissions(flat) {
+  const nested = {}
+
+  Object.entries(flat || {}).forEach(([key, roles]) => {
+    const [domain, action] = String(key).split('.')
+    if (!domain || !action) {
+      return
+    }
+
+    if (!nested[domain]) {
+      nested[domain] = {}
+    }
+
+    nested[domain][action] = roles
+  })
+
+  return nested
+}
+
+function readStoredPermissions() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    const raw = localStorage.getItem('permissions')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function storePermissionsLocally(nextPermissions) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    localStorage.setItem('permissions', JSON.stringify(nextPermissions))
+  } catch {
+    // Ignore storage errors and keep defaults as fallback.
+  }
+}
+
+function hasPermission(permissions, domain, action, role) {
+  return permissions?.[domain]?.[action]?.includes(role)
+}
 
 function formatDateTime(value) {
   if (!value) {
@@ -64,6 +120,8 @@ function parseJsonString(value) {
 }
 
 export default function Importbeheer() {
+  const [permissions, setPermissions] = useState(defaultPermissions)
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
   const [importMessage, setImportMessage] = useState('')
   const [isImporting, setIsImporting] = useState(false)
@@ -91,8 +149,18 @@ export default function Importbeheer() {
   const [selectedManualMatchIngredient, setSelectedManualMatchIngredient] = useState(null)
   const [selectedImportMatchIngredient, setSelectedImportMatchIngredient] = useState(null)
   const [isLoadingMatchPreview, setIsLoadingMatchPreview] = useState(false)
-  const currentUserRole = useMemo(() => getCurrentUserRole(), [])
-  const canManageSupervisorImportActions = currentUserRole === 'Supervisor'
+  const currentUser = getCurrentUser()
+  const role = currentUser?.role
+  const canViewImportbeheer =
+    !isLoadingPermissions && hasPermission(permissions, 'importbeheer', 'bekijken', role)
+  const canImportCsv =
+    !isLoadingPermissions && hasPermission(permissions, 'importbeheer', 'importeren', role)
+  const canMatchImport =
+    !isLoadingPermissions && hasPermission(permissions, 'importbeheer', 'matchen', role)
+  const canCleanupImport =
+    !isLoadingPermissions && hasPermission(permissions, 'importbeheer', 'opschonen', role)
+  const canMergeImport =
+    !isLoadingPermissions && hasPermission(permissions, 'importbeheer', 'samenvoegen', role)
 
   const duplicateIssues = useMemo(
     () => issues.filter((issue) => issue.issue_type === 'duplicate_conflict_in_file'),
@@ -341,11 +409,71 @@ export default function Importbeheer() {
   }
 
   useEffect(() => {
+    let isCancelled = false
+
+    async function loadPermissions() {
+      setIsLoadingPermissions(true)
+      try {
+        const token = apiClient.getAuthToken()
+        const response = await fetch(`${API_BASE_URL}/api/permissions`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        })
+        if (!response.ok) {
+          throw new Error(`Failed to fetch permissions: ${response.status}`)
+        }
+
+        const data = await response.json()
+        const nextPermissions =
+          data?.permissions && typeof data.permissions === 'object'
+            ? unflattenPermissions(data.permissions)
+            : defaultPermissions
+        const resolvedPermissions =
+          nextPermissions && Object.keys(nextPermissions).length > 0 ? nextPermissions : defaultPermissions
+
+        if (!isCancelled) {
+          setPermissions(resolvedPermissions)
+          storePermissionsLocally(resolvedPermissions)
+        }
+      } catch {
+        const fallbackPermissions = readStoredPermissions()
+        if (!isCancelled) {
+          setPermissions(
+            fallbackPermissions && typeof fallbackPermissions === 'object'
+              ? fallbackPermissions
+              : defaultPermissions
+          )
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingPermissions(false)
+        }
+      }
+    }
+
+    loadPermissions()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     loadIssues()
     loadStaleImportIngredients()
     loadManualIngredients()
     loadManualMatchIngredients()
   }, [])
+
+  if (!isLoadingPermissions && !canViewImportbeheer) {
+    return (
+      <div>
+        <header className="page-header">
+          <h2>Importbeheer</h2>
+          <p>Je hebt geen rechten om Importbeheer te bekijken.</p>
+        </header>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -357,14 +485,18 @@ export default function Importbeheer() {
       <section className="card">
         <h3>Handmatig CSV uploaden</h3>
         <p style={{ marginTop: '0.65rem' }}>Upload hier CSV-bestanden om inkoopproducten te synchroniseren.</p>
-        <input
-          type="file"
-          accept=".csv,text/csv"
-          onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
-        />
-        <button type="button" onClick={handleImport} disabled={!selectedFile || isImporting}>
-          {isImporting ? 'Bezig met importeren...' : 'CSV uploaden'}
-        </button>
+        {canImportCsv ? (
+          <>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+            />
+            <button type="button" onClick={handleImport} disabled={!selectedFile || isImporting}>
+              {isImporting ? 'Bezig met importeren...' : 'CSV uploaden'}
+            </button>
+          </>
+        ) : null}
         {importMessage ? <p>{importMessage}</p> : null}
       </section>
 
@@ -414,23 +546,27 @@ export default function Importbeheer() {
                         <td>{ingredient.manual_note || '-'}</td>
                         <td>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <button
-                              type="button"
-                              onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
-                              disabled={isBusy}
-                            >
-                              Reviewen
-                            </button>
-                            {ingredient.match_status === 'strong' ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenMatchPreview(ingredient)}
-                                disabled={isBusy || isLoadingMatchPreview}
-                              >
-                                Bekijk match
-                              </button>
+                            {canMatchImport ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
+                                  disabled={isBusy}
+                                >
+                                  Reviewen
+                                </button>
+                                {ingredient.match_status === 'strong' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenMatchPreview(ingredient)}
+                                    disabled={isBusy || isLoadingMatchPreview}
+                                  >
+                                    Bekijk match
+                                  </button>
+                                ) : null}
+                              </>
                             ) : null}
-                            {canManageSupervisorImportActions ? (
+                            {canCleanupImport ? (
                               <>
                                 <button
                                   type="button"
@@ -509,25 +645,29 @@ export default function Importbeheer() {
                         <td>{ingredient.manual_note || '-'}</td>
                         <td>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <button
-                              type="button"
-                              onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
-                              disabled={isBusy}
-                            >
-                              Reviewen
-                            </button>
-                            {ingredient.match_status === 'strong' ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleManualIngredientAction(ingredient.id, 'link-import')
-                                }
-                                disabled={isBusy}
-                              >
-                                Koppel aan import
-                              </button>
+                            {canMatchImport ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
+                                  disabled={isBusy}
+                                >
+                                  Reviewen
+                                </button>
+                                {ingredient.match_status === 'strong' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleManualIngredientAction(ingredient.id, 'link-import')
+                                    }
+                                    disabled={isBusy}
+                                  >
+                                    Koppel aan import
+                                  </button>
+                                ) : null}
+                              </>
                             ) : null}
-                            {canManageSupervisorImportActions ? (
+                            {canCleanupImport ? (
                               <>
                                 <button
                                   type="button"
@@ -603,7 +743,7 @@ export default function Importbeheer() {
                         <td>{formatDateTime(ingredient.supplier_last_imported_at)}</td>
                         <td>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            {canManageSupervisorImportActions ? (
+                            {canCleanupImport ? (
                               <>
                                 <button
                                   type="button"
@@ -661,9 +801,11 @@ export default function Importbeheer() {
                       <td>{issue.supplier_product_name || '-'}</td>
                       <td>{formatDateTime(issue.created_at)}</td>
                       <td>
-                        <button type="button" onClick={() => handleOpenIssue(issue.id)}>
-                          Open
-                        </button>
+                        {canMergeImport ? (
+                          <button type="button" onClick={() => handleOpenIssue(issue.id)}>
+                            Open
+                          </button>
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -841,24 +983,26 @@ export default function Importbeheer() {
                 Annuleren
               </button>
 
-              <button
-                type="button"
-                onClick={() =>
-                  handleManualIngredientAction(selectedManualMatchIngredient.id, 'link-import')
-                }
-                disabled={activeManualActionId === selectedManualMatchIngredient.id}
-                style={{
-                  padding: '0.5rem 1.25rem',
-                  borderRadius: '0.5rem',
-                  border: 'none',
-                  background: '#2563eb',
-                  color: '#fff',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                Koppelen
-              </button>
+              {canMatchImport ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleManualIngredientAction(selectedManualMatchIngredient.id, 'link-import')
+                  }
+                  disabled={activeManualActionId === selectedManualMatchIngredient.id}
+                  style={{
+                    padding: '0.5rem 1.25rem',
+                    borderRadius: '0.5rem',
+                    border: 'none',
+                    background: '#2563eb',
+                    color: '#fff',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Koppelen
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -944,7 +1088,7 @@ export default function Importbeheer() {
             ))}
           </div>
 
-          {selectedIssue.issue_type === 'duplicate_conflict_in_file' ? (
+          {selectedIssue.issue_type === 'duplicate_conflict_in_file' && canMergeImport ? (
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
               <button
                 type="button"

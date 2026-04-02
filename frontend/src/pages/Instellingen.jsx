@@ -22,6 +22,13 @@ const PERMISSION_ACTIONS = [
   'herstellen',
   'dupliceren'
 ]
+const PERMISSION_ACTIONS_BY_DOMAIN = {
+  gerechten: PERMISSION_ACTIONS,
+  halffabricaten: PERMISSION_ACTIONS,
+  ingredienten: PERMISSION_ACTIONS,
+  menukaarten: PERMISSION_ACTIONS,
+  importbeheer: ['bekijken', 'importeren', 'matchen', 'opschonen', 'samenvoegen']
+}
 const PERMISSION_DOMAIN_LABELS = {
   gerechten: 'Gerechten',
   halffabricaten: 'Halffabricaten',
@@ -67,13 +74,11 @@ const INITIAL_PERMISSIONS = {
     dupliceren: ['Supervisor', 'Chef', 'Kok']
   },
   importbeheer: {
-    bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
-    aanmaken: ['Supervisor', 'Chef', 'Kok'],
-    wijzigen: ['Supervisor', 'Chef', 'Kok'],
-    archiveren: ['Supervisor'],
-    verwijderen: ['Supervisor'],
-    herstellen: ['Supervisor'],
-    dupliceren: ['Supervisor', 'Chef', 'Kok']
+    bekijken: ['Supervisor', 'Chef', 'Kok'],
+    importeren: ['Supervisor', 'Chef'],
+    matchen: ['Supervisor', 'Chef', 'Kok'],
+    opschonen: ['Supervisor'],
+    samenvoegen: ['Supervisor']
   }
 }
 
@@ -1281,7 +1286,7 @@ export default function Instellingen() {
                           </tr>
                         </thead>
                         <tbody>
-                          {PERMISSION_ACTIONS.map((action) => (
+                          {(PERMISSION_ACTIONS_BY_DOMAIN[domainKey] || PERMISSION_ACTIONS).map((action) => (
                             <tr key={`${domainKey}-${action}`}>
                               <td style={{ textTransform: 'capitalize' }}>{action}</td>
                               {PERMISSION_ROLES.map((permissionRole) => (
