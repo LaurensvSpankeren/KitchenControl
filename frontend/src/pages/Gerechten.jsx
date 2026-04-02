@@ -411,6 +411,8 @@ export default function Gerechten() {
   const role = currentUser?.role
   const currentUserRole = useMemo(() => getCurrentUserRole(), [])
   const canManageSupervisorDishActions = currentUserRole === 'Supervisor'
+  const canCreateDishes = !isLoadingPermissions && hasPermission(permissions, 'gerechten', 'aanmaken', role)
+  const canEditDishes = !isLoadingPermissions && hasPermission(permissions, 'gerechten', 'wijzigen', role)
 
   const uiStyles = {
     viewModeSwitch: { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' },
@@ -1705,9 +1707,11 @@ export default function Gerechten() {
               </option>
             ))}
           </select>
-          <button type="button" className="sfp-new-btn" onClick={openNewModal}>
-            Nieuw gerecht
-          </button>
+          {canCreateDishes ? (
+            <button type="button" className="sfp-new-btn" onClick={openNewModal}>
+              Nieuw gerecht
+            </button>
+          ) : null}
         </div>
 
         {pageMessage ? <p className="form-info inline-message">{pageMessage}</p> : null}
@@ -1754,14 +1758,16 @@ export default function Gerechten() {
                     <td className="text-left">{item.allergens_total || 'Geen brondata allergenen beschikbaar'}</td>
                     <td className="text-center" style={uiStyles.actionCell}>
                       <div style={uiStyles.rowActionsWrap} ref={openActionsMenuId === item.id ? actionsMenuRef : null}>
-                        <button
-                          type="button"
-                          className="table-action-btn"
-                          style={uiStyles.rowActionButton}
-                          onClick={() => openEditModal(item, viewMode)}
-                        >
-                          Openen
-                        </button>
+                        {canEditDishes ? (
+                          <button
+                            type="button"
+                            className="table-action-btn"
+                            style={uiStyles.rowActionButton}
+                            onClick={() => openEditModal(item, viewMode)}
+                          >
+                            Openen
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="table-action-btn"
@@ -1858,12 +1864,14 @@ export default function Gerechten() {
                     ) : (
                       <div style={uiStyles.photoPlaceholder}>Nog geen foto geüpload</div>
                     )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      disabled={isReadOnlyModal}
-                      onChange={handleDishPhotoUpload}
-                    />
+                    {canEditDishes ? (
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={isReadOnlyModal}
+                        onChange={handleDishPhotoUpload}
+                      />
+                    ) : null}
                   </label>
                   <div className="modal-grid one-col calm-grid">
                     <label>
@@ -2235,7 +2243,7 @@ export default function Gerechten() {
                                           Annuleren
                                         </button>
                                       </>
-                                    ) : !isReadOnlyModal ? (
+                                    ) : !isReadOnlyModal && canEditDishes ? (
                                       <>
                                         <button
                                           type="button"
@@ -2414,9 +2422,11 @@ export default function Gerechten() {
                         Archiveren
                       </button>
                     ) : null}
-                    <button type="button" className="primary-btn" onClick={handleSaveDish} disabled={isSaving}>
-                      {isSaving ? 'Opslaan...' : 'Opslaan'}
-                    </button>
+                    {canEditDishes ? (
+                      <button type="button" className="primary-btn" onClick={handleSaveDish} disabled={isSaving}>
+                        {isSaving ? 'Opslaan...' : 'Opslaan'}
+                      </button>
+                    ) : null}
                   </>
                 ) : (
                   <>

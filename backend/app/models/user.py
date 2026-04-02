@@ -15,6 +15,9 @@ USER_ROLES = (
     "Bediening",
 )
 DEFAULT_PERMISSIONS = {
+    "gerechten.bekijken": ["Supervisor", "Chef", "Kok", "Keukenhulp", "Bediening"],
+    "gerechten.aanmaken": ["Supervisor", "Chef", "Kok"],
+    "gerechten.wijzigen": ["Supervisor", "Chef", "Kok"],
     "gerechten.verwijderen": ["Supervisor"],
     "gerechten.archiveren": ["Supervisor"],
     "gerechten.dupliceren": ["Supervisor", "Chef", "Kok"],

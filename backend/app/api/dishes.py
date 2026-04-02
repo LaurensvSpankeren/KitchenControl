@@ -382,14 +382,20 @@ def _build_dish_detail(db: Session, item: Dish) -> dict:
 @router.get("/api/dishes", tags=["dishes"])
 def list_dishes(
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> list[dict]:
+    if not has_permission(current_user, "gerechten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     items = db.query(Dish).filter(Dish.is_archived.is_(False)).order_by(Dish.name.asc()).all()
     return [_serialize_dish(item) for item in items]
 
 
 @router.get("/api/dishes/archived", tags=["dishes"])
-def list_archived_dishes(db: Session = Depends(get_db)) -> list[dict]:
+def list_archived_dishes(
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> list[dict]:
     items = db.query(Dish).filter(Dish.is_archived.is_(True)).order_by(Dish.name.asc()).all()
     return [_serialize_dish(item) for item in items]
 
@@ -398,8 +404,11 @@ def list_archived_dishes(db: Session = Depends(get_db)) -> list[dict]:
 def create_dish(
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.aanmaken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = Dish(name="tmp")
     _apply_dish_payload(item, payload)
 
@@ -414,8 +423,11 @@ def update_dish(
     dish_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -431,8 +443,11 @@ def upload_dish_photo(
     dish_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -452,8 +467,11 @@ def add_dish_recipe_line(
     dish_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item_type = (payload.get("item_type") or "").strip()
     if item_type not in {"ingredient", "semi_finished_product"}:
         raise HTTPException(
@@ -506,8 +524,11 @@ def update_dish_recipe_line(
     recipe_line_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     parent = db.query(Dish).filter(Dish.id == dish_id).first()
     if parent is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -560,8 +581,11 @@ def delete_dish_recipe_line(
     dish_id: int,
     recipe_line_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     parent = db.query(Dish).filter(Dish.id == dish_id).first()
     if parent is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -588,8 +612,11 @@ def replace_dish_recipe_steps(
     dish_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -809,8 +836,11 @@ def delete_dish(
 def get_dish_detail(
     dish_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
@@ -819,7 +849,11 @@ def get_dish_detail(
 
 
 @router.get("/api/dishes/{dish_id}/print", tags=["dishes"])
-def get_dish_print_payload(dish_id: int, db: Session = Depends(get_db)) -> dict:
+def get_dish_print_payload(
+    dish_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
+) -> dict:
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
