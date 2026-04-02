@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user, require_supervisor
+from app.api.auth import get_current_user
 from app.db.session import get_db
 from app.models.ingredient_import_issue import IngredientImportIssue
+from app.models.user import has_permission
 from app.services.ingredient_import_issue_service import resolve_issue
 from app.services.ingredient_variant_cleanup_service import archive_legacy_variant_duplicates
 
@@ -32,8 +33,13 @@ def list_import_issues(
     status: str | None = None,
     issue_type: str | None = None,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> list[dict]:
+    if not has_permission(current_user, "importbeheer.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+    if not has_permission(current_user, "importbeheer.samenvoegen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     query = db.query(IngredientImportIssue)
     if status:
         query = query.filter(IngredientImportIssue.status == status)
@@ -48,8 +54,13 @@ def list_import_issues(
 def get_import_issue(
     issue_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "importbeheer.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+    if not has_permission(current_user, "importbeheer.samenvoegen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     issue = db.query(IngredientImportIssue).filter(IngredientImportIssue.id == issue_id).first()
     if issue is None:
         raise HTTPException(status_code=404, detail="Import issue not found")
@@ -61,8 +72,11 @@ def resolve_import_issue(
     issue_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "importbeheer.samenvoegen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     try:
         issue = resolve_issue(
             db=db,
@@ -81,6 +95,9 @@ def resolve_import_issue(
 @router.post("/api/import-issues/cleanup-legacy-variants", tags=["import-issues"])
 def cleanup_legacy_variant_duplicates(
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "importbeheer.samenvoegen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     return archive_legacy_variant_duplicates(db)

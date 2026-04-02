@@ -1,11 +1,12 @@
 import os
 import tempfile
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.api.auth import require_supervisor
+from app.api.auth import get_current_user
 from app.db.session import get_db
+from app.models.user import has_permission
 from app.services.ingredient_import import import_ingredients_from_csv
 
 router = APIRouter()
@@ -15,8 +16,11 @@ router = APIRouter()
 async def import_ingredients(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _current_user = Depends(require_supervisor),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "importbeheer.importeren", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     temp_file_path = ""
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:

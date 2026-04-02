@@ -513,8 +513,13 @@ def create_manual_ingredient(
 @router.get("/api/manual-ingredients/review", tags=["ingredients"])
 def list_manual_ingredients_for_review(
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> list[dict]:
+    if not has_permission(current_user, "importbeheer.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+    if not has_permission(current_user, "importbeheer.matchen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     threshold = datetime.now(timezone.utc) - timedelta(days=45)
     ingredients = (
         db.query(Ingredient)
@@ -543,8 +548,13 @@ def list_manual_ingredients_for_review(
 @router.get("/api/manual-ingredients/matches", tags=["ingredients"])
 def list_manual_ingredients_with_matches(
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> list[dict]:
+    if not has_permission(current_user, "importbeheer.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+    if not has_permission(current_user, "importbeheer.matchen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     ingredients = (
         db.query(Ingredient)
         .filter(
@@ -566,8 +576,11 @@ def list_manual_ingredients_with_matches(
 @router.get("/api/import-ingredients/stale", tags=["ingredients"])
 def list_stale_import_ingredients(
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> list[dict]:
+    if not has_permission(current_user, "importbeheer.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     threshold = datetime.now(timezone.utc) - timedelta(days=45)
     ingredients = (
         db.query(Ingredient)
@@ -594,7 +607,7 @@ def delete_manual_ingredient(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "ingredienten.verwijderen", db):
+    if not has_permission(current_user, "importbeheer.opschonen", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
@@ -626,7 +639,7 @@ def delete_import_ingredient(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "ingredienten.verwijderen", db):
+    if not has_permission(current_user, "importbeheer.opschonen", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
@@ -658,7 +671,7 @@ def archive_manual_ingredient(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "ingredienten.archiveren", db):
+    if not has_permission(current_user, "importbeheer.opschonen", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
@@ -680,7 +693,7 @@ def archive_import_ingredient(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> dict:
-    if not has_permission(current_user, "ingredienten.archiveren", db):
+    if not has_permission(current_user, "importbeheer.opschonen", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
@@ -700,8 +713,11 @@ def archive_import_ingredient(
 def review_manual_ingredient(
     ingredient_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "importbeheer.matchen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
@@ -718,8 +734,11 @@ def review_manual_ingredient(
 def link_manual_ingredient(
     ingredient_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "importbeheer.matchen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     try:
         return link_manual_ingredient_to_import(db, ingredient_id)
     except LookupError as exc:
