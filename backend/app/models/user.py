@@ -38,6 +38,9 @@ DEFAULT_PERMISSIONS = {
     "menukaarten.archiveren": ["Supervisor"],
     "menukaarten.dupliceren": ["Supervisor", "Chef", "Kok"],
     "menukaarten.herstellen": ["Supervisor"],
+    "menukaarten.bekijken": ["Supervisor", "Chef", "Kok", "Keukenhulp", "Bediening"],
+    "menukaarten.aanmaken": ["Supervisor", "Chef", "Kok"],
+    "menukaarten.wijzigen": ["Supervisor", "Chef", "Kok"],
 }
 PERMISSIONS = DEFAULT_PERMISSIONS
 SUPERVISOR_ROLE = "Supervisor"

@@ -428,8 +428,11 @@ def _get_link_in_sectie(db: Session, menukaart_id: int, sectie_id: int, gerecht_
 @router.get("/api/menukaarten", tags=["menukaarten"])
 def list_menukaarten(
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> list[dict]:
+    if not has_permission(current_user, "menukaarten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     items = (
         db.query(Menukaart)
         .options(
@@ -539,8 +542,11 @@ def list_archived_menukaarten(
 def get_menukaart(
     menukaart_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     return _serialize_menukaart_detail(db, _get_menukaart(db, menukaart_id))
 
 
@@ -548,8 +554,11 @@ def get_menukaart(
 def create_menukaart(
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.aanmaken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Missing required field: name")
@@ -626,8 +635,11 @@ def update_menukaart(
     menukaart_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
@@ -669,8 +681,11 @@ def create_menukaart_sectie(
     menukaart_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     menukaart = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if menukaart is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
@@ -700,8 +715,11 @@ def update_menukaart_sectie(
     sectie_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     sectie = _get_sectie(db, menukaart_id, sectie_id)
     title = (payload.get("title") or "").strip()
     if not title:
@@ -717,8 +735,11 @@ def move_menukaart_sectie_up(
     menukaart_id: int,
     sectie_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     sectie = _get_sectie(db, menukaart_id, sectie_id)
     previous_sectie = (
         db.query(MenukaartSectie)
@@ -742,8 +763,11 @@ def move_menukaart_sectie_down(
     menukaart_id: int,
     sectie_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     sectie = _get_sectie(db, menukaart_id, sectie_id)
     next_sectie = (
         db.query(MenukaartSectie)
@@ -786,8 +810,11 @@ def add_gerecht_to_menukaart(
     menukaart_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     menukaart = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if menukaart is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")
@@ -837,8 +864,11 @@ def move_menukaart_gerecht_up(
     sectie_id: int,
     gerecht_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     _get_sectie(db, menukaart_id, sectie_id)
     link = _get_link_in_sectie(db, menukaart_id, sectie_id, gerecht_id)
     previous_link = (
@@ -865,8 +895,11 @@ def move_menukaart_gerecht_down(
     sectie_id: int,
     gerecht_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     _get_sectie(db, menukaart_id, sectie_id)
     link = _get_link_in_sectie(db, menukaart_id, sectie_id, gerecht_id)
     next_link = (
@@ -893,8 +926,11 @@ def move_menukaart_gerecht_to_sectie(
     gerecht_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "menukaarten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     menukaart = db.query(Menukaart).filter(Menukaart.id == menukaart_id).first()
     if menukaart is None:
         raise HTTPException(status_code=404, detail="Menukaart not found")

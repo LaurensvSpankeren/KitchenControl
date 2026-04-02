@@ -354,6 +354,10 @@ export default function Menukaarten() {
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false)
   const currentUser = getCurrentUser()
   const role = currentUser?.role
+  const canCreateMenukaarten =
+    !isLoadingPermissions && hasPermission(permissions, 'menukaarten', 'aanmaken', role)
+  const canEditMenukaarten =
+    !isLoadingPermissions && hasPermission(permissions, 'menukaarten', 'wijzigen', role)
   const [activeTab, setActiveTab] = useState('active')
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -2012,14 +2016,16 @@ export default function Menukaarten() {
                           style={archivedActionUiStyles.rowActionsWrap}
                           ref={openActionsMenuId === item.id ? actionsMenuRef : null}
                         >
-                          <button
-                            type="button"
-                            className="table-action-btn"
-                            style={archivedActionUiStyles.rowActionButton}
-                            onClick={() => openMenukaartModal(item.id)}
-                          >
-                            Openen
-                          </button>
+                          {canEditMenukaarten ? (
+                            <button
+                              type="button"
+                              className="table-action-btn"
+                              style={archivedActionUiStyles.rowActionButton}
+                              onClick={() => openMenukaartModal(item.id)}
+                            >
+                              Openen
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="table-action-btn"
@@ -2063,14 +2069,16 @@ export default function Menukaarten() {
                           style={archivedActionUiStyles.rowActionsWrap}
                           ref={openActionsMenuId === item.id ? actionsMenuRef : null}
                         >
-                          <button
-                            type="button"
-                            className="table-action-btn"
-                            style={archivedActionUiStyles.rowActionButton}
-                            onClick={() => openMenukaartModal(item.id)}
-                          >
-                            Openen
-                          </button>
+                          {canEditMenukaarten ? (
+                            <button
+                              type="button"
+                              className="table-action-btn"
+                              style={archivedActionUiStyles.rowActionButton}
+                              onClick={() => openMenukaartModal(item.id)}
+                            >
+                              Openen
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="table-action-btn"
@@ -2097,23 +2105,25 @@ export default function Menukaarten() {
                                   ⧉ Dupliceren
                                 </button>
                               ) : null}
-                              {item.status === 'active' ? (
-                                <button
-                                  type="button"
-                                  style={archivedActionUiStyles.rowMenuItem}
-                                  onClick={() => handleSetStatus(item, 'concept')}
-                                >
-                                  ↩ Terug naar concept
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  style={archivedActionUiStyles.rowMenuItem}
-                                  onClick={() => handleSetStatus(item, 'active')}
-                                >
-                                  ✅ Actief maken
-                                </button>
-                              )}
+                              {canEditMenukaarten ? (
+                                item.status === 'active' ? (
+                                  <button
+                                    type="button"
+                                    style={archivedActionUiStyles.rowMenuItem}
+                                    onClick={() => handleSetStatus(item, 'concept')}
+                                  >
+                                    ↩ Terug naar concept
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    style={archivedActionUiStyles.rowMenuItem}
+                                    onClick={() => handleSetStatus(item, 'active')}
+                                  >
+                                    ✅ Actief maken
+                                  </button>
+                                )
+                              ) : null}
                               {hasPermission(permissions, 'menukaarten', 'archiveren', role) ? (
                                 <button
                                   type="button"
@@ -2183,7 +2193,7 @@ export default function Menukaarten() {
             <option value="concept">In ontwikkeling</option>
           </select>
           <div />
-          {activeTab === 'active' ? (
+          {activeTab === 'active' && canCreateMenukaarten ? (
             <button
               type="button"
               className="sfp-new-btn"
@@ -2232,14 +2242,16 @@ export default function Menukaarten() {
                     </label>
                   </div>
                   <div className="modal-actions" style={{ padding: '1rem 0 0', borderTop: '0', justifyContent: 'flex-start' }}>
-                    <button
-                      type="button"
-                      className="primary-btn"
-                      onClick={handleCreate}
-                      disabled={!newMenukaartName.trim()}
-                    >
-                      Menukaart aanmaken
-                    </button>
+                    {canCreateMenukaarten ? (
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        onClick={handleCreate}
+                        disabled={!newMenukaartName.trim()}
+                      >
+                        Menukaart aanmaken
+                      </button>
+                    ) : null}
                     <button type="button" className="secondary-btn" onClick={closeMenukaartModal}>
                       Sluiten
                     </button>
@@ -2259,7 +2271,7 @@ export default function Menukaarten() {
                             <input
                               type="text"
                               value={menukaartNameInput}
-                              readOnly={isSelectedArchived || isSavingMenukaartName}
+                              readOnly={isSelectedArchived || isSavingMenukaartName || !canEditMenukaarten}
                               onChange={(event) => setMenukaartNameInput(event.target.value)}
                               onBlur={handleSaveMenukaartName}
                               onKeyDown={handleMenukaartNameKeyDown}
@@ -2270,7 +2282,12 @@ export default function Menukaarten() {
                             Categorie
                             <select
                               value={selectedCategoryId}
-                              disabled={isLoadingMenukaartCategories || !supportsMenukaartCategories || isSelectedArchived}
+                              disabled={
+                                isLoadingMenukaartCategories ||
+                                !supportsMenukaartCategories ||
+                                isSelectedArchived ||
+                                !canEditMenukaarten
+                              }
                               onChange={(event) => handleCategoryChange(event.target.value)}
                             >
                               <option value="">Kies een categorie</option>
@@ -2280,14 +2297,16 @@ export default function Menukaarten() {
                                 </option>
                               ))}
                             </select>
-                            <button
-                              type="button"
-                              className="table-action-btn"
-                              disabled={isSelectedArchived}
-                              onClick={() => setShowNewCategoryInput((prev) => !prev)}
-                            >
-                              Nieuwe categorie
-                            </button>
+                            {canEditMenukaarten ? (
+                              <button
+                                type="button"
+                                className="table-action-btn"
+                                disabled={isSelectedArchived}
+                                onClick={() => setShowNewCategoryInput((prev) => !prev)}
+                              >
+                                Nieuwe categorie
+                              </button>
+                            ) : null}
                             {showNewCategoryInput ? (
                               <div className="recipe-line-inline">
                                 <input
@@ -2389,7 +2408,7 @@ export default function Menukaarten() {
                   <section className="modal-section">
                     <h4>Secties</h4>
                     <div className="modal-grid one-col calm-grid">
-                      {!isSelectedArchived ? (
+                      {!isSelectedArchived && canEditMenukaarten ? (
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
                           <p style={{ margin: 0, color: '#4b5563' }}>
                             Verdeel hier de kaart in secties/groepen en zet in de juiste volgorde.
@@ -2416,7 +2435,7 @@ export default function Menukaarten() {
                               style={sectieBlockStyles.summaryCard}
                             >
                               <div>
-                                {editingSectieId === sectie.id && !isSelectedArchived ? (
+                                {editingSectieId === sectie.id && !isSelectedArchived && canEditMenukaarten ? (
                                   <input
                                     type="text"
                                     value={editingSectieTitle}
@@ -2433,7 +2452,7 @@ export default function Menukaarten() {
                                   {sectie.gerechten?.length || 0} gerechten
                                 </div>
                               </div>
-                              {sectie.id != null && !isSelectedArchived ? (
+                              {sectie.id != null && !isSelectedArchived && canEditMenukaarten ? (
                                 <div style={sectieBlockStyles.actionsWrap}>
                                   <div style={sectieBlockStyles.orderWrap}>
                                     <div style={sectieBlockStyles.orderLabel}>Volgorde</div>
@@ -2536,7 +2555,7 @@ export default function Menukaarten() {
                                 }
                               }}
                               placeholder="Zoek op gerecht of menukaart"
-                              disabled={!selectedBeheerSectie || isSelectedArchived}
+                              disabled={!selectedBeheerSectie || isSelectedArchived || !canEditMenukaarten}
                               style={sectieBlockStyles.largeControl}
                             />
                           </label>
@@ -2554,7 +2573,7 @@ export default function Menukaarten() {
                                   applyDishSearchFilters()
                                 }
                               }}
-                              disabled={!selectedBeheerSectie || isSelectedArchived}
+                              disabled={!selectedBeheerSectie || isSelectedArchived || !canEditMenukaarten}
                               style={sectieBlockStyles.largeControl}
                             >
                               <option value="">Alle categorieën</option>
@@ -2576,7 +2595,7 @@ export default function Menukaarten() {
                                   applyDishSearchFilters()
                                 }
                               }}
-                              disabled={!selectedBeheerSectie || isSelectedArchived || !dishCategoryFilter}
+                              disabled={!selectedBeheerSectie || isSelectedArchived || !dishCategoryFilter || !canEditMenukaarten}
                               style={sectieBlockStyles.largeControl}
                             >
                               <option value="">Alle subcategorieën</option>
@@ -2590,7 +2609,7 @@ export default function Menukaarten() {
                           <button
                             type="button"
                             onClick={applyDishSearchFilters}
-                            disabled={!selectedBeheerSectie || isSelectedArchived}
+                            disabled={!selectedBeheerSectie || isSelectedArchived || !canEditMenukaarten}
                             style={sectieBlockStyles.searchButton}
                           >
                             Zoek
@@ -2647,7 +2666,8 @@ export default function Menukaarten() {
                                             disabled={
                                               isSelectedArchived ||
                                               isSubmittingDetailAction ||
-                                              isAlreadyLinked
+                                              isAlreadyLinked ||
+                                              !canEditMenukaarten
                                             }
                                             style={{ maxWidth: '160px', minWidth: '120px' }}
                                           >
@@ -2722,7 +2742,7 @@ export default function Menukaarten() {
                                         '-'
                                           )}
                                     </td>
-                                    {!isSelectedArchived ? (
+                                    {!isSelectedArchived && canEditMenukaarten ? (
                                       <td style={sectieBlockStyles.contentActionCell}>
                                         <div style={sectieBlockStyles.contentTableActions}>
                                           <button
