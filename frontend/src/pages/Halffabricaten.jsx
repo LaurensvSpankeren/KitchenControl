@@ -454,6 +454,8 @@ export default function Halffabricaten() {
   const role = currentUser?.role
   const currentUserRole = useMemo(() => getCurrentUserRole(), [])
   const canManageSupervisorProductActions = currentUserRole === 'Supervisor'
+  const canCreateProducts = !isLoadingPermissions && hasPermission(permissions, 'halffabricaten', 'aanmaken', role)
+  const canEditProducts = !isLoadingPermissions && hasPermission(permissions, 'halffabricaten', 'wijzigen', role)
   const uiStyles = {
     viewModeSwitch: { display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' },
     photoPreviewWrap: { marginTop: '0.5rem' },
@@ -1710,7 +1712,7 @@ export default function Halffabricaten() {
               </option>
             ))}
           </select>
-          {viewMode === 'active' ? (
+          {viewMode === 'active' && canCreateProducts ? (
             <button type="button" className="sfp-new-btn" onClick={openNewModal}>
               Nieuw halffabricaat
             </button>
@@ -1749,14 +1751,16 @@ export default function Halffabricaten() {
                     <td className="text-center">{formatYield(item.final_yield_amount, item.final_yield_unit)}</td>
                     <td className="text-center" style={uiStyles.actionCell}>
                       <div style={uiStyles.rowActionsWrap} ref={openActionsMenuId === item.id ? actionsMenuRef : null}>
-                        <button
-                          type="button"
-                          className="table-action-btn"
-                          style={uiStyles.rowActionButton}
-                          onClick={() => openEditModal(item, viewMode)}
-                        >
-                          Openen
-                        </button>
+                        {canEditProducts ? (
+                          <button
+                            type="button"
+                            className="table-action-btn"
+                            style={uiStyles.rowActionButton}
+                            onClick={() => openEditModal(item, viewMode)}
+                          >
+                            Openen
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="table-action-btn"
@@ -1874,14 +1878,16 @@ export default function Halffabricaten() {
                           alt="Foto preview"
                           style={uiStyles.photoPreview}
                         />
-                        <button
-                          type="button"
-                          className="table-action-btn"
-                          disabled={isReadOnlyModal}
-                          onClick={() => setIsEditingPhotoUrl(true)}
-                        >
-                          ✏️ Bewerken
-                        </button>
+                        {canEditProducts ? (
+                          <button
+                            type="button"
+                            className="table-action-btn"
+                            disabled={isReadOnlyModal}
+                            onClick={() => setIsEditingPhotoUrl(true)}
+                          >
+                            ✏️ Bewerken
+                          </button>
+                        ) : null}
                       </div>
                     )}
                   </label>
@@ -1909,14 +1915,16 @@ export default function Halffabricaten() {
                         </option>
                       ))}
                     </select>
-                    <button
-                      type="button"
-                      className="table-action-btn"
-                      disabled={isReadOnlyModal}
-                      onClick={() => setShowNewCategoryInput((prev) => !prev)}
-                    >
-                      Nieuwe categorie
-                    </button>
+                    {canEditProducts ? (
+                      <button
+                        type="button"
+                        className="table-action-btn"
+                        disabled={isReadOnlyModal}
+                        onClick={() => setShowNewCategoryInput((prev) => !prev)}
+                      >
+                        Nieuwe categorie
+                      </button>
+                    ) : null}
                     {showNewCategoryInput ? (
                       <div className="recipe-line-inline">
                         <input
@@ -1946,14 +1954,16 @@ export default function Halffabricaten() {
                         </option>
                       ))}
                     </select>
-                    <button
-                      type="button"
-                      className="table-action-btn"
-                      onClick={() => setShowNewSubcategoryInput((prev) => !prev)}
-                      disabled={!formData.category || isReadOnlyModal}
-                    >
-                      Nieuwe subcategorie
-                    </button>
+                    {canEditProducts ? (
+                      <button
+                        type="button"
+                        className="table-action-btn"
+                        onClick={() => setShowNewSubcategoryInput((prev) => !prev)}
+                        disabled={!formData.category || isReadOnlyModal}
+                      >
+                        Nieuwe subcategorie
+                      </button>
+                    ) : null}
                     {showNewSubcategoryInput ? (
                       <div className="recipe-line-inline">
                         <input
@@ -2225,7 +2235,7 @@ export default function Halffabricaten() {
                                   </>
                                 ) : (
                                   <>
-                                    {!isReadOnlyModal ? (
+                                    {!isReadOnlyModal && canEditProducts ? (
                                       <>
                                         <button type="button" className="table-action-btn" onClick={() => startEditLine(line)}>
                                           Bewerken
@@ -2360,9 +2370,11 @@ export default function Halffabricaten() {
                   </button>
                 ) : null}
                 {!isSelectedArchived ? (
-                  <button type="button" className="primary-btn" onClick={handleSaveProduct} disabled={isSaving}>
-                    {isSaving ? 'Opslaan...' : 'Opslaan'}
-                  </button>
+                  canEditProducts ? (
+                    <button type="button" className="primary-btn" onClick={handleSaveProduct} disabled={isSaving}>
+                      {isSaving ? 'Opslaan...' : 'Opslaan'}
+                    </button>
+                  ) : null
                 ) : (
                   <>
                     {!isLoadingPermissions && hasPermission(permissions, 'halffabricaten', 'herstellen', role) ? (

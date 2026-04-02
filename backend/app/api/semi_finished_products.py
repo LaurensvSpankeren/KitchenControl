@@ -516,8 +516,11 @@ def _build_semi_finished_detail(
 @router.get("/api/semi-finished-products", tags=["semi-finished-products"])
 def list_semi_finished_products(
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> list[dict]:
+    if not has_permission(current_user, "halffabricaten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     items = (
         db.query(SemiFinishedProduct)
         .filter(SemiFinishedProduct.is_archived.is_(False))
@@ -547,8 +550,11 @@ def list_archived_semi_finished_products(
 def create_semi_finished_product(
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.aanmaken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = SemiFinishedProduct(name="tmp")
     _apply_semi_finished_payload(item, payload)
 
@@ -563,8 +569,11 @@ def update_semi_finished_product(
     semi_finished_product_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
@@ -583,8 +592,11 @@ def add_semi_finished_product_recipe_line(
     semi_finished_product_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item_type = (payload.get("item_type") or "").strip()
     if item_type not in {"ingredient", "semi_finished_product"}:
         raise HTTPException(
@@ -640,8 +652,11 @@ def update_semi_finished_product_recipe_line(
     recipe_line_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     parent = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if parent is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
@@ -697,8 +712,11 @@ def delete_semi_finished_product_recipe_line(
     semi_finished_product_id: int,
     recipe_line_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     parent = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if parent is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
@@ -725,8 +743,11 @@ def replace_recipe_steps(
     semi_finished_product_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
@@ -971,8 +992,11 @@ def delete_semi_finished_product(
 def get_semi_finished_product_detail(
     semi_finished_product_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
@@ -982,7 +1006,9 @@ def get_semi_finished_product_detail(
 
 @router.get("/api/semi-finished-products/{semi_finished_product_id}/print", tags=["semi-finished-products"])
 def get_semi_finished_product_print_payload(
-    semi_finished_product_id: int, db: Session = Depends(get_db)
+    semi_finished_product_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
@@ -1009,7 +1035,9 @@ def get_semi_finished_product_print_payload(
 
 @router.get("/api/semi-finished-products/{semi_finished_product_id}/label", tags=["semi-finished-products"])
 def get_semi_finished_product_label_payload(
-    semi_finished_product_id: int, db: Session = Depends(get_db)
+    semi_finished_product_id: int,
+    db: Session = Depends(get_db),
+    _current_user = Depends(get_current_user),
 ) -> dict:
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
