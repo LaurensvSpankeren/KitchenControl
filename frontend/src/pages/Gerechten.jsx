@@ -411,6 +411,7 @@ export default function Gerechten() {
   const role = currentUser?.role
   const currentUserRole = useMemo(() => getCurrentUserRole(), [])
   const canManageSupervisorDishActions = currentUserRole === 'Supervisor'
+  const canViewDishes = !isLoadingPermissions && hasPermission(permissions, 'gerechten', 'bekijken', role)
   const canCreateDishes = !isLoadingPermissions && hasPermission(permissions, 'gerechten', 'aanmaken', role)
   const canEditDishes = !isLoadingPermissions && hasPermission(permissions, 'gerechten', 'wijzigen', role)
 
@@ -1758,7 +1759,7 @@ export default function Gerechten() {
                     <td className="text-left">{item.allergens_total || 'Geen brondata allergenen beschikbaar'}</td>
                     <td className="text-center" style={uiStyles.actionCell}>
                       <div style={uiStyles.rowActionsWrap} ref={openActionsMenuId === item.id ? actionsMenuRef : null}>
-                        {canEditDishes ? (
+                        {canViewDishes ? (
                           <button
                             type="button"
                             className="table-action-btn"

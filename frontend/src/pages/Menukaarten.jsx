@@ -354,6 +354,8 @@ export default function Menukaarten() {
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false)
   const currentUser = getCurrentUser()
   const role = currentUser?.role
+  const canViewMenukaarten =
+    !isLoadingPermissions && hasPermission(permissions, 'menukaarten', 'bekijken', role)
   const canCreateMenukaarten =
     !isLoadingPermissions && hasPermission(permissions, 'menukaarten', 'aanmaken', role)
   const canEditMenukaarten =
@@ -2016,7 +2018,7 @@ export default function Menukaarten() {
                           style={archivedActionUiStyles.rowActionsWrap}
                           ref={openActionsMenuId === item.id ? actionsMenuRef : null}
                         >
-                          {canEditMenukaarten ? (
+                          {canViewMenukaarten ? (
                             <button
                               type="button"
                               className="table-action-btn"
@@ -2069,7 +2071,7 @@ export default function Menukaarten() {
                           style={archivedActionUiStyles.rowActionsWrap}
                           ref={openActionsMenuId === item.id ? actionsMenuRef : null}
                         >
-                          {canEditMenukaarten ? (
+                          {canViewMenukaarten ? (
                             <button
                               type="button"
                               className="table-action-btn"
@@ -2342,14 +2344,16 @@ export default function Menukaarten() {
                                   Herstellen
                                 </button>
                               ) : null}
-                              <button
-                                type="button"
-                                className="secondary-btn"
-                                onClick={() => handleDeleteArchived(selectedMenukaart)}
-                                style={{ maxWidth: '180px' }}
-                              >
-                                Verwijderen
-                              </button>
+                              {hasPermission(permissions, 'menukaarten', 'verwijderen', role) ? (
+                                <button
+                                  type="button"
+                                  className="secondary-btn"
+                                  onClick={() => handleDeleteArchived(selectedMenukaart)}
+                                  style={{ maxWidth: '180px' }}
+                                >
+                                  Verwijderen
+                                </button>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>

@@ -25,7 +25,7 @@ const PERMISSION_ACTIONS = [
 const PERMISSION_ACTIONS_BY_DOMAIN = {
   gerechten: PERMISSION_ACTIONS,
   halffabricaten: PERMISSION_ACTIONS,
-  ingredienten: PERMISSION_ACTIONS,
+  ingredienten: ['bekijken', 'aanmaken', 'wijzigen', 'archiveren', 'verwijderen'],
   menukaarten: PERMISSION_ACTIONS,
   importbeheer: ['bekijken', 'importeren', 'matchen', 'opschonen', 'samenvoegen']
 }
@@ -60,9 +60,7 @@ const INITIAL_PERMISSIONS = {
     aanmaken: ['Supervisor', 'Chef', 'Kok'],
     wijzigen: ['Supervisor', 'Chef', 'Kok'],
     archiveren: ['Supervisor'],
-    verwijderen: ['Supervisor'],
-    herstellen: ['Supervisor'],
-    dupliceren: ['Supervisor', 'Chef', 'Kok']
+    verwijderen: ['Supervisor']
   },
   menukaarten: {
     bekijken: ['Supervisor', 'Chef', 'Kok', 'Keukenhulp', 'Bediening'],
@@ -1279,9 +1277,11 @@ export default function Instellingen() {
                       <table className="ingredients-table">
                         <thead>
                           <tr>
-                            <th>Actie</th>
+                            <th style={{ textAlign: 'left' }}>Actie</th>
                             {PERMISSION_ROLES.map((permissionRole) => (
-                              <th key={permissionRole}>{permissionRole}</th>
+                              <th key={permissionRole} style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                                {permissionRole}
+                              </th>
                             ))}
                           </tr>
                         </thead>
@@ -1290,12 +1290,17 @@ export default function Instellingen() {
                             <tr key={`${domainKey}-${action}`}>
                               <td style={{ textTransform: 'capitalize' }}>{action}</td>
                               {PERMISSION_ROLES.map((permissionRole) => (
-                                <td key={`${domainKey}-${action}-${permissionRole}`} style={{ textAlign: 'center' }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={(permissions[domainKey]?.[action] || []).includes(permissionRole)}
-                                    onChange={() => handlePermissionToggle(domainKey, action, permissionRole)}
-                                  />
+                                <td
+                                  key={`${domainKey}-${action}-${permissionRole}`}
+                                  style={{ textAlign: 'center', verticalAlign: 'middle' }}
+                                >
+                                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={(permissions[domainKey]?.[action] || []).includes(permissionRole)}
+                                      onChange={() => handlePermissionToggle(domainKey, action, permissionRole)}
+                                    />
+                                  </div>
                                 </td>
                               ))}
                             </tr>

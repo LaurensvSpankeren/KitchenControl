@@ -534,8 +534,11 @@ def list_semi_finished_products(
 @router.get("/api/semi-finished-products/archived", tags=["semi-finished-products"])
 def list_archived_semi_finished_products(
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> list[dict]:
+    if not has_permission(current_user, "halffabricaten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     items = (
         db.query(SemiFinishedProduct)
         .filter(SemiFinishedProduct.is_archived.is_(True))
@@ -1008,8 +1011,11 @@ def get_semi_finished_product_detail(
 def get_semi_finished_product_print_payload(
     semi_finished_product_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
@@ -1037,8 +1043,11 @@ def get_semi_finished_product_print_payload(
 def get_semi_finished_product_label_payload(
     semi_finished_product_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "halffabricaten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")

@@ -522,8 +522,11 @@ def rename_menukaart_category(
 @router.get("/api/menukaarten/archived", tags=["menukaarten"])
 def list_archived_menukaarten(
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> list[dict]:
+    if not has_permission(current_user, "menukaarten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     items = (
         db.query(Menukaart)
         .options(

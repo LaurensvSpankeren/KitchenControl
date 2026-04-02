@@ -454,6 +454,7 @@ export default function Halffabricaten() {
   const role = currentUser?.role
   const currentUserRole = useMemo(() => getCurrentUserRole(), [])
   const canManageSupervisorProductActions = currentUserRole === 'Supervisor'
+  const canViewProducts = !isLoadingPermissions && hasPermission(permissions, 'halffabricaten', 'bekijken', role)
   const canCreateProducts = !isLoadingPermissions && hasPermission(permissions, 'halffabricaten', 'aanmaken', role)
   const canEditProducts = !isLoadingPermissions && hasPermission(permissions, 'halffabricaten', 'wijzigen', role)
   const uiStyles = {
@@ -1751,7 +1752,7 @@ export default function Halffabricaten() {
                     <td className="text-center">{formatYield(item.final_yield_amount, item.final_yield_unit)}</td>
                     <td className="text-center" style={uiStyles.actionCell}>
                       <div style={uiStyles.rowActionsWrap} ref={openActionsMenuId === item.id ? actionsMenuRef : null}>
-                        {canEditProducts ? (
+                        {canViewProducts ? (
                           <button
                             type="button"
                             className="table-action-btn"

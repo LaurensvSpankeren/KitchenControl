@@ -394,8 +394,11 @@ def list_dishes(
 @router.get("/api/dishes/archived", tags=["dishes"])
 def list_archived_dishes(
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> list[dict]:
+    if not has_permission(current_user, "gerechten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     items = db.query(Dish).filter(Dish.is_archived.is_(True)).order_by(Dish.name.asc()).all()
     return [_serialize_dish(item) for item in items]
 
@@ -852,8 +855,11 @@ def get_dish_detail(
 def get_dish_print_payload(
     dish_id: int,
     db: Session = Depends(get_db),
-    _current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "gerechten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
