@@ -286,10 +286,14 @@ function getCurrentChefName() {
 }
 
 function buildSemiFinishedDetailUrl(id) {
+  const baseUrl =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : PRINT_BASE_URL
   if (!id) {
-    return `${PRINT_BASE_URL}/halffabricaten`
+    return `${baseUrl}/halffabricaten`
   }
-  return `${PRINT_BASE_URL}/halffabricaten?id=${id}`
+  return `${baseUrl}/halffabricaten?id=${id}`
 }
 
 function getPrintBootstrapScript() {
@@ -450,6 +454,7 @@ export default function Halffabricaten() {
   const [shouldFocusNameAfterDuplicate, setShouldFocusNameAfterDuplicate] = useState(false)
   const actionsMenuRef = useRef(null)
   const nameInputRef = useRef(null)
+  const hasHandledDeepLinkRef = useRef(false)
   const isReadOnlyModal = isSelectedArchived
   const currentUser = getCurrentUser()
   const role = currentUser?.role
@@ -672,6 +677,37 @@ export default function Halffabricaten() {
     loadIngredients()
     loadSemiFinishedCategories()
   }, [])
+
+  useEffect(() => {
+    if (hasHandledDeepLinkRef.current || typeof window === 'undefined') {
+      return
+    }
+
+    const searchParams = new URLSearchParams(window.location.search)
+    const idParam = searchParams.get('id')
+    if (!idParam) {
+      hasHandledDeepLinkRef.current = true
+      return
+    }
+
+    const targetId = Number(idParam)
+    if (!Number.isFinite(targetId)) {
+      hasHandledDeepLinkRef.current = true
+      return
+    }
+
+    const match =
+      products.find((item) => Number(item.id) === targetId) ||
+      archivedProducts.find((item) => Number(item.id) === targetId)
+
+    if (!match) {
+      return
+    }
+
+    hasHandledDeepLinkRef.current = true
+    const sourceView = match.is_archived ? 'archived' : 'active'
+    void openEditModal(match, sourceView)
+  }, [products, archivedProducts])
 
   useEffect(() => {
     if (!openActionsMenuId) {
@@ -1401,8 +1437,18 @@ export default function Halffabricaten() {
         <head>
           <title>Dagetiket - ${productName}</title>
           <style>
-            @page { size: 89mm 36mm; margin: 2mm; }
-            body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+            @page { size: 89mm 36mm; margin: 0; }
+            html, body {
+              width: 89mm;
+              height: 36mm;
+              margin: 0;
+              padding: 0;
+              overflow: hidden;
+              background: #fff;
+              font-family: Arial, sans-serif;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
             .print-fallback-wrap { padding: 3mm 2mm 1mm; text-align: center; }
             .print-fallback-btn {
               border: 1px solid #222;
@@ -1413,15 +1459,16 @@ export default function Halffabricaten() {
               cursor: pointer;
             }
             .label {
-              width: 100%;
-              height: 100%;
+              width: 89mm;
+              height: 36mm;
               border: 1px solid #000;
               box-sizing: border-box;
-              padding: 2.5mm;
+              padding: 2mm;
               display: grid;
-              grid-template-columns: 1fr 18mm;
+              grid-template-columns: 1fr 20mm;
               column-gap: 2mm;
               align-items: stretch;
+              background: #fff;
             }
             .content { min-width: 0; }
             .title {
@@ -1436,8 +1483,8 @@ export default function Halffabricaten() {
             }
             .line { font-size: 10px; margin: 0 0 0.8mm; line-height: 1.2; }
             .allergens { font-size: 8px; line-height: 1.2; margin-top: 1.2mm; }
-            .qr-wrap { display: flex; align-items: center; justify-content: center; }
-            .qr-wrap img { width: 18mm; height: 18mm; object-fit: contain; }
+            .qr-wrap { display: flex; align-items: center; justify-content: center; overflow: visible; }
+            .qr-wrap img { display: block; width: 20mm; height: 20mm; object-fit: contain; }
             @media print {
               .print-fallback-wrap { display: none; }
             }
@@ -1477,7 +1524,10 @@ export default function Halffabricaten() {
     `
 
     setIsLabelModalOpen(false)
-    void printHtml(printMarkup, { windowFeatures: 'width=420,height=620' }).then((didStartPrint) => {
+    void printHtml(printMarkup, {
+      windowFeatures: 'width=420,height=620',
+      waitForImages: true
+    }).then((didStartPrint) => {
       if (!didStartPrint) {
         setErrorMessage('Printvenster kon niet worden geopend.')
       }
