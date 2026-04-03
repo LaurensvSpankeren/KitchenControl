@@ -1463,10 +1463,10 @@ export default function Halffabricaten() {
               height: 36mm;
               border: 1px solid #000;
               box-sizing: border-box;
-              padding: 1.8mm 2.2mm;
+              padding: 1.8mm 2.6mm 1.8mm 2.2mm;
               display: grid;
-              grid-template-columns: minmax(0, 1fr) 18mm;
-              column-gap: 2.4mm;
+              grid-template-columns: minmax(0, 1fr) 17.2mm;
+              column-gap: 2mm;
               align-items: stretch;
               background: #fff;
               overflow: hidden;
@@ -1503,13 +1503,14 @@ export default function Halffabricaten() {
               display: flex;
               align-items: center;
               justify-content: center;
-              padding-right: 0.6mm;
+              box-sizing: border-box;
+              padding: 0.4mm 0.8mm 0.4mm 0.2mm;
               overflow: hidden;
             }
             .qr-wrap img {
               display: block;
-              width: 17.5mm;
-              height: 17.5mm;
+              width: 16.2mm;
+              height: 16.2mm;
               object-fit: contain;
             }
             @media print {

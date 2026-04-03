@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import AppShell from './components/AppShell'
 import { apiClient, AUTH_UNAUTHORIZED_EVENT } from './api/client'
@@ -13,8 +13,18 @@ import Buffetten from './pages/Buffetten'
 import Instellingen from './pages/Instellingen'
 import Login from './pages/Login'
 
+const POST_LOGIN_REDIRECT_KEY = 'post_login_redirect'
+
 function ProtectedRoute({ isAuthenticated, children }) {
+  const location = useLocation()
+
   if (!isAuthenticated) {
+    if (typeof window !== 'undefined') {
+      const redirectTarget = `${location.pathname}${location.search}${location.hash}`
+      if (redirectTarget && redirectTarget !== '/login') {
+        window.sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, redirectTarget)
+      }
+    }
     return <Navigate to="/login" replace />
   }
   return children
@@ -24,6 +34,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isAuthLoading, setIsAuthLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
+  const [postLoginRedirectTarget, setPostLoginRedirectTarget] = useState(null)
 
   useEffect(() => {
     function handleUnauthorizedSession() {
@@ -84,8 +95,11 @@ export default function App() {
   }, [])
 
   async function handleLogin(email, password) {
+    const redirectTarget = getPostLoginRedirectTarget()
     const payload = await apiClient.login({ email, password })
     apiClient.setAuthSession(payload.token, payload.user)
+    clearPostLoginRedirectTarget()
+    setPostLoginRedirectTarget(redirectTarget)
     setCurrentUser(payload.user)
     setIsAuthenticated(true)
   }
@@ -101,9 +115,31 @@ export default function App() {
       console.error('Logout mislukt, lokale sessie wordt alsnog beëindigd.', error)
     } finally {
       apiClient.clearAuthSession()
+      clearPostLoginRedirectTarget()
+      setPostLoginRedirectTarget(null)
       setCurrentUser(null)
       setIsAuthenticated(false)
     }
+  }
+
+  function getPostLoginRedirectTarget() {
+    if (typeof window === 'undefined') {
+      return null
+    }
+
+    const target = window.sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY)
+    if (!target || target === '/login') {
+      return null
+    }
+
+    return target
+  }
+
+  function clearPostLoginRedirectTarget() {
+    if (typeof window === 'undefined') {
+      return
+    }
+    window.sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY)
   }
 
   if (isAuthLoading) {
@@ -124,7 +160,7 @@ export default function App() {
           path="/login"
           element={
             isAuthenticated ? (
-              <Navigate to="/" replace />
+              <Navigate to={postLoginRedirectTarget || '/'} replace />
             ) : (
               <Login onLogin={handleLogin} />
             )
