@@ -1463,28 +1463,55 @@ export default function Halffabricaten() {
               height: 36mm;
               border: 1px solid #000;
               box-sizing: border-box;
-              padding: 2mm;
+              padding: 1.8mm 2.2mm;
               display: grid;
-              grid-template-columns: 1fr 20mm;
-              column-gap: 2mm;
+              grid-template-columns: minmax(0, 1fr) 18mm;
+              column-gap: 2.4mm;
               align-items: stretch;
               background: #fff;
+              overflow: hidden;
             }
-            .content { min-width: 0; }
+            .content {
+              min-width: 0;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+            }
             .title {
-              font-size: 12px;
+              font-size: 13.5px;
               font-weight: 700;
-              margin: 0 0 1.5mm;
+              margin: 0 0 1mm;
               text-transform: uppercase;
-              line-height: 1.2;
+              line-height: 1.1;
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
             }
-            .line { font-size: 10px; margin: 0 0 0.8mm; line-height: 1.2; }
-            .allergens { font-size: 8px; line-height: 1.2; margin-top: 1.2mm; }
-            .qr-wrap { display: flex; align-items: center; justify-content: center; overflow: visible; }
-            .qr-wrap img { display: block; width: 20mm; height: 20mm; object-fit: contain; }
+            .line {
+              font-size: 10.5px;
+              margin: 0 0 0.7mm;
+              line-height: 1.18;
+            }
+            .allergens {
+              font-size: 8.6px;
+              line-height: 1.18;
+              margin-top: 0.6mm;
+              max-height: 8.4mm;
+              overflow: hidden;
+            }
+            .qr-wrap {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding-right: 0.6mm;
+              overflow: hidden;
+            }
+            .qr-wrap img {
+              display: block;
+              width: 17.5mm;
+              height: 17.5mm;
+              object-fit: contain;
+            }
             @media print {
               .print-fallback-wrap { display: none; }
             }
