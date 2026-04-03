@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { apiClient, API_BASE_URL } from '../api/client'
+import { isIOSPrintDevice, printHtmlInCurrentWindow } from '../utils/browserPrint'
 import { getCurrentUser, getCurrentUserRole } from '../utils/currentUser'
 
 const defaultPermissions = {
@@ -1464,12 +1465,6 @@ export default function Gerechten() {
       return
     }
 
-    const printWindow = window.open('', '_blank', 'width=900,height=700')
-    if (!printWindow) {
-      setErrorMessage('Printvenster kon niet worden geopend.')
-      return
-    }
-
     try {
       const payload = await apiClient.getDishPrint(selectedDishId)
       const chefName = getCurrentChefName()
@@ -1499,7 +1494,7 @@ export default function Gerechten() {
       const photoHtml = photoUrl ? `<img src="${escapeHtml(photoUrl)}" alt="Gerechtfoto" />` : ''
       const photoBlockHtml = photoHtml ? `<div class="photo">${photoHtml}</div>` : ''
 
-      printWindow.document.write(`
+      const printHtml = `
         <html>
           <head>
             <title>Keukenrecept - ${escapeHtml(payload.name || '')}</title>
@@ -1635,7 +1630,20 @@ export default function Gerechten() {
             ${getPrintBootstrapScript()}
           </body>
         </html>
-      `)
+      `
+
+      if (isIOSPrintDevice()) {
+        await printHtmlInCurrentWindow(printHtml)
+        return
+      }
+
+      const printWindow = window.open('', '_blank', 'width=900,height=700')
+      if (!printWindow) {
+        setErrorMessage('Printvenster kon niet worden geopend.')
+        return
+      }
+
+      printWindow.document.write(printHtml)
       printWindow.document.close()
     } catch {
       setErrorMessage('Printen mislukt.')
