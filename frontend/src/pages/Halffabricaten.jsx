@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { apiClient, API_BASE_URL } from '../api/client'
-import { isIOSPrintDevice, printHtmlInCurrentWindow } from '../utils/browserPrint'
+import { printHtml } from '../utils/browserPrint'
 import { getCurrentUser, getCurrentUserRole } from '../utils/currentUser'
 
 const defaultPermissions = {
@@ -1396,7 +1396,7 @@ export default function Halffabricaten() {
       qrTargetUrl
     )}`
 
-    const printHtml = `
+    const printMarkup = `
       <html>
         <head>
           <title>Dagetiket - ${productName}</title>
@@ -1476,23 +1476,12 @@ export default function Halffabricaten() {
       </html>
     `
 
-    if (isIOSPrintDevice()) {
-      setIsLabelModalOpen(false)
-      window.setTimeout(() => {
-        void printHtmlInCurrentWindow(printHtml)
-      }, 0)
-      return
-    }
-
-    const printWindow = window.open('', '_blank', 'width=420,height=620')
-    if (!printWindow) {
-      setErrorMessage('Printvenster kon niet worden geopend.')
-      return
-    }
-
-    printWindow.document.write(printHtml)
-    printWindow.document.close()
     setIsLabelModalOpen(false)
+    void printHtml(printMarkup, { windowFeatures: 'width=420,height=620' }).then((didStartPrint) => {
+      if (!didStartPrint) {
+        setErrorMessage('Printvenster kon niet worden geopend.')
+      }
+    })
   }
 
   async function handlePrintRecipe() {
@@ -1530,7 +1519,7 @@ export default function Halffabricaten() {
         ? `<img src="${escapeHtml(payload.photo_url)}" alt="Productfoto" />`
         : ''
 
-      const printHtml = `
+      const printMarkup = `
         <html>
           <head>
             <title>Keukenrecept - ${payload.name}</title>
@@ -1652,19 +1641,10 @@ export default function Halffabricaten() {
         </html>
       `
 
-      if (isIOSPrintDevice()) {
-        await printHtmlInCurrentWindow(printHtml)
-        return
-      }
-
-      const printWindow = window.open('', '_blank', 'width=900,height=700')
-      if (!printWindow) {
+      const didStartPrint = await printHtml(printMarkup, { windowFeatures: 'width=900,height=700' })
+      if (!didStartPrint) {
         setErrorMessage('Printvenster kon niet worden geopend.')
-        return
       }
-
-      printWindow.document.write(printHtml)
-      printWindow.document.close()
     } catch {
       setErrorMessage('Printen mislukt.')
     }

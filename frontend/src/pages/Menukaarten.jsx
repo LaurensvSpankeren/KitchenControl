@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { apiClient, API_BASE_URL } from '../api/client'
+import { printHtml } from '../utils/browserPrint'
 import { getCurrentUser } from '../utils/currentUser'
 
 const defaultPermissions = {
@@ -192,53 +193,6 @@ function getAllergenIcons(allergensTotal) {
   return ALLERGEN_ICON_MAP.filter((item) => hasAllergenMatch(allergens, item))
 }
 
-function waitForPrintImages(printWindow, timeoutMs = 2000) {
-  const images = Array.from(printWindow.document.images || [])
-  if (images.length === 0) {
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve) => {
-    let resolved = false
-    let remaining = images.length
-
-    const finish = () => {
-      if (resolved) {
-        return
-      }
-      resolved = true
-      resolve()
-    }
-
-    const markDone = () => {
-      remaining -= 1
-      if (remaining <= 0) {
-        finish()
-      }
-    }
-
-    const timer = window.setTimeout(finish, timeoutMs)
-
-    images.forEach((image) => {
-      if (image.complete) {
-        markDone()
-        return
-      }
-
-      const handleSettled = () => {
-        image.removeEventListener('load', handleSettled)
-        image.removeEventListener('error', handleSettled)
-        markDone()
-        if (remaining <= 0) {
-          window.clearTimeout(timer)
-        }
-      }
-
-      image.addEventListener('load', handleSettled, { once: true })
-      image.addEventListener('error', handleSettled, { once: true })
-    })
-  })
-}
 
 function statusLabel(status) {
   return status === 'active' ? 'Actief' : 'Concept'
@@ -1665,12 +1619,6 @@ export default function Menukaarten() {
       return
     }
 
-    const printWindow = window.open('', '_blank', 'width=900,height=700')
-    if (!printWindow) {
-      setError('Printweergave openen mislukt.')
-      return
-    }
-
     const sectionsHtml = (selectedMenukaart.secties || [])
       .map((sectie) => {
         const dishesHtml = (sectie.gerechten || [])
@@ -1705,7 +1653,7 @@ export default function Menukaarten() {
       })
       .join('')
 
-    printWindow.document.write(`
+    const html = `
       <!doctype html>
       <html lang="nl">
         <head>
@@ -1779,20 +1727,17 @@ export default function Menukaarten() {
           ${sectionsHtml || '<p>Geen secties of gerechten beschikbaar.</p>'}
         </body>
       </html>
-    `)
-    printWindow.document.close()
-    printWindow.focus()
-    printWindow.print()
+    `
+
+    void printHtml(html, { windowFeatures: 'width=900,height=700' }).then((didStartPrint) => {
+      if (!didStartPrint) {
+        setError('Printweergave openen mislukt.')
+      }
+    })
   }
 
   async function handlePrintAllergenenkaart() {
     if (!selectedMenukaart) {
-      return
-    }
-
-    const printWindow = window.open('', '_blank', 'width=1100,height=800')
-    if (!printWindow) {
-      setError('Printweergave openen mislukt.')
       return
     }
 
@@ -1849,7 +1794,7 @@ export default function Menukaarten() {
         .filter(Boolean)
         .join('')
 
-      printWindow.document.write(`
+      const html = `
         <!doctype html>
         <html lang="nl">
           <head>
@@ -1936,13 +1881,16 @@ export default function Menukaarten() {
             ${sectionsHtml || '<p>Geen secties met gerechten beschikbaar.</p>'}
           </body>
         </html>
-      `)
-      printWindow.document.close()
-      await waitForPrintImages(printWindow)
-      printWindow.focus()
-      printWindow.print()
+      `
+
+      const didStartPrint = await printHtml(html, {
+        windowFeatures: 'width=1100,height=800',
+        waitForImages: true
+      })
+      if (!didStartPrint) {
+        setError('Printweergave openen mislukt.')
+      }
     } catch {
-      printWindow.close()
       setError('Allergenenkaart printen mislukt.')
     }
   }

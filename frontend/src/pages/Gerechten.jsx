@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { apiClient, API_BASE_URL } from '../api/client'
-import { isIOSPrintDevice, printHtmlInCurrentWindow } from '../utils/browserPrint'
+import { printHtml } from '../utils/browserPrint'
 import { getCurrentUser, getCurrentUserRole } from '../utils/currentUser'
 
 const defaultPermissions = {
@@ -1494,7 +1494,7 @@ export default function Gerechten() {
       const photoHtml = photoUrl ? `<img src="${escapeHtml(photoUrl)}" alt="Gerechtfoto" />` : ''
       const photoBlockHtml = photoHtml ? `<div class="photo">${photoHtml}</div>` : ''
 
-      const printHtml = `
+      const printMarkup = `
         <html>
           <head>
             <title>Keukenrecept - ${escapeHtml(payload.name || '')}</title>
@@ -1632,19 +1632,10 @@ export default function Gerechten() {
         </html>
       `
 
-      if (isIOSPrintDevice()) {
-        await printHtmlInCurrentWindow(printHtml)
-        return
-      }
-
-      const printWindow = window.open('', '_blank', 'width=900,height=700')
-      if (!printWindow) {
+      const didStartPrint = await printHtml(printMarkup, { windowFeatures: 'width=900,height=700' })
+      if (!didStartPrint) {
         setErrorMessage('Printvenster kon niet worden geopend.')
-        return
       }
-
-      printWindow.document.write(printHtml)
-      printWindow.document.close()
     } catch {
       setErrorMessage('Printen mislukt.')
     }
