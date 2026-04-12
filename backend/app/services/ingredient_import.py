@@ -58,8 +58,12 @@ NEGATIVE_ALLERGEN_VALUES = {
 }
 
 PIECE_HINT_TERMS = ("stuk", "stuks", " st ", "x", "rol", "rollen", "brood", "portie")
-SUBPACKAGE_UNIT_TERMS = ("zak", "stuk", "stuks", "rol", "rollen", "portie", "bak", "tray")
-SUBPACKAGE_UNIT_CODES = {"ZK", "ST", "RL", "TR", "BK"}
+SUBPACKAGE_UNIT_TERMS = ("zak", "stuk", "stuks", "rol", "rollen", "portie", "bak", "tray", "pak")
+SUBPACKAGE_UNIT_CODES = {"ZK", "ST", "RL", "TR", "BK", "PK"}
+OUTER_PACK_TERMS = ("tray", "doos", "krat", "collo", "bak", "emmer")
+OUTER_PACK_CODES = {"TR", "DS", "KR", "CL", "BK", "EM"}
+INNER_PACK_TERMS = ("pak", "fles", "blik", "pot", "stuk", "stuks")
+INNER_PACK_CODES = {"PK", "FL", "BL", "PT", "ST"}
 AMOUNT_MATCH_EPSILON = 1e-6
 
 
@@ -121,6 +125,114 @@ def _extract_amount_and_unit_from_text(value: str | None) -> tuple[float | None,
             return amount, unit
 
     return None, None
+
+
+def _text_contains_explicit_multiplier(value: str | None) -> bool:
+    if not value:
+        return False
+    normalized = value.strip().replace(",", ".")
+    return bool(re.search(r"\d+(?:\.\d+)?\s*[xX]\s*\d", normalized))
+
+
+def _looks_like_outer_pack(unit_code: str | None, unit_name: str | None) -> bool:
+    normalized_code = (unit_code or "").strip().upper()
+    normalized_name = (unit_name or "").strip().lower()
+    return normalized_code in OUTER_PACK_CODES or any(term in normalized_name for term in OUTER_PACK_TERMS)
+
+
+def _looks_like_inner_pack(unit_code: str | None, unit_name: str | None) -> bool:
+    normalized_code = (unit_code or "").strip().upper()
+    normalized_name = (unit_name or "").strip().lower()
+    return normalized_code in INNER_PACK_CODES or any(term in normalized_name for term in INNER_PACK_TERMS)
+
+
+def _derive_safe_multipack_values(
+    supplier_sales_factor: float | None,
+    supplier_sales_unit_code: str | None,
+    supplier_sales_unit_name: str | None,
+    supplier_standard_unit_code: str | None,
+    supplier_standard_unit_name: str | None,
+    supplier_pack_description: str | None,
+    units_per_package: float | None,
+    calc_unit: str | None,
+    calc_quantity: float | None,
+) -> tuple[float | None, float | None, bool]:
+    if supplier_sales_factor is None or supplier_sales_factor <= 1:
+        return units_per_package, calc_quantity, False
+
+    sales_unit_code = (supplier_sales_unit_code or "").strip().upper()
+    standard_unit_code = (supplier_standard_unit_code or "").strip().upper()
+    sales_unit_name = (supplier_sales_unit_name or "").strip().lower()
+    standard_unit_name = (supplier_standard_unit_name or "").strip().lower()
+    if (
+        sales_unit_code == standard_unit_code
+        and sales_unit_name
+        and standard_unit_name
+        and sales_unit_name == standard_unit_name
+    ):
+        return units_per_package, calc_quantity, False
+
+    if not _looks_like_outer_pack(supplier_sales_unit_code, supplier_sales_unit_name):
+        return units_per_package, calc_quantity, False
+    if not _looks_like_inner_pack(supplier_standard_unit_code, supplier_standard_unit_name):
+        return units_per_package, calc_quantity, False
+    if _text_contains_explicit_multiplier(supplier_pack_description):
+        return units_per_package, calc_quantity, False
+
+    text_amount, text_unit = _extract_amount_and_unit_from_text(supplier_pack_description)
+    normalized_calc_unit = _normalize_unit(calc_unit)
+    normalized_text_unit = _normalize_unit(text_unit)
+    if (
+        text_amount is None
+        or normalized_text_unit not in {"gram", "kg", "liter", "ml"}
+        or normalized_calc_unit is None
+        or calc_quantity is None
+    ):
+        return units_per_package, calc_quantity, False
+
+    single_item_quantity = calc_quantity
+    if normalized_calc_unit in {"gram", "ml"}:
+        normalized_text_quantity = (
+            _normalize_weight_to_gram(text_amount, normalized_text_unit)
+            if normalized_calc_unit == "gram"
+            else _normalize_volume_to_ml(text_amount, normalized_text_unit)
+        )
+        if normalized_text_quantity is None or abs(calc_quantity - normalized_text_quantity) > AMOUNT_MATCH_EPSILON:
+            return units_per_package, calc_quantity, False
+        single_item_quantity = normalized_text_quantity
+
+    inferred_units = units_per_package if units_per_package is not None else supplier_sales_factor
+    if inferred_units is None or inferred_units <= 1:
+        return units_per_package, calc_quantity, False
+
+    inferred_calc_quantity = single_item_quantity * inferred_units
+    if inferred_calc_quantity <= 0:
+        return units_per_package, calc_quantity, False
+
+    return inferred_units, inferred_calc_quantity, True
+
+
+def _should_flag_multipack_review(
+    supplier_sales_factor: float | None,
+    supplier_sales_unit_code: str | None,
+    supplier_sales_unit_name: str | None,
+    supplier_standard_unit_code: str | None,
+    supplier_standard_unit_name: str | None,
+    supplier_pack_description: str | None,
+    units_per_package: float | None,
+) -> bool:
+    if supplier_sales_factor is None or supplier_sales_factor <= 1:
+        return False
+    if not _looks_like_outer_pack(supplier_sales_unit_code, supplier_sales_unit_name):
+        return False
+    if not _looks_like_inner_pack(supplier_standard_unit_code, supplier_standard_unit_name):
+        return False
+    if _text_contains_explicit_multiplier(supplier_pack_description):
+        return False
+    text_amount, text_unit = _extract_amount_and_unit_from_text(supplier_pack_description)
+    if text_amount is None or _normalize_unit(text_unit) not in {"gram", "kg", "liter", "ml"}:
+        return False
+    return units_per_package is None
 
 
 def _extract_units_per_package(row: dict) -> float | None:
@@ -615,6 +727,28 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 net_content_amount,
                 units_per_package,
             )
+            multipack_review_needed = _should_flag_multipack_review(
+                supplier_sales_factor,
+                supplier_sales_unit_code,
+                supplier_sales_unit_name,
+                supplier_standard_unit_code,
+                supplier_standard_unit_name,
+                supplier_pack_description,
+                units_per_package,
+            )
+            units_per_package, inferred_calc_quantity, did_apply_safe_multipack = _derive_safe_multipack_values(
+                supplier_sales_factor,
+                supplier_sales_unit_code,
+                supplier_sales_unit_name,
+                supplier_standard_unit_code,
+                supplier_standard_unit_name,
+                supplier_pack_description,
+                units_per_package,
+                calc_unit,
+                calc_quantity,
+            )
+            if did_apply_safe_multipack and inferred_calc_quantity is not None:
+                calc_quantity = inferred_calc_quantity
             preferred_unit, secondary_unit, secondary_unit_factor = _derive_dual_unit_values(
                 calc_unit,
                 calc_quantity,
@@ -680,6 +814,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                     "preferred_unit": preferred_unit,
                     "secondary_unit": secondary_unit,
                     "secondary_unit_factor": secondary_unit_factor,
+                    "multipack_review_needed": multipack_review_needed and not did_apply_safe_multipack,
                 }
             )
 
@@ -764,6 +899,32 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
         )
 
         issues_to_create: list[IngredientImportIssue] = []
+
+        if parsed_row.get("multipack_review_needed"):
+            issues_to_create.append(
+                IngredientImportIssue(
+                    import_batch_id=batch.id,
+                    ingredient_id=ingredient.id if ingredient else None,
+                    supplier_product_code=supplier_product_code,
+                    supplier_product_name=supplier_product_name or None,
+                    issue_type="multipack_review_recommended",
+                    status="open",
+                    payload_json=json.dumps(
+                        {
+                            "supplier_sales_factor": (
+                                str(supplier_sales_factor)
+                                if supplier_sales_factor is not None
+                                else None
+                            ),
+                            "supplier_sales_unit_code": supplier_sales_unit_code,
+                            "supplier_sales_unit_name": supplier_sales_unit_name,
+                            "supplier_standard_unit_code": supplier_standard_unit_code,
+                            "supplier_standard_unit_name": supplier_standard_unit_name,
+                            "supplier_pack_description": supplier_pack_description,
+                        }
+                    ),
+                )
+            )
 
         if ingredient:
             current_name = (ingredient.supplier_product_name or "").strip()
