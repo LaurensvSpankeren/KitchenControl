@@ -127,6 +127,56 @@ def _extract_amount_and_unit_from_text(value: str | None) -> tuple[float | None,
     return None, None
 
 
+def _extract_nested_multipack_from_text(
+    value: str | None,
+) -> tuple[float | None, str | None, float | None, float | None]:
+    if not value:
+        return None, None, None, None
+
+    normalized = value.strip().replace(",", ".")
+    match = re.fullmatch(
+        r"(\d+)\s*[xX]\s*(\d+)\s*[xX]\s*(\d+(?:\.\d+)?)\s*(kg|gr|gram|g|ml|liter|l|lt)",
+        normalized,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None, None, None, None
+
+    outer_count = _parse_number(match.group(1))
+    inner_count = _parse_number(match.group(2))
+    per_unit_amount = _parse_number(match.group(3))
+    unit = _normalize_unit(match.group(4))
+    if (
+        outer_count is None
+        or inner_count is None
+        or per_unit_amount is None
+        or outer_count <= 1
+        or inner_count <= 1
+        or per_unit_amount <= 0
+    ):
+        return None, None, None, None
+
+    units_per_package = outer_count * inner_count
+    if unit in {"kg", "gram"}:
+        normalized_per_unit_amount = _normalize_weight_to_gram(per_unit_amount, unit)
+        calc_unit = "gram"
+    elif unit in {"liter", "ml"}:
+        normalized_per_unit_amount = _normalize_volume_to_ml(per_unit_amount, unit)
+        calc_unit = "ml"
+    else:
+        return None, None, None, None
+
+    if normalized_per_unit_amount is None:
+        return None, None, None, None
+
+    return (
+        units_per_package,
+        calc_unit,
+        units_per_package * normalized_per_unit_amount,
+        normalized_per_unit_amount,
+    )
+
+
 def _text_contains_explicit_multiplier(value: str | None) -> bool:
     if not value:
         return False
@@ -547,6 +597,64 @@ def _values_differ(current_value, imported_value) -> bool:
     return current_value != imported_value
 
 
+def _to_decimal_or_none(value) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None
+
+
+def _should_update_dual_unit_values(
+    ingredient: Ingredient,
+    preferred_unit: str | None,
+    secondary_unit: str | None,
+    secondary_unit_factor: float | None,
+    nested_multipack_applied: bool,
+    previous_units_per_package,
+    calc_quantity: float | None,
+) -> bool:
+    if preferred_unit is None or secondary_unit is None or secondary_unit_factor is None:
+        return False
+
+    if (
+        ingredient.preferred_unit is None
+        and ingredient.secondary_unit is None
+        and ingredient.secondary_unit_factor is None
+    ):
+        return True
+
+    if not nested_multipack_applied:
+        return False
+
+    if _normalize_unit(ingredient.preferred_unit) != _normalize_unit(preferred_unit):
+        return False
+
+    existing_secondary_unit = _normalize_unit(ingredient.secondary_unit)
+    if existing_secondary_unit is not None and existing_secondary_unit != _normalize_unit(secondary_unit):
+        return False
+
+    if ingredient.secondary_unit is None or ingredient.secondary_unit_factor is None:
+        return True
+
+    previous_units = _to_decimal_or_none(previous_units_per_package)
+    current_factor = _to_decimal_or_none(ingredient.secondary_unit_factor)
+    next_factor = _to_decimal_or_none(secondary_unit_factor)
+    next_calc_quantity = _to_decimal_or_none(calc_quantity)
+    if (
+        previous_units is None
+        or previous_units == 0
+        or current_factor is None
+        or next_factor is None
+        or next_calc_quantity is None
+    ):
+        return False
+
+    previously_derived_factor = next_calc_quantity / previous_units
+    return current_factor == previously_derived_factor and current_factor != next_factor
+
+
 def _serialize_import_value(value):
     return str(value) if value is not None else None
 
@@ -727,6 +835,21 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 net_content_amount,
                 units_per_package,
             )
+            (
+                nested_units_per_package,
+                nested_calc_unit,
+                nested_calc_quantity,
+                _nested_secondary_unit_factor,
+            ) = _extract_nested_multipack_from_text(supplier_pack_description)
+            did_apply_nested_multipack = (
+                nested_units_per_package is not None
+                and nested_calc_unit is not None
+                and nested_calc_quantity is not None
+            )
+            if did_apply_nested_multipack:
+                units_per_package = nested_units_per_package
+                calc_unit = nested_calc_unit
+                calc_quantity = nested_calc_quantity
             multipack_review_needed = _should_flag_multipack_review(
                 supplier_sales_factor,
                 supplier_sales_unit_code,
@@ -815,6 +938,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                     "secondary_unit": secondary_unit,
                     "secondary_unit_factor": secondary_unit_factor,
                     "multipack_review_needed": multipack_review_needed and not did_apply_safe_multipack,
+                    "nested_multipack_applied": did_apply_nested_multipack,
                 }
             )
 
@@ -1011,6 +1135,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
         batch.issue_count += len(issues_to_create)
 
         if ingredient:
+            previous_units_per_package = ingredient.units_per_package
             ingredient.supplier_product_name = supplier_product_name or ingredient.supplier_product_name
             ingredient.supplier_sales_unit_code = supplier_sales_unit_code
             ingredient.supplier_sales_unit_name = supplier_sales_unit_name
@@ -1038,13 +1163,14 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 ingredient.calculation_unit = calc_unit
                 ingredient.calculation_quantity_per_package = calc_quantity
                 ingredient.conversion_factor_to_base = calc_quantity
-            if (
-                preferred_unit is not None
-                and secondary_unit is not None
-                and secondary_unit_factor is not None
-                and ingredient.preferred_unit is None
-                and ingredient.secondary_unit is None
-                and ingredient.secondary_unit_factor is None
+            if _should_update_dual_unit_values(
+                ingredient,
+                preferred_unit,
+                secondary_unit,
+                secondary_unit_factor,
+                bool(parsed_row.get("nested_multipack_applied")),
+                previous_units_per_package,
+                calc_quantity,
             ):
                 ingredient.preferred_unit = preferred_unit
                 ingredient.secondary_unit = secondary_unit
