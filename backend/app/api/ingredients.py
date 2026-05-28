@@ -375,6 +375,7 @@ IMPORT_STATUS_SIGNAL_MAP = {
     "nog niet beschikbaar": "temporarily_unavailable",
     "beschikbaar - te saneren": "to_be_sanitized",
 }
+IMPORT_SIGNAL_LATEST_WINDOW = timedelta(minutes=10)
 
 
 def _normalize_import_status_description(value: str | None) -> str | None:
@@ -415,10 +416,14 @@ def _serialize_import_signal(ingredient: Ingredient, usage: dict) -> dict:
         "supplier_status_last_imported_at": ingredient.supplier_status_last_imported_at.isoformat()
         if ingredient.supplier_status_last_imported_at is not None
         else None,
+        "supplier_signal_acknowledged_at": ingredient.supplier_signal_acknowledged_at.isoformat()
+        if ingredient.supplier_signal_acknowledged_at is not None
+        else None,
         "dish_count": usage["dish_count"],
         "dishes": usage["dishes"],
         "semi_finished_product_count": usage["semi_finished_product_count"],
         "semi_finished_products": usage["semi_finished_products"],
+        "can_delete": usage["can_delete"],
     }
 
 
@@ -750,11 +755,29 @@ def list_import_signals(
     if not has_permission(current_user, "importbeheer.bekijken", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
+    latest_status_imported_at = (
+        db.query(func.max(Ingredient.supplier_status_last_imported_at))
+        .filter(
+            Ingredient.source_type == "import",
+            Ingredient.supplier_status_last_imported_at.is_not(None),
+        )
+        .scalar()
+    )
+    if latest_status_imported_at is None:
+        return []
+
+    latest_window_start = latest_status_imported_at - IMPORT_SIGNAL_LATEST_WINDOW
     candidates = (
         db.query(Ingredient)
         .filter(
             Ingredient.source_type == "import",
             Ingredient.is_archived.is_(False),
+            Ingredient.supplier_status_last_imported_at >= latest_window_start,
+            Ingredient.supplier_status_last_imported_at <= latest_status_imported_at,
+            or_(
+                Ingredient.supplier_signal_acknowledged_at.is_(None),
+                Ingredient.supplier_signal_acknowledged_at < Ingredient.supplier_status_last_imported_at,
+            ),
             or_(
                 Ingredient.supplier_is_orderable.is_(False),
                 Ingredient.supplier_order_status_description.is_not(None),
@@ -773,6 +796,26 @@ def list_import_signals(
         _serialize_import_signal(ingredient, usage_by_id[ingredient.id])
         for ingredient in ingredients
     ]
+
+
+@router.post("/api/import-signals/{ingredient_id}/acknowledge", tags=["ingredients"])
+def acknowledge_import_signal(
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+) -> dict:
+    if not has_permission(current_user, "importbeheer.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
+    ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    if ingredient.source_type != "import":
+        raise HTTPException(status_code=400, detail="Only import ingredients can be acknowledged via this endpoint")
+
+    ingredient.supplier_signal_acknowledged_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"success": True}
 
 
 @router.get("/api/manual-ingredients/{ingredient_id}/usage-check", tags=["ingredients"])

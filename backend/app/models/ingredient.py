@@ -46,6 +46,7 @@ class Ingredient(Base):
     supplier_alternative_article_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     supplier_replaced_by_article_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     supplier_status_last_imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    supplier_signal_acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     supplier_last_imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     source_type: Mapped[str] = mapped_column(String(20), nullable=False, default="import", server_default="import")
     manual_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
