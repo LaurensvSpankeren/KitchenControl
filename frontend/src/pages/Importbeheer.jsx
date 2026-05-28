@@ -473,35 +473,6 @@ export default function Importbeheer() {
     }
   }
 
-  async function handleStaleImportIngredientAction(ingredientId, action) {
-    if (!ingredientId || activeStaleImportActionId) {
-      return
-    }
-
-    setActiveStaleImportActionId(ingredientId)
-    setStaleImportError('')
-    setStaleImportMessage('')
-
-    try {
-      if (action === 'archive') {
-        if (!canCleanupImport) {
-          setStaleImportError('Je hebt geen rechten om importingrediënten te archiveren.')
-          return
-        }
-        await apiClient.archiveImportIngredient(ingredientId)
-        setStaleImportMessage('Importingrediënt gearchiveerd.')
-      }
-
-      setStaleImportIngredients((currentIngredients) =>
-        currentIngredients.filter((ingredient) => ingredient.id !== ingredientId)
-      )
-    } catch (error) {
-      setStaleImportError(error?.message || 'Actie op importingrediënt mislukt.')
-    } finally {
-      setActiveStaleImportActionId(null)
-    }
-  }
-
   useEffect(() => {
     let isCancelled = false
 
@@ -825,24 +796,14 @@ export default function Importbeheer() {
                         <td>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                             {canCleanupImport ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="secondary-btn"
-                                  onClick={() => handleStaleImportIngredientAction(ingredient.id, 'archive')}
-                                  disabled={isBusy}
-                                >
-                                  Archiveren
-                                </button>
-                                <button
-                                  type="button"
-                                  className="secondary-btn"
-                                  onClick={() => handleOpenDeleteIngredient(ingredient, 'import')}
-                                  disabled={isBusy}
-                                >
-                                  Verwijderen
-                                </button>
-                              </>
+                              <button
+                                type="button"
+                                className="secondary-btn"
+                                onClick={() => handleOpenDeleteIngredient(ingredient, 'import')}
+                                disabled={isBusy}
+                              >
+                                Verwijderen
+                              </button>
                             ) : null}
                           </div>
                         </td>
