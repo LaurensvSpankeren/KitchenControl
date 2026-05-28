@@ -243,6 +243,14 @@ def _serialize_ingredient(ingredient: Ingredient) -> dict:
         if ingredient.supplier_vat_rate is not None
         else None,
         "supplier_allergens_raw": ingredient.supplier_allergens_raw,
+        "supplier_is_orderable": ingredient.supplier_is_orderable,
+        "supplier_order_status_code": ingredient.supplier_order_status_code,
+        "supplier_order_status_description": ingredient.supplier_order_status_description,
+        "supplier_alternative_article_code": ingredient.supplier_alternative_article_code,
+        "supplier_replaced_by_article_code": ingredient.supplier_replaced_by_article_code,
+        "supplier_status_last_imported_at": ingredient.supplier_status_last_imported_at.isoformat()
+        if ingredient.supplier_status_last_imported_at is not None
+        else None,
         "supplier_last_imported_at": ingredient.supplier_last_imported_at.isoformat()
         if ingredient.supplier_last_imported_at is not None
         else None,
@@ -290,45 +298,127 @@ def _serialize_ingredient_with_match(db: Session, ingredient: Ingredient) -> dic
     return data
 
 
-def _build_ingredient_usage(db: Session, ingredient_id: int) -> dict:
-    dishes = [
-        {"id": row.id, "name": row.name}
-        for row in (
-            db.query(Dish.id, Dish.name)
-            .join(RecipeLine, RecipeLine.parent_id == Dish.id)
-            .filter(
-                RecipeLine.parent_type == "dish",
-                RecipeLine.item_type == "ingredient",
-                RecipeLine.item_id == ingredient_id,
-                Dish.is_archived.is_(False),
-            )
-            .group_by(Dish.id, Dish.name)
-            .order_by(Dish.name.asc())
-            .all()
-        )
-    ]
-    semi_finished_products = [
-        {"id": row.id, "name": row.name}
-        for row in (
-            db.query(SemiFinishedProduct.id, SemiFinishedProduct.name)
-            .join(RecipeLine, RecipeLine.parent_id == SemiFinishedProduct.id)
-            .filter(
-                RecipeLine.parent_type == "semi_finished_product",
-                RecipeLine.item_type == "ingredient",
-                RecipeLine.item_id == ingredient_id,
-                SemiFinishedProduct.is_archived.is_(False),
-            )
-            .group_by(SemiFinishedProduct.id, SemiFinishedProduct.name)
-            .order_by(SemiFinishedProduct.name.asc())
-            .all()
-        )
-    ]
+def _empty_ingredient_usage() -> dict:
     return {
-        "dish_count": len(dishes),
-        "dishes": dishes,
-        "semi_finished_product_count": len(semi_finished_products),
-        "semi_finished_products": semi_finished_products,
-        "can_delete": not dishes and not semi_finished_products,
+        "dish_count": 0,
+        "dishes": [],
+        "semi_finished_product_count": 0,
+        "semi_finished_products": [],
+        "can_delete": True,
+    }
+
+
+def _build_ingredient_usage_map(db: Session, ingredient_ids: list[int]) -> dict[int, dict]:
+    ingredient_ids = list(dict.fromkeys(ingredient_ids))
+    usage_by_id = {ingredient_id: _empty_ingredient_usage() for ingredient_id in ingredient_ids}
+    if not ingredient_ids:
+        return usage_by_id
+
+    dish_rows = (
+        db.query(
+            RecipeLine.item_id.label("ingredient_id"),
+            Dish.id.label("dish_id"),
+            Dish.name.label("dish_name"),
+        )
+        .join(Dish, RecipeLine.parent_id == Dish.id)
+        .filter(
+            RecipeLine.parent_type == "dish",
+            RecipeLine.item_type == "ingredient",
+            RecipeLine.item_id.in_(ingredient_ids),
+            Dish.is_archived.is_(False),
+        )
+        .group_by(RecipeLine.item_id, Dish.id, Dish.name)
+        .order_by(Dish.name.asc())
+        .all()
+    )
+    for row in dish_rows:
+        usage_by_id[row.ingredient_id]["dishes"].append({"id": row.dish_id, "name": row.dish_name})
+
+    semi_finished_rows = (
+        db.query(
+            RecipeLine.item_id.label("ingredient_id"),
+            SemiFinishedProduct.id.label("semi_finished_product_id"),
+            SemiFinishedProduct.name.label("semi_finished_product_name"),
+        )
+        .join(SemiFinishedProduct, RecipeLine.parent_id == SemiFinishedProduct.id)
+        .filter(
+            RecipeLine.parent_type == "semi_finished_product",
+            RecipeLine.item_type == "ingredient",
+            RecipeLine.item_id.in_(ingredient_ids),
+            SemiFinishedProduct.is_archived.is_(False),
+        )
+        .group_by(RecipeLine.item_id, SemiFinishedProduct.id, SemiFinishedProduct.name)
+        .order_by(SemiFinishedProduct.name.asc())
+        .all()
+    )
+    for row in semi_finished_rows:
+        usage_by_id[row.ingredient_id]["semi_finished_products"].append(
+            {"id": row.semi_finished_product_id, "name": row.semi_finished_product_name}
+        )
+
+    for usage in usage_by_id.values():
+        usage["dish_count"] = len(usage["dishes"])
+        usage["semi_finished_product_count"] = len(usage["semi_finished_products"])
+        usage["can_delete"] = not usage["dishes"] and not usage["semi_finished_products"]
+
+    return usage_by_id
+
+
+def _build_ingredient_usage(db: Session, ingredient_id: int) -> dict:
+    return _build_ingredient_usage_map(db, [ingredient_id])[ingredient_id]
+
+
+IMPORT_STATUS_SIGNAL_MAP = {
+    "uit assortiment": "out_of_assortment",
+    "gesaneerd": "out_of_assortment",
+    "niet beschikbaar": "temporarily_unavailable",
+    "nog niet beschikbaar": "temporarily_unavailable",
+    "beschikbaar - te saneren": "to_be_sanitized",
+}
+
+
+def _normalize_import_status_description(value: str | None) -> str | None:
+    normalized = " ".join((value or "").strip().lower().split())
+    return normalized or None
+
+
+def _build_import_signals(ingredient: Ingredient) -> list[str]:
+    signals = []
+    if ingredient.supplier_is_orderable is False:
+        signals.append("unavailable")
+
+    status_description = _normalize_import_status_description(
+        ingredient.supplier_order_status_description
+    )
+    status_signal = IMPORT_STATUS_SIGNAL_MAP.get(status_description)
+    if status_signal is not None:
+        signals.append(status_signal)
+
+    if ingredient.supplier_alternative_article_code or ingredient.supplier_replaced_by_article_code:
+        signals.append("possible_replacement")
+
+    return signals
+
+
+def _serialize_import_signal(ingredient: Ingredient, usage: dict) -> dict:
+    return {
+        "id": ingredient.id,
+        "name": ingredient.supplier_product_name,
+        "article_code": ingredient.supplier_product_code,
+        "supplier": ingredient.supplier_name,
+        "signals": _build_import_signals(ingredient),
+        "supplier_is_orderable": ingredient.supplier_is_orderable,
+        "supplier_order_status_code": ingredient.supplier_order_status_code,
+        "supplier_order_status_description": ingredient.supplier_order_status_description,
+        "supplier_alternative_article_code": ingredient.supplier_alternative_article_code,
+        "supplier_replaced_by_article_code": ingredient.supplier_replaced_by_article_code,
+        "supplier_status_last_imported_at": ingredient.supplier_status_last_imported_at.isoformat()
+        if ingredient.supplier_status_last_imported_at is not None
+        else None,
+        "dish_count": usage["dish_count"],
+        "dishes": usage["dishes"],
+        "semi_finished_product_count": usage["semi_finished_product_count"],
+        "semi_finished_products": usage["semi_finished_products"],
     }
 
 
@@ -650,6 +740,39 @@ def list_stale_import_ingredients(
         .all()
     )
     return [_serialize_ingredient(ingredient) for ingredient in ingredients]
+
+
+@router.get("/api/import-signals", tags=["ingredients"])
+def list_import_signals(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+) -> list[dict]:
+    if not has_permission(current_user, "importbeheer.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
+    candidates = (
+        db.query(Ingredient)
+        .filter(
+            Ingredient.source_type == "import",
+            Ingredient.is_archived.is_(False),
+            or_(
+                Ingredient.supplier_is_orderable.is_(False),
+                Ingredient.supplier_order_status_description.is_not(None),
+                Ingredient.supplier_alternative_article_code.is_not(None),
+                Ingredient.supplier_replaced_by_article_code.is_not(None),
+            ),
+        )
+        .order_by(Ingredient.supplier_product_name.asc())
+        .all()
+    )
+    ingredients = [
+        ingredient for ingredient in candidates if _build_import_signals(ingredient)
+    ]
+    usage_by_id = _build_ingredient_usage_map(db, [ingredient.id for ingredient in ingredients])
+    return [
+        _serialize_import_signal(ingredient, usage_by_id[ingredient.id])
+        for ingredient in ingredients
+    ]
 
 
 @router.get("/api/manual-ingredients/{ingredient_id}/usage-check", tags=["ingredients"])

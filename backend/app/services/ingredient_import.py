@@ -832,6 +832,22 @@ def _clean_optional_string(value: str | None) -> str | None:
     return cleaned or None
 
 
+def _normalize_supplier_article_code(value: str | None) -> str | None:
+    cleaned = _clean_optional_string(value)
+    if cleaned is None or cleaned == "000000":
+        return None
+    return cleaned
+
+
+def _parse_supplier_orderable(value: str | None) -> bool | None:
+    normalized = (value or "").strip().upper()
+    if normalized == "J":
+        return True
+    if normalized == "N":
+        return False
+    return None
+
+
 def _build_duplicate_fingerprint(parsed_row: dict) -> dict:
     return {
         "supplier_product_code": parsed_row["supplier_product_code"],
@@ -988,6 +1004,17 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
             supplier_allergens_raw = _extract_supplier_allergens(row)
             supplier_brand = (row.get("Merknaam voluit") or "").strip() or None
             category = (row.get("Omschrijving hoofdproduktgroep") or "").strip() or None
+            supplier_is_orderable = _parse_supplier_orderable(row.get("Bestelbaar"))
+            supplier_order_status_code = _clean_optional_string(row.get("Bestelstatus"))
+            supplier_order_status_description = _clean_optional_string(
+                row.get("Bestelstatus omschrijving")
+            )
+            supplier_alternative_article_code = _normalize_supplier_article_code(
+                row.get("Alternatief artikel")
+            )
+            supplier_replaced_by_article_code = _normalize_supplier_article_code(
+                row.get("Art Vervangen door")
+            )
 
             packaging_type = (row.get("Omschrijving verkoopeenheid") or "").strip() or None
             units_per_package = _extract_units_per_package(row)
@@ -1115,6 +1142,11 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                     "supplier_allergens_raw": supplier_allergens_raw,
                     "supplier_brand": supplier_brand,
                     "category": category,
+                    "supplier_is_orderable": supplier_is_orderable,
+                    "supplier_order_status_code": supplier_order_status_code,
+                    "supplier_order_status_description": supplier_order_status_description,
+                    "supplier_alternative_article_code": supplier_alternative_article_code,
+                    "supplier_replaced_by_article_code": supplier_replaced_by_article_code,
                     "packaging_type": packaging_type,
                     "units_per_package": units_per_package,
                     "net_content_amount": net_content_amount,
@@ -1193,6 +1225,11 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
         supplier_allergens_raw = parsed_row["supplier_allergens_raw"]
         supplier_brand = parsed_row["supplier_brand"]
         category = parsed_row["category"]
+        supplier_is_orderable = parsed_row["supplier_is_orderable"]
+        supplier_order_status_code = parsed_row["supplier_order_status_code"]
+        supplier_order_status_description = parsed_row["supplier_order_status_description"]
+        supplier_alternative_article_code = parsed_row["supplier_alternative_article_code"]
+        supplier_replaced_by_article_code = parsed_row["supplier_replaced_by_article_code"]
         packaging_type = parsed_row["packaging_type"]
         units_per_package = parsed_row["units_per_package"]
         net_content_amount = parsed_row["net_content_amount"]
@@ -1341,6 +1378,11 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
             ingredient.supplier_allergens_raw = supplier_allergens_raw
             ingredient.supplier_brand = supplier_brand
             ingredient.category = category
+            ingredient.supplier_is_orderable = supplier_is_orderable
+            ingredient.supplier_order_status_code = supplier_order_status_code
+            ingredient.supplier_order_status_description = supplier_order_status_description
+            ingredient.supplier_alternative_article_code = supplier_alternative_article_code
+            ingredient.supplier_replaced_by_article_code = supplier_replaced_by_article_code
             ingredient.supplier_pack_description = supplier_pack_description
             ingredient.packaging_type = packaging_type
             ingredient.units_per_package = units_per_package
@@ -1351,6 +1393,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
             ingredient.package_weight_unit = package_weight_unit
             ingredient.package_volume_amount = package_volume_amount
             ingredient.package_volume_unit = package_volume_unit
+            ingredient.supplier_status_last_imported_at = import_timestamp
             ingredient.supplier_last_imported_at = import_timestamp
             if calc_unit is not None and calc_quantity is not None:
                 ingredient.calculation_unit = calc_unit
@@ -1404,6 +1447,12 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 supplier_price_ex_vat=supplier_price_ex_vat,
                 supplier_vat_rate=supplier_vat_rate,
                 supplier_allergens_raw=supplier_allergens_raw,
+                supplier_is_orderable=supplier_is_orderable,
+                supplier_order_status_code=supplier_order_status_code,
+                supplier_order_status_description=supplier_order_status_description,
+                supplier_alternative_article_code=supplier_alternative_article_code,
+                supplier_replaced_by_article_code=supplier_replaced_by_article_code,
+                supplier_status_last_imported_at=import_timestamp,
                 supplier_last_imported_at=import_timestamp,
                 category=category,
                 base_unit=base_unit,
