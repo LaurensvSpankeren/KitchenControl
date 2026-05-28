@@ -65,6 +65,9 @@ OUTER_PACK_CODES = {"TR", "DS", "KR", "CL", "BK", "EM"}
 INNER_PACK_TERMS = ("pak", "fles", "blik", "pot", "stuk", "stuks")
 INNER_PACK_CODES = {"PK", "FL", "BL", "PT", "ST"}
 AMOUNT_MATCH_EPSILON = 1e-6
+DERIVED_CONTENT_MATCH_RATIO = 0.005
+SALES_FACTOR_SUBPACKAGE_TERMS = ("folie", "zak", "pak", "verpakking", "pouch")
+SALES_FACTOR_SUBPACKAGE_CODES = {"FO", "ZK", "PK"}
 
 
 def _parse_number(value: str | None) -> float | None:
@@ -177,6 +180,52 @@ def _extract_nested_multipack_from_text(
     )
 
 
+def _extract_simple_multipack_from_text(
+    value: str | None,
+) -> tuple[float | None, str | None, float | None, float | None]:
+    if not value:
+        return None, None, None, None
+
+    normalized = value.strip().replace(",", ".")
+    match = re.fullmatch(
+        r"(\d+)\s*[xX]\s*(\d+(?:\.\d+)?)\s*(kg|gr|gram|g|ml|liter|l|lt)",
+        normalized,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None, None, None, None
+
+    units_per_subpackage = _parse_number(match.group(1))
+    per_unit_amount = _parse_number(match.group(2))
+    unit = _normalize_unit(match.group(3))
+    if (
+        units_per_subpackage is None
+        or per_unit_amount is None
+        or units_per_subpackage <= 1
+        or per_unit_amount <= 0
+    ):
+        return None, None, None, None
+
+    if unit in {"kg", "gram"}:
+        normalized_per_unit_amount = _normalize_weight_to_gram(per_unit_amount, unit)
+        calc_unit = "gram"
+    elif unit in {"liter", "ml"}:
+        normalized_per_unit_amount = _normalize_volume_to_ml(per_unit_amount, unit)
+        calc_unit = "ml"
+    else:
+        return None, None, None, None
+
+    if normalized_per_unit_amount is None:
+        return None, None, None, None
+
+    return (
+        units_per_subpackage,
+        calc_unit,
+        units_per_subpackage * normalized_per_unit_amount,
+        normalized_per_unit_amount,
+    )
+
+
 def _text_contains_explicit_multiplier(value: str | None) -> bool:
     if not value:
         return False
@@ -194,6 +243,111 @@ def _looks_like_inner_pack(unit_code: str | None, unit_name: str | None) -> bool
     normalized_code = (unit_code or "").strip().upper()
     normalized_name = (unit_name or "").strip().lower()
     return normalized_code in INNER_PACK_CODES or any(term in normalized_name for term in INNER_PACK_TERMS)
+
+
+def _looks_like_sales_factor_subpackage(unit_code: str | None, unit_name: str | None) -> bool:
+    normalized_code = (unit_code or "").strip().upper()
+    normalized_name = (unit_name or "").strip().lower()
+    return normalized_code in SALES_FACTOR_SUBPACKAGE_CODES or any(
+        term in normalized_name for term in SALES_FACTOR_SUBPACKAGE_TERMS
+    )
+
+
+def _amounts_match_with_tolerance(expected: float, actual: float) -> bool:
+    tolerance = max(AMOUNT_MATCH_EPSILON, abs(expected) * DERIVED_CONTENT_MATCH_RATIO)
+    return abs(expected - actual) <= tolerance
+
+
+def _derive_sales_factor_subpackage_values(
+    supplier_sales_factor: float | None,
+    supplier_sales_unit_code: str | None,
+    supplier_sales_unit_name: str | None,
+    supplier_standard_unit_code: str | None,
+    supplier_standard_unit_name: str | None,
+    supplier_pack_description: str | None,
+    package_weight_amount: float | None,
+    package_weight_unit: str | None,
+    standard_package_weight_amount: float | None,
+    standard_package_weight_unit: str | None,
+    package_volume_amount: float | None,
+    package_volume_unit: str | None,
+) -> tuple[float | None, str | None, float | None, bool]:
+    if supplier_sales_factor is None or supplier_sales_factor <= 1:
+        return None, None, None, False
+
+    sales_unit_code = (supplier_sales_unit_code or "").strip().upper()
+    standard_unit_code = (supplier_standard_unit_code or "").strip().upper()
+    sales_unit_name = (supplier_sales_unit_name or "").strip().lower()
+    standard_unit_name = (supplier_standard_unit_name or "").strip().lower()
+    if sales_unit_code == standard_unit_code and sales_unit_name == standard_unit_name:
+        return None, None, None, False
+
+    if not _looks_like_outer_pack(supplier_sales_unit_code, supplier_sales_unit_name):
+        return None, None, None, False
+    if not _looks_like_sales_factor_subpackage(
+        supplier_standard_unit_code,
+        supplier_standard_unit_name,
+    ):
+        return None, None, None, False
+
+    (
+        units_per_subpackage,
+        calc_unit,
+        subpackage_calc_quantity,
+        secondary_unit_factor,
+    ) = _extract_simple_multipack_from_text(supplier_pack_description)
+    if (
+        units_per_subpackage is None
+        or calc_unit is None
+        or subpackage_calc_quantity is None
+        or secondary_unit_factor is None
+    ):
+        return None, None, None, False
+
+    if calc_unit == "gram":
+        total_source_amount = package_weight_amount
+        total_source_unit = package_weight_unit
+        standard_source_amount = standard_package_weight_amount
+        standard_source_unit = standard_package_weight_unit
+        normalize_fn = _normalize_weight_to_gram
+    elif calc_unit == "ml":
+        total_source_amount = package_volume_amount
+        total_source_unit = package_volume_unit
+        standard_source_amount = None
+        standard_source_unit = None
+        normalize_fn = _normalize_volume_to_ml
+    else:
+        return None, None, None, False
+
+    total_source_quantity = (
+        normalize_fn(total_source_amount, total_source_unit)
+        if total_source_amount is not None and total_source_unit is not None
+        else None
+    )
+    expected_total_quantity = supplier_sales_factor * subpackage_calc_quantity
+    if total_source_quantity is None or not _amounts_match_with_tolerance(
+        expected_total_quantity,
+        total_source_quantity,
+    ):
+        return None, None, None, False
+
+    standard_source_quantity = (
+        normalize_fn(standard_source_amount, standard_source_unit)
+        if standard_source_amount is not None and standard_source_unit is not None
+        else None
+    )
+    if standard_source_quantity is not None and not _amounts_match_with_tolerance(
+        subpackage_calc_quantity,
+        standard_source_quantity,
+    ):
+        return None, None, None, False
+
+    return (
+        supplier_sales_factor * units_per_subpackage,
+        calc_unit,
+        expected_total_quantity,
+        True,
+    )
 
 
 def _derive_safe_multipack_values(
@@ -419,6 +573,18 @@ def _extract_package_weight(row: dict) -> tuple[float | None, str | None]:
         unit = "kg"
 
     return amount, unit
+
+
+def _extract_standard_package_weight(row: dict) -> tuple[float | None, str | None]:
+    for column_name in (
+        "Netto Gewicht Standaardeenheid",
+        "Netto gewicht Standaardeenheid",
+    ):
+        amount = _parse_number(row.get(column_name))
+        if amount is not None and amount != 0:
+            # Bidfood standaard-eenheid gewichtskolommen zijn in kilogram.
+            return amount, "kg"
+    return None, None
 
 
 def _extract_package_volume(row: dict) -> tuple[float | None, str | None]:
@@ -827,6 +993,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
             units_per_package = _extract_units_per_package(row)
             net_content_amount, net_content_unit = _extract_net_content(row)
             package_weight_amount, package_weight_unit = _extract_package_weight(row)
+            standard_package_weight_amount, standard_package_weight_unit = _extract_standard_package_weight(row)
             package_volume_amount, package_volume_unit = _extract_package_volume(row)
             supplier_pack_description = (row.get("Omschrijving inhoud artikel") or "").strip() or None
 
@@ -850,6 +1017,31 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 units_per_package = nested_units_per_package
                 calc_unit = nested_calc_unit
                 calc_quantity = nested_calc_quantity
+            did_apply_sales_factor_subpackage = False
+            if not did_apply_nested_multipack:
+                (
+                    sales_factor_units_per_package,
+                    sales_factor_calc_unit,
+                    sales_factor_calc_quantity,
+                    did_apply_sales_factor_subpackage,
+                ) = _derive_sales_factor_subpackage_values(
+                    supplier_sales_factor,
+                    supplier_sales_unit_code,
+                    supplier_sales_unit_name,
+                    supplier_standard_unit_code,
+                    supplier_standard_unit_name,
+                    supplier_pack_description,
+                    package_weight_amount,
+                    package_weight_unit,
+                    standard_package_weight_amount,
+                    standard_package_weight_unit,
+                    package_volume_amount,
+                    package_volume_unit,
+                )
+                if did_apply_sales_factor_subpackage:
+                    units_per_package = sales_factor_units_per_package
+                    calc_unit = sales_factor_calc_unit
+                    calc_quantity = sales_factor_calc_quantity
             multipack_review_needed = _should_flag_multipack_review(
                 supplier_sales_factor,
                 supplier_sales_unit_code,
@@ -939,6 +1131,7 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                     "secondary_unit_factor": secondary_unit_factor,
                     "multipack_review_needed": multipack_review_needed and not did_apply_safe_multipack,
                     "nested_multipack_applied": did_apply_nested_multipack,
+                    "sales_factor_subpackage_applied": did_apply_sales_factor_subpackage,
                 }
             )
 
@@ -1168,7 +1361,10 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 preferred_unit,
                 secondary_unit,
                 secondary_unit_factor,
-                bool(parsed_row.get("nested_multipack_applied")),
+                bool(
+                    parsed_row.get("nested_multipack_applied")
+                    or parsed_row.get("sales_factor_subpackage_applied")
+                ),
                 previous_units_per_package,
                 calc_quantity,
             ):
