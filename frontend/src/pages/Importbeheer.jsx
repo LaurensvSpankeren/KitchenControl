@@ -149,6 +149,8 @@ export default function Importbeheer() {
   const [selectedManualMatchIngredient, setSelectedManualMatchIngredient] = useState(null)
   const [selectedImportMatchIngredient, setSelectedImportMatchIngredient] = useState(null)
   const [isLoadingMatchPreview, setIsLoadingMatchPreview] = useState(false)
+  const [deleteDialog, setDeleteDialog] = useState(null)
+  const [isDeletingIngredient, setIsDeletingIngredient] = useState(false)
   const currentUser = getCurrentUser()
   const role = currentUser?.role
   const canViewImportbeheer =
@@ -171,6 +173,15 @@ export default function Importbeheer() {
     () => parseJsonString(selectedIssue?.payload_json),
     [selectedIssue]
   )
+
+  function getManualFeedbackTargets(ingredientId) {
+    const targetMatchIngredient = manualMatchIngredients.find((ingredient) => ingredient.id === ingredientId)
+    const isMatchAction = Boolean(targetMatchIngredient)
+    return {
+      setMessage: isMatchAction ? setManualMatchMessage : setManualReviewMessage,
+      setError: isMatchAction ? setManualMatchError : setManualReviewError
+    }
+  }
 
   async function loadIssues() {
     setIsLoadingIssues(true)
@@ -296,10 +307,7 @@ export default function Importbeheer() {
       return
     }
 
-    const targetMatchIngredient = manualMatchIngredients.find((ingredient) => ingredient.id === ingredientId)
-    const isMatchAction = Boolean(targetMatchIngredient)
-    const setMessage = isMatchAction ? setManualMatchMessage : setManualReviewMessage
-    const setError = isMatchAction ? setManualMatchError : setManualReviewError
+    const { setMessage, setError } = getManualFeedbackTargets(ingredientId)
 
     setActiveManualActionId(ingredientId)
     setError('')
@@ -308,21 +316,14 @@ export default function Importbeheer() {
     try {
       if (action === 'review') {
         await apiClient.reviewManualIngredient(ingredientId)
-        setMessage('Handmatig ingrediënt gemarkeerd als reviewed.')
+        setMessage('Handmatig ingrediënt gemarkeerd als geen match.')
       } else if (action === 'archive') {
-        if (!canManageSupervisorImportActions) {
+        if (!canCleanupImport) {
           setError('Je hebt geen rechten om handmatige ingrediënten te archiveren.')
           return
         }
         await apiClient.archiveManualIngredient(ingredientId)
         setMessage('Handmatig ingrediënt gearchiveerd.')
-      } else if (action === 'delete') {
-        if (!canManageSupervisorImportActions) {
-          setError('Je hebt geen rechten om handmatige ingrediënten te verwijderen.')
-          return
-        }
-        await apiClient.deleteManualIngredient(ingredientId)
-        setMessage('Handmatig ingrediënt verwijderd.')
       } else if (action === 'link-import') {
         const result = await apiClient.linkManualIngredientToImport(ingredientId)
         setMessage(
@@ -372,6 +373,106 @@ export default function Importbeheer() {
     setSelectedImportMatchIngredient(null)
   }
 
+  async function handleOpenDeleteIngredient(ingredient, sourceType) {
+    if (!ingredient?.id || !canCleanupImport) {
+      return
+    }
+
+    const isManual = sourceType === 'manual'
+    if ((isManual && activeManualActionId) || (!isManual && activeStaleImportActionId)) {
+      return
+    }
+
+    if (isManual) {
+      const { setMessage, setError } = getManualFeedbackTargets(ingredient.id)
+      setMessage('')
+      setError('')
+      setActiveManualActionId(ingredient.id)
+    } else {
+      setStaleImportMessage('')
+      setStaleImportError('')
+      setActiveStaleImportActionId(ingredient.id)
+    }
+
+    try {
+      const usage =
+        sourceType === 'manual'
+          ? await apiClient.getManualIngredientUsageCheck(ingredient.id)
+          : await apiClient.getImportIngredientUsageCheck(ingredient.id)
+      setDeleteDialog({
+        ingredient,
+        sourceType,
+        usage,
+        mode: usage?.can_delete ? 'confirm' : 'blocked'
+      })
+    } catch (error) {
+      if (isManual) {
+        const { setError } = getManualFeedbackTargets(ingredient.id)
+        setError(error?.message || 'Gebruik van ingrediënt controleren mislukt.')
+      } else {
+        setStaleImportError(error?.message || 'Gebruik van ingrediënt controleren mislukt.')
+      }
+    } finally {
+      if (isManual) {
+        setActiveManualActionId(null)
+      } else {
+        setActiveStaleImportActionId(null)
+      }
+    }
+  }
+
+  function closeDeleteDialog() {
+    if (isDeletingIngredient) {
+      return
+    }
+    setDeleteDialog(null)
+  }
+
+  async function handleConfirmDeleteIngredient() {
+    if (!deleteDialog?.ingredient?.id || isDeletingIngredient || deleteDialog.mode !== 'confirm') {
+      return
+    }
+
+    const { ingredient, sourceType } = deleteDialog
+    const isManual = sourceType === 'manual'
+    setIsDeletingIngredient(true)
+
+    try {
+      if (isManual) {
+        await apiClient.deleteManualIngredient(ingredient.id)
+        const { setMessage } = getManualFeedbackTargets(ingredient.id)
+        setMessage('Handmatig ingrediënt verwijderd.')
+        await Promise.all([loadManualIngredients(), loadManualMatchIngredients()])
+      } else {
+        await apiClient.deleteImportIngredient(ingredient.id)
+        setStaleImportMessage('Importingrediënt verwijderd.')
+        setStaleImportIngredients((currentIngredients) =>
+          currentIngredients.filter((currentIngredient) => currentIngredient.id !== ingredient.id)
+        )
+      }
+      setDeleteDialog(null)
+    } catch (error) {
+      if (error?.status === 409 && error?.data) {
+        setDeleteDialog({
+          ingredient,
+          sourceType,
+          usage: error.data,
+          mode: 'blocked'
+        })
+        return
+      }
+
+      if (isManual) {
+        const { setError } = getManualFeedbackTargets(ingredient.id)
+        setError(error?.message || 'Ingrediënt verwijderen mislukt.')
+      } else {
+        setStaleImportError(error?.message || 'Importingrediënt verwijderen mislukt.')
+      }
+    } finally {
+      setIsDeletingIngredient(false)
+    }
+  }
+
   async function handleStaleImportIngredientAction(ingredientId, action) {
     if (!ingredientId || activeStaleImportActionId) {
       return
@@ -383,19 +484,12 @@ export default function Importbeheer() {
 
     try {
       if (action === 'archive') {
-        if (!canManageSupervisorImportActions) {
+        if (!canCleanupImport) {
           setStaleImportError('Je hebt geen rechten om importingrediënten te archiveren.')
           return
         }
         await apiClient.archiveImportIngredient(ingredientId)
         setStaleImportMessage('Importingrediënt gearchiveerd.')
-      } else if (action === 'delete') {
-        if (!canManageSupervisorImportActions) {
-          setStaleImportError('Je hebt geen rechten om importingrediënten te verwijderen.')
-          return
-        }
-        await apiClient.deleteImportIngredient(ingredientId)
-        setStaleImportMessage('Importingrediënt verwijderd.')
       }
 
       setStaleImportIngredients((currentIngredients) =>
@@ -463,6 +557,13 @@ export default function Importbeheer() {
     loadManualIngredients()
     loadManualMatchIngredients()
   }, [])
+
+  const deleteUsage = deleteDialog?.usage || {}
+  const deleteDishes = Array.isArray(deleteUsage.dishes) ? deleteUsage.dishes : []
+  const deleteSemiFinishedProducts = Array.isArray(deleteUsage.semi_finished_products)
+    ? deleteUsage.semi_finished_products
+    : []
+  const isDeleteBlocked = deleteDialog?.mode === 'blocked'
 
   if (!isLoadingPermissions && !canViewImportbeheer) {
     return (
@@ -553,7 +654,7 @@ export default function Importbeheer() {
                                   onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
                                   disabled={isBusy}
                                 >
-                                  Reviewen
+                                  Geen match
                                 </button>
                                 {ingredient.match_status === 'strong' ? (
                                   <button
@@ -567,24 +668,14 @@ export default function Importbeheer() {
                               </>
                             ) : null}
                             {canCleanupImport ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="secondary-btn"
-                                  onClick={() => handleManualIngredientAction(ingredient.id, 'archive')}
-                                  disabled={isBusy}
-                                >
-                                  Archiveren
-                                </button>
-                                <button
-                                  type="button"
-                                  className="secondary-btn"
-                                  onClick={() => handleManualIngredientAction(ingredient.id, 'delete')}
-                                  disabled={isBusy}
-                                >
-                                  Verwijderen
-                                </button>
-                              </>
+                              <button
+                                type="button"
+                                className="secondary-btn"
+                                onClick={() => handleOpenDeleteIngredient(ingredient, 'manual')}
+                                disabled={isBusy}
+                              >
+                                Verwijderen
+                              </button>
                             ) : null}
                           </div>
                         </td>
@@ -652,7 +743,7 @@ export default function Importbeheer() {
                                   onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
                                   disabled={isBusy}
                                 >
-                                  Reviewen
+                                  Geen match
                                 </button>
                                 {ingredient.match_status === 'strong' ? (
                                   <button
@@ -668,24 +759,14 @@ export default function Importbeheer() {
                               </>
                             ) : null}
                             {canCleanupImport ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="secondary-btn"
-                                  onClick={() => handleManualIngredientAction(ingredient.id, 'archive')}
-                                  disabled={isBusy}
-                                >
-                                  Archiveren
-                                </button>
-                                <button
-                                  type="button"
-                                  className="secondary-btn"
-                                  onClick={() => handleManualIngredientAction(ingredient.id, 'delete')}
-                                  disabled={isBusy}
-                                >
-                                  Verwijderen
-                                </button>
-                              </>
+                              <button
+                                type="button"
+                                className="secondary-btn"
+                                onClick={() => handleOpenDeleteIngredient(ingredient, 'manual')}
+                                disabled={isBusy}
+                              >
+                                Verwijderen
+                              </button>
                             ) : null}
                           </div>
                         </td>
@@ -756,7 +837,7 @@ export default function Importbeheer() {
                                 <button
                                   type="button"
                                   className="secondary-btn"
-                                  onClick={() => handleStaleImportIngredientAction(ingredient.id, 'delete')}
+                                  onClick={() => handleOpenDeleteIngredient(ingredient, 'import')}
                                   disabled={isBusy}
                                 >
                                   Verwijderen
@@ -815,6 +896,96 @@ export default function Importbeheer() {
           )}
         </div>
       </section>
+
+      {deleteDialog ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h3>{isDeleteBlocked ? 'Ingrediënt kan niet worden verwijderd' : 'Ingrediënt verwijderen'}</h3>
+            </div>
+
+            <div className="modal-body">
+              {isDeleteBlocked ? (
+                <>
+                  <p>Dit ingrediënt kan niet worden verwijderd omdat het nog wordt gebruikt in actieve recepten.</p>
+
+                  <h4>Gerechten</h4>
+                  {deleteDishes.length > 0 ? (
+                    <ul>
+                      {deleteDishes.map((dish) => (
+                        <li key={`dish-${dish.id}`}>{dish.name}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>Geen</p>
+                  )}
+
+                  <h4>Halffabricaten</h4>
+                  {deleteSemiFinishedProducts.length > 0 ? (
+                    <ul>
+                      {deleteSemiFinishedProducts.map((product) => (
+                        <li key={`semi-${product.id}`}>{product.name}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>Geen</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p>Dit ingrediënt wordt niet meer gebruikt in actieve gerechten of halffabricaten.</p>
+
+                  <p>Het ingrediënt wordt verwijderd uit:</p>
+                  <ul>
+                    <li>ingrediëntenlijsten</li>
+                    <li>zoekresultaten</li>
+                    <li>import match controle</li>
+                  </ul>
+
+                  <p>Historische receptdata blijft technisch behouden.</p>
+
+                  <p>
+                    Let op:
+                    <br />
+                    als dit product nog in uw Bidfood favorieten of exports voorkomt,
+                    <br />
+                    kan het bij een volgende import opnieuw worden toegevoegd.
+                  </p>
+
+                  <p>Weet je zeker dat je wilt verwijderen?</p>
+                </>
+              )}
+            </div>
+
+            <div className="modal-actions">
+              {isDeleteBlocked ? (
+                <button type="button" className="secondary-btn" onClick={closeDeleteDialog}>
+                  Sluiten
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={closeDeleteDialog}
+                    disabled={isDeletingIngredient}
+                  >
+                    Nee, ongewijzigd laten
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={handleConfirmDeleteIngredient}
+                    disabled={isDeletingIngredient}
+                  >
+                    {isDeletingIngredient ? 'Bezig met verwijderen...' : 'Ja, verwijderen'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {selectedManualMatchIngredient && selectedImportMatchIngredient ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">

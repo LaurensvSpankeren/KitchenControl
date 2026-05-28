@@ -596,6 +596,14 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getManualIngredientUsageCheck(id) {
+    const response = await apiFetch(`${API_BASE_URL}/api/manual-ingredients/${id}/usage-check`)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to check manual ingredient usage: ${response.status}`)
+    }
+    return response.json()
+  },
   async archiveManualIngredient(id) {
     const response = await apiFetch(`${API_BASE_URL}/api/manual-ingredients/${id}/archive`, {
       method: 'POST'
@@ -612,7 +620,10 @@ export const apiClient = {
     })
     if (!response.ok) {
       const errorData = await response.json().catch(() => null)
-      throw new Error(errorData?.detail || `Failed to delete manual ingredient: ${response.status}`)
+      const error = new Error(errorData?.detail || `Failed to delete manual ingredient: ${response.status}`)
+      error.status = response.status
+      error.data = errorData
+      throw error
     }
     return response.json()
   },
@@ -636,13 +647,24 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getImportIngredientUsageCheck(id) {
+    const response = await apiFetch(`${API_BASE_URL}/api/import-ingredients/${id}/usage-check`)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to check import ingredient usage: ${response.status}`)
+    }
+    return response.json()
+  },
   async deleteImportIngredient(id) {
     const response = await apiFetch(`${API_BASE_URL}/api/import-ingredients/${id}`, {
       method: 'DELETE'
     })
     if (!response.ok) {
       const errorData = await response.json().catch(() => null)
-      throw new Error(errorData?.detail || `Failed to delete import ingredient: ${response.status}`)
+      const error = new Error(errorData?.detail || `Failed to delete import ingredient: ${response.status}`)
+      error.status = response.status
+      error.data = errorData
+      throw error
     }
     return response.json()
   },

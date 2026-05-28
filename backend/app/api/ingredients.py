@@ -1,13 +1,16 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user, require_supervisor
 from app.db.session import get_db
+from app.models.dish import Dish
 from app.models.ingredient import Ingredient
 from app.models.recipe_line import RecipeLine
+from app.models.semi_finished_product import SemiFinishedProduct
 from app.models.user import has_permission
 from app.services.ingredient_import_match_service import (
     build_import_match_debug_for_manual_ingredient,
@@ -285,6 +288,54 @@ def _serialize_ingredient_with_match(db: Session, ingredient: Ingredient) -> dic
     if ingredient.source_type == "manual":
         data.update(detect_import_match_for_manual_ingredient(db, ingredient))
     return data
+
+
+def _build_ingredient_usage(db: Session, ingredient_id: int) -> dict:
+    dishes = [
+        {"id": row.id, "name": row.name}
+        for row in (
+            db.query(Dish.id, Dish.name)
+            .join(RecipeLine, RecipeLine.parent_id == Dish.id)
+            .filter(
+                RecipeLine.parent_type == "dish",
+                RecipeLine.item_type == "ingredient",
+                RecipeLine.item_id == ingredient_id,
+                Dish.is_archived.is_(False),
+            )
+            .group_by(Dish.id, Dish.name)
+            .order_by(Dish.name.asc())
+            .all()
+        )
+    ]
+    semi_finished_products = [
+        {"id": row.id, "name": row.name}
+        for row in (
+            db.query(SemiFinishedProduct.id, SemiFinishedProduct.name)
+            .join(RecipeLine, RecipeLine.parent_id == SemiFinishedProduct.id)
+            .filter(
+                RecipeLine.parent_type == "semi_finished_product",
+                RecipeLine.item_type == "ingredient",
+                RecipeLine.item_id == ingredient_id,
+                SemiFinishedProduct.is_archived.is_(False),
+            )
+            .group_by(SemiFinishedProduct.id, SemiFinishedProduct.name)
+            .order_by(SemiFinishedProduct.name.asc())
+            .all()
+        )
+    ]
+    return {
+        "dish_count": len(dishes),
+        "dishes": dishes,
+        "semi_finished_product_count": len(semi_finished_products),
+        "semi_finished_products": semi_finished_products,
+        "can_delete": not dishes and not semi_finished_products,
+    }
+
+
+def _soft_delete_ingredient(ingredient: Ingredient) -> None:
+    ingredient.is_archived = True
+    ingredient.archived_at = datetime.now(timezone.utc)
+    ingredient.awaiting_import_match = False
 
 
 @router.get("/api/ingredients", tags=["ingredients"])
@@ -601,6 +652,42 @@ def list_stale_import_ingredients(
     return [_serialize_ingredient(ingredient) for ingredient in ingredients]
 
 
+@router.get("/api/manual-ingredients/{ingredient_id}/usage-check", tags=["ingredients"])
+def get_manual_ingredient_usage_check(
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+) -> dict:
+    if not has_permission(current_user, "importbeheer.opschonen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
+    ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    if ingredient.source_type != "manual":
+        raise HTTPException(status_code=400, detail="Only manual ingredients can be checked via this endpoint")
+
+    return _build_ingredient_usage(db, ingredient.id)
+
+
+@router.get("/api/import-ingredients/{ingredient_id}/usage-check", tags=["ingredients"])
+def get_import_ingredient_usage_check(
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+) -> dict:
+    if not has_permission(current_user, "importbeheer.opschonen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
+    ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    if ingredient.source_type != "import":
+        raise HTTPException(status_code=400, detail="Only import ingredients can be checked via this endpoint")
+
+    return _build_ingredient_usage(db, ingredient.id)
+
+
 @router.delete("/api/manual-ingredients/{ingredient_id}", tags=["ingredients"])
 def delete_manual_ingredient(
     ingredient_id: int,
@@ -616,19 +703,11 @@ def delete_manual_ingredient(
     if ingredient.source_type != "manual":
         raise HTTPException(status_code=400, detail="Only manual ingredients can be deleted via this endpoint")
 
-    is_used = (
-        db.query(RecipeLine.id)
-        .filter(RecipeLine.item_type == "ingredient", RecipeLine.item_id == ingredient.id)
-        .first()
-        is not None
-    )
-    if is_used:
-        raise HTTPException(
-            status_code=400,
-            detail="Ingredient is still used in recepten of halffabricaten en kan niet worden verwijderd.",
-        )
+    usage = _build_ingredient_usage(db, ingredient.id)
+    if not usage["can_delete"]:
+        return JSONResponse(status_code=409, content=usage)
 
-    db.delete(ingredient)
+    _soft_delete_ingredient(ingredient)
     db.commit()
     return {"deleted": True, "ingredient_id": ingredient_id}
 
@@ -648,19 +727,11 @@ def delete_import_ingredient(
     if ingredient.source_type != "import":
         raise HTTPException(status_code=400, detail="Only import ingredients can be deleted via this endpoint")
 
-    is_used = (
-        db.query(RecipeLine.id)
-        .filter(RecipeLine.item_type == "ingredient", RecipeLine.item_id == ingredient.id)
-        .first()
-        is not None
-    )
-    if is_used:
-        raise HTTPException(
-            status_code=400,
-            detail="Ingredient is still used in recepten of halffabricaten en kan niet worden verwijderd.",
-        )
+    usage = _build_ingredient_usage(db, ingredient.id)
+    if not usage["can_delete"]:
+        return JSONResponse(status_code=409, content=usage)
 
-    db.delete(ingredient)
+    _soft_delete_ingredient(ingredient)
     db.commit()
     return {"deleted": True, "ingredient_id": ingredient_id}
 
@@ -724,6 +795,7 @@ def review_manual_ingredient(
     if ingredient.source_type != "manual":
         raise HTTPException(status_code=400, detail="Only manual ingredients can be reviewed via this endpoint")
 
+    ingredient.awaiting_import_match = False
     ingredient.last_manual_review_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(ingredient)
