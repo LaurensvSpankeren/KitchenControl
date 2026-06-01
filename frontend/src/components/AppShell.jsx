@@ -22,11 +22,12 @@ export default function AppShell({ onLogout }) {
 
     async function loadImportAlerts() {
       try {
-        const [manualMatches, manualReview, staleImport, issues] = await Promise.all([
+        const [manualMatches, manualReview, staleImport, issues, importSignals] = await Promise.all([
           apiClient.getManualIngredientsWithMatches(),
           apiClient.getManualIngredientsForReview(),
           apiClient.getStaleImportIngredients(),
-          apiClient.getImportIssues({ status: 'open' })
+          apiClient.getImportIssues({ status: 'open' }),
+          apiClient.getImportSignals()
         ])
 
         const duplicateIssues = Array.isArray(issues)
@@ -38,7 +39,8 @@ export default function AppShell({ onLogout }) {
             (Array.isArray(manualMatches) ? manualMatches.length : 0) +
               (Array.isArray(manualReview) ? manualReview.length : 0) +
               (Array.isArray(staleImport) ? staleImport.length : 0) +
-              duplicateIssues.length
+              duplicateIssues.length +
+              (Array.isArray(importSignals) ? importSignals.length : 0)
           )
         }
       } catch (error) {
