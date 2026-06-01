@@ -13,6 +13,14 @@ const defaultPermissions = {
   }
 }
 
+const importSignalLabels = {
+  unavailable: 'Niet bestelbaar',
+  out_of_assortment: 'Uit assortiment',
+  temporarily_unavailable: 'Tijdelijk niet beschikbaar',
+  to_be_sanitized: 'Te saneren',
+  possible_replacement: 'Vervanging beschikbaar'
+}
+
 function unflattenPermissions(flat) {
   const nested = {}
 
@@ -108,6 +116,24 @@ function formatImportMatch(ingredient) {
   return 'Geen'
 }
 
+function formatImportSignalLabel(signal) {
+  return importSignalLabels[signal] || signal
+}
+
+function getImportSignalUsageCount(signal) {
+  return Number(signal?.dish_count || 0) + Number(signal?.semi_finished_product_count || 0)
+}
+
+function formatReplacementArticle(signal) {
+  const replacedBy = signal?.supplier_replaced_by_article_code
+  const alternative = signal?.supplier_alternative_article_code
+
+  if (replacedBy && alternative && replacedBy !== alternative) {
+    return `${replacedBy} / alternatief ${alternative}`
+  }
+  return replacedBy || alternative || '-'
+}
+
 function parseJsonString(value) {
   if (!value) {
     return null
@@ -136,6 +162,10 @@ export default function Importbeheer() {
   const [staleImportMessage, setStaleImportMessage] = useState('')
   const [staleImportError, setStaleImportError] = useState('')
   const [isLoadingStaleImportIngredients, setIsLoadingStaleImportIngredients] = useState(false)
+  const [importSignals, setImportSignals] = useState([])
+  const [importSignalMessage, setImportSignalMessage] = useState('')
+  const [importSignalError, setImportSignalError] = useState('')
+  const [isLoadingImportSignals, setIsLoadingImportSignals] = useState(false)
   const [manualIngredients, setManualIngredients] = useState([])
   const [manualMatchIngredients, setManualMatchIngredients] = useState([])
   const [manualMatchMessage, setManualMatchMessage] = useState('')
@@ -146,6 +176,8 @@ export default function Importbeheer() {
   const [isLoadingManualMatchIngredients, setIsLoadingManualMatchIngredients] = useState(false)
   const [activeManualActionId, setActiveManualActionId] = useState(null)
   const [activeStaleImportActionId, setActiveStaleImportActionId] = useState(null)
+  const [activeImportSignalActionId, setActiveImportSignalActionId] = useState(null)
+  const [usageDialog, setUsageDialog] = useState(null)
   const [selectedManualMatchIngredient, setSelectedManualMatchIngredient] = useState(null)
   const [selectedImportMatchIngredient, setSelectedImportMatchIngredient] = useState(null)
   const [isLoadingMatchPreview, setIsLoadingMatchPreview] = useState(false)
@@ -225,6 +257,20 @@ export default function Importbeheer() {
     }
   }
 
+  async function loadImportSignals() {
+    setIsLoadingImportSignals(true)
+    setImportSignalError('')
+    try {
+      const data = await apiClient.getImportSignals()
+      setImportSignals(Array.isArray(data) ? data : [])
+    } catch {
+      setImportSignalError('Importsignalen laden mislukt.')
+      setImportSignals([])
+    } finally {
+      setIsLoadingImportSignals(false)
+    }
+  }
+
   async function loadManualMatchIngredients() {
     setIsLoadingManualMatchIngredients(true)
     setManualMatchError('')
@@ -265,6 +311,7 @@ export default function Importbeheer() {
     try {
       const result = await apiClient.importIngredientsCsv(selectedFile)
       setImportMessage(`Import geslaagd: ${result.created} aangemaakt, ${result.updated} bijgewerkt`)
+      await loadImportSignals()
     } catch {
       setImportMessage('Import mislukt')
     } finally {
@@ -373,13 +420,47 @@ export default function Importbeheer() {
     setSelectedImportMatchIngredient(null)
   }
 
-  async function handleOpenDeleteIngredient(ingredient, sourceType) {
+  async function handleAcknowledgeImportSignal(signal) {
+    if (!signal?.id || activeImportSignalActionId) {
+      return
+    }
+
+    setActiveImportSignalActionId(signal.id)
+    setImportSignalMessage('')
+    setImportSignalError('')
+
+    try {
+      await apiClient.acknowledgeImportSignal(signal.id)
+      setImportSignals((currentSignals) =>
+        currentSignals.filter((currentSignal) => currentSignal.id !== signal.id)
+      )
+      if (usageDialog?.id === signal.id) {
+        setUsageDialog(null)
+      }
+      setImportSignalMessage('Importsignaal afgehandeld.')
+    } catch (error) {
+      setImportSignalError(error?.message || 'Importsignaal afhandelen mislukt.')
+    } finally {
+      setActiveImportSignalActionId(null)
+    }
+  }
+
+  function closeUsageDialog() {
+    setUsageDialog(null)
+  }
+
+  async function handleOpenDeleteIngredient(ingredient, sourceType, origin = 'default') {
     if (!ingredient?.id || !canCleanupImport) {
       return
     }
 
     const isManual = sourceType === 'manual'
-    if ((isManual && activeManualActionId) || (!isManual && activeStaleImportActionId)) {
+    const isImportSignal = sourceType === 'import' && origin === 'signal'
+    if (
+      (isManual && activeManualActionId) ||
+      (isImportSignal && activeImportSignalActionId) ||
+      (!isManual && !isImportSignal && activeStaleImportActionId)
+    ) {
       return
     }
 
@@ -388,6 +469,10 @@ export default function Importbeheer() {
       setMessage('')
       setError('')
       setActiveManualActionId(ingredient.id)
+    } else if (isImportSignal) {
+      setImportSignalMessage('')
+      setImportSignalError('')
+      setActiveImportSignalActionId(ingredient.id)
     } else {
       setStaleImportMessage('')
       setStaleImportError('')
@@ -402,6 +487,7 @@ export default function Importbeheer() {
       setDeleteDialog({
         ingredient,
         sourceType,
+        origin,
         usage,
         mode: usage?.can_delete ? 'confirm' : 'blocked'
       })
@@ -409,12 +495,16 @@ export default function Importbeheer() {
       if (isManual) {
         const { setError } = getManualFeedbackTargets(ingredient.id)
         setError(error?.message || 'Gebruik van ingrediënt controleren mislukt.')
+      } else if (isImportSignal) {
+        setImportSignalError(error?.message || 'Gebruik van ingrediënt controleren mislukt.')
       } else {
         setStaleImportError(error?.message || 'Gebruik van ingrediënt controleren mislukt.')
       }
     } finally {
       if (isManual) {
         setActiveManualActionId(null)
+      } else if (isImportSignal) {
+        setActiveImportSignalActionId(null)
       } else {
         setActiveStaleImportActionId(null)
       }
@@ -433,8 +523,9 @@ export default function Importbeheer() {
       return
     }
 
-    const { ingredient, sourceType } = deleteDialog
+    const { ingredient, sourceType, origin } = deleteDialog
     const isManual = sourceType === 'manual'
+    const isImportSignal = sourceType === 'import' && origin === 'signal'
     setIsDeletingIngredient(true)
 
     try {
@@ -445,10 +536,20 @@ export default function Importbeheer() {
         await Promise.all([loadManualIngredients(), loadManualMatchIngredients()])
       } else {
         await apiClient.deleteImportIngredient(ingredient.id)
-        setStaleImportMessage('Importingrediënt verwijderd.')
+        if (isImportSignal) {
+          setImportSignalMessage('Importsignaal verwijderd.')
+        } else {
+          setStaleImportMessage('Importingrediënt verwijderd.')
+        }
         setStaleImportIngredients((currentIngredients) =>
           currentIngredients.filter((currentIngredient) => currentIngredient.id !== ingredient.id)
         )
+        setImportSignals((currentSignals) =>
+          currentSignals.filter((currentSignal) => currentSignal.id !== ingredient.id)
+        )
+        if (usageDialog?.id === ingredient.id) {
+          setUsageDialog(null)
+        }
       }
       setDeleteDialog(null)
     } catch (error) {
@@ -456,6 +557,7 @@ export default function Importbeheer() {
         setDeleteDialog({
           ingredient,
           sourceType,
+          origin,
           usage: error.data,
           mode: 'blocked'
         })
@@ -465,6 +567,8 @@ export default function Importbeheer() {
       if (isManual) {
         const { setError } = getManualFeedbackTargets(ingredient.id)
         setError(error?.message || 'Ingrediënt verwijderen mislukt.')
+      } else if (isImportSignal) {
+        setImportSignalError(error?.message || 'Importsignaal verwijderen mislukt.')
       } else {
         setStaleImportError(error?.message || 'Importingrediënt verwijderen mislukt.')
       }
@@ -524,6 +628,7 @@ export default function Importbeheer() {
 
   useEffect(() => {
     loadIssues()
+    loadImportSignals()
     loadStaleImportIngredients()
     loadManualIngredients()
     loadManualMatchIngredients()
@@ -535,6 +640,10 @@ export default function Importbeheer() {
     ? deleteUsage.semi_finished_products
     : []
   const isDeleteBlocked = deleteDialog?.mode === 'blocked'
+  const usageDialogDishes = Array.isArray(usageDialog?.dishes) ? usageDialog.dishes : []
+  const usageDialogSemiFinishedProducts = Array.isArray(usageDialog?.semi_finished_products)
+    ? usageDialog.semi_finished_products
+    : []
 
   if (!isLoadingPermissions && !canViewImportbeheer) {
     return (
@@ -570,6 +679,107 @@ export default function Importbeheer() {
           </>
         ) : null}
         {importMessage ? <p>{importMessage}</p> : null}
+      </section>
+
+      <section className="card" style={{ marginTop: '1.75rem' }}>
+        <h3>Importsignalen</h3>
+        <p style={{ marginTop: '0.65rem' }}>
+          Controleer deze importsignalen zorgvuldig. Vervang artikelen indien nodig in de Bidfood
+          bestellijst/favorieten en werk recepten en halffabricaten bij voordat een ingrediënt wordt verwijderd.
+        </p>
+        {importSignalMessage ? <p className="form-info inline-message">{importSignalMessage}</p> : null}
+        {importSignalError ? <p>{importSignalError}</p> : null}
+        {isLoadingImportSignals ? (
+          <p>Importsignalen laden...</p>
+        ) : importSignals.length === 0 ? (
+          <p>Geen actuele importsignalen gevonden.</p>
+        ) : (
+          <div className="table-scroll" style={{ marginTop: '1rem' }}>
+            <table className="ingredients-table">
+              <thead>
+                <tr>
+                  <th>Leverancier</th>
+                  <th>Product</th>
+                  <th>Artikelnummer</th>
+                  <th>Signalen</th>
+                  <th>Vervangen door</th>
+                  <th>Acties</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importSignals.map((signal) => {
+                  const signals = Array.isArray(signal.signals) ? signal.signals : []
+                  const usageCount = getImportSignalUsageCount(signal)
+                  const isBusy = activeImportSignalActionId === signal.id
+                  return (
+                    <tr key={signal.id}>
+                      <td>{signal.supplier || signal.supplier_name || '-'}</td>
+                      <td>{signal.name || signal.supplier_product_name || '-'}</td>
+                      <td>{signal.article_code || signal.supplier_product_code || '-'}</td>
+                      <td>
+                        {signals.length > 0 ? (
+                          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            {signals.map((item) => (
+                              <span
+                                key={item}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: '0.15rem 0.45rem',
+                                  borderRadius: '999px',
+                                  background: '#eef2ff',
+                                  color: '#1f2937',
+                                  fontSize: '0.85rem',
+                                  lineHeight: 1.4
+                                }}
+                              >
+                                {formatImportSignalLabel(item)}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td>{formatReplacementArticle(signal)}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => setUsageDialog(signal)}
+                            disabled={isBusy}
+                          >
+                            Gebruikt in ({usageCount})
+                          </button>
+                          {canViewImportbeheer ? (
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => handleAcknowledgeImportSignal(signal)}
+                              disabled={isBusy}
+                            >
+                              Afgehandeld
+                            </button>
+                          ) : null}
+                          {canCleanupImport ? (
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => handleOpenDeleteIngredient(signal, 'import', 'signal')}
+                              disabled={isBusy}
+                            >
+                              Verwijderen
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="card" style={{ marginTop: '1.75rem' }}>
@@ -943,6 +1153,51 @@ export default function Importbeheer() {
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {usageDialog ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h3>Gebruikt in</h3>
+            </div>
+
+            <div className="modal-body">
+              <p>
+                {usageDialog.name || usageDialog.supplier_product_name || 'Ingrediënt'}{' '}
+                ({usageDialog.article_code || usageDialog.supplier_product_code || '-'})
+              </p>
+
+              <h4>Gerechten</h4>
+              {usageDialogDishes.length > 0 ? (
+                <ul>
+                  {usageDialogDishes.map((dish) => (
+                    <li key={`usage-dish-${dish.id}`}>{dish.name}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>Geen</p>
+              )}
+
+              <h4>Halffabricaten</h4>
+              {usageDialogSemiFinishedProducts.length > 0 ? (
+                <ul>
+                  {usageDialogSemiFinishedProducts.map((product) => (
+                    <li key={`usage-semi-${product.id}`}>{product.name}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>Geen</p>
+              )}
+            </div>
+
+            <div className="modal-actions">
+              <button type="button" className="secondary-btn" onClick={closeUsageDialog}>
+                Sluiten
+              </button>
             </div>
           </div>
         </div>

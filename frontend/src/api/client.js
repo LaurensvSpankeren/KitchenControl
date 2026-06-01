@@ -342,6 +342,23 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getImportSignals() {
+    const response = await apiFetch(`${API_BASE_URL}/api/import-signals`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch import signals: ${response.status}`)
+    }
+    return response.json()
+  },
+  async acknowledgeImportSignal(id) {
+    const response = await apiFetch(`${API_BASE_URL}/api/import-signals/${id}/acknowledge`, {
+      method: 'POST'
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to acknowledge import signal: ${response.status}`)
+    }
+    return response.json()
+  },
   async getMenukaarten() {
     const response = await apiFetch(`${API_BASE_URL}/api/menukaarten`)
     if (!response.ok) {
