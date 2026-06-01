@@ -457,6 +457,7 @@ def list_ingredient_categories(
             func.trim(Ingredient.category).label("name"),
             func.count(Ingredient.id).label("ingredient_count"),
         )
+        .filter(Ingredient.is_archived.is_(False))
         .filter(Ingredient.category.is_not(None))
         .filter(func.trim(Ingredient.category) != "")
         .group_by(func.trim(Ingredient.category))

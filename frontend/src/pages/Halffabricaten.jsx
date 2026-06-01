@@ -584,7 +584,7 @@ export default function Halffabricaten() {
   async function loadIngredients() {
     try {
       const data = await apiClient.getIngredients()
-      setIngredients(Array.isArray(data) ? data : [])
+      setIngredients(Array.isArray(data) ? data.filter((item) => !item?.is_archived) : [])
     } catch {
       setIngredients([])
     }
