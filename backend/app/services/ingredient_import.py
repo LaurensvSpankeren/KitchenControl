@@ -839,10 +839,18 @@ def _should_update_dual_unit_values(
     secondary_unit: str | None,
     secondary_unit_factor: float | None,
     nested_multipack_applied: bool,
+    sales_factor_subpackage_applied: bool,
     previous_units_per_package,
+    units_per_package,
     calc_quantity: float | None,
 ) -> bool:
     if preferred_unit is None or secondary_unit is None or secondary_unit_factor is None:
+        return False
+
+    next_preferred_unit = _normalize_unit(preferred_unit)
+    next_secondary_unit = _normalize_unit(secondary_unit)
+    next_factor = _to_decimal_or_none(secondary_unit_factor)
+    if next_factor is None or next_factor <= 0:
         return False
 
     if (
@@ -852,14 +860,38 @@ def _should_update_dual_unit_values(
     ):
         return True
 
+    existing_preferred_unit = _normalize_unit(ingredient.preferred_unit)
+    existing_secondary_unit = _normalize_unit(ingredient.secondary_unit)
+
+    if sales_factor_subpackage_applied:
+        if next_preferred_unit != "stuk" or next_secondary_unit not in {"gram", "ml"}:
+            return False
+        if existing_preferred_unit is not None and existing_preferred_unit != next_preferred_unit:
+            return False
+        if existing_secondary_unit is not None and existing_secondary_unit != next_secondary_unit:
+            return False
+
+        next_units = _to_decimal_or_none(units_per_package)
+        next_calc_quantity = _to_decimal_or_none(calc_quantity)
+        if next_units is None or next_units == 0 or next_calc_quantity is None:
+            return False
+
+        expected_factor = next_calc_quantity / next_units
+        if abs(expected_factor - next_factor) > Decimal(str(AMOUNT_MATCH_EPSILON)):
+            return False
+
+        current_factor = _to_decimal_or_none(ingredient.secondary_unit_factor)
+        if current_factor is None:
+            return True
+        return abs(current_factor - next_factor) > Decimal(str(AMOUNT_MATCH_EPSILON))
+
     if not nested_multipack_applied:
         return False
 
-    if _normalize_unit(ingredient.preferred_unit) != _normalize_unit(preferred_unit):
+    if existing_preferred_unit != next_preferred_unit:
         return False
 
-    existing_secondary_unit = _normalize_unit(ingredient.secondary_unit)
-    if existing_secondary_unit is not None and existing_secondary_unit != _normalize_unit(secondary_unit):
+    if existing_secondary_unit is not None and existing_secondary_unit != next_secondary_unit:
         return False
 
     if ingredient.secondary_unit is None or ingredient.secondary_unit_factor is None:
@@ -867,13 +899,11 @@ def _should_update_dual_unit_values(
 
     previous_units = _to_decimal_or_none(previous_units_per_package)
     current_factor = _to_decimal_or_none(ingredient.secondary_unit_factor)
-    next_factor = _to_decimal_or_none(secondary_unit_factor)
     next_calc_quantity = _to_decimal_or_none(calc_quantity)
     if (
         previous_units is None
         or previous_units == 0
         or current_factor is None
-        or next_factor is None
         or next_calc_quantity is None
     ):
         return False
@@ -1465,11 +1495,10 @@ def import_ingredients_from_csv(file_path: str, db: Session) -> dict[str, int]:
                 preferred_unit,
                 secondary_unit,
                 secondary_unit_factor,
-                bool(
-                    parsed_row.get("nested_multipack_applied")
-                    or parsed_row.get("sales_factor_subpackage_applied")
-                ),
+                bool(parsed_row.get("nested_multipack_applied")),
+                bool(parsed_row.get("sales_factor_subpackage_applied")),
                 previous_units_per_package,
+                units_per_package,
                 calc_quantity,
             ):
                 ingredient.preferred_unit = preferred_unit
