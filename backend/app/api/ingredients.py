@@ -395,9 +395,6 @@ def _build_import_signals(ingredient: Ingredient) -> list[str]:
     if status_signal is not None:
         signals.append(status_signal)
 
-    if ingredient.supplier_alternative_article_code or ingredient.supplier_replaced_by_article_code:
-        signals.append("possible_replacement")
-
     return signals
 
 
@@ -781,8 +778,6 @@ def list_import_signals(
             or_(
                 Ingredient.supplier_is_orderable.is_(False),
                 Ingredient.supplier_order_status_description.is_not(None),
-                Ingredient.supplier_alternative_article_code.is_not(None),
-                Ingredient.supplier_replaced_by_article_code.is_not(None),
             ),
         )
         .order_by(Ingredient.supplier_product_name.asc())

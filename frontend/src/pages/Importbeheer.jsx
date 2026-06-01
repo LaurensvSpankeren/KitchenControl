@@ -17,8 +17,7 @@ const importSignalLabels = {
   unavailable: 'Niet bestelbaar',
   out_of_assortment: 'Uit assortiment',
   temporarily_unavailable: 'Tijdelijk niet beschikbaar',
-  to_be_sanitized: 'Te saneren',
-  possible_replacement: 'Vervanging beschikbaar'
+  to_be_sanitized: 'Te saneren'
 }
 
 function unflattenPermissions(flat) {
