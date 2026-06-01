@@ -543,6 +543,60 @@ def _values_match_by_unit_conversion(
     return False
 
 
+def _infer_sales_factor_subpackage_total_weight_unit(row: dict, amount: float | None) -> str | None:
+    if amount is None:
+        return None
+
+    supplier_sales_factor = _parse_number(row.get("Verkoopfaktor"))
+    if supplier_sales_factor is None or supplier_sales_factor <= 1:
+        return None
+
+    supplier_sales_unit_code = row.get("Verkoopeenheid")
+    supplier_sales_unit_name = row.get("Omschrijving verkoopeenheid")
+    supplier_standard_unit_code = row.get("Standaard eenheid")
+    supplier_standard_unit_name = row.get("Omschrijving standaardeenheid")
+    if not _looks_like_outer_pack(supplier_sales_unit_code, supplier_sales_unit_name):
+        return None
+    if not _looks_like_sales_factor_subpackage(
+        supplier_standard_unit_code,
+        supplier_standard_unit_name,
+    ):
+        return None
+
+    (
+        _units_per_subpackage,
+        calc_unit,
+        subpackage_calc_quantity,
+        _secondary_unit_factor,
+    ) = _extract_simple_multipack_from_text(row.get("Omschrijving inhoud artikel"))
+    if calc_unit != "gram" or subpackage_calc_quantity is None:
+        return None
+
+    expected_total_quantity = supplier_sales_factor * subpackage_calc_quantity
+    amount_as_kg = _normalize_weight_to_gram(amount, "kg")
+    if amount_as_kg is None or not _amounts_match_with_tolerance(
+        expected_total_quantity,
+        amount_as_kg,
+    ):
+        return None
+
+    for column_name in (
+        "Netto Gewicht Standaardeenheid",
+        "Netto gewicht Standaardeenheid",
+    ):
+        standard_amount = _parse_number(row.get(column_name))
+        if standard_amount is None or standard_amount == 0:
+            continue
+        standard_quantity = _normalize_weight_to_gram(standard_amount, "kg")
+        if standard_quantity is not None and not _amounts_match_with_tolerance(
+            subpackage_calc_quantity,
+            standard_quantity,
+        ):
+            return None
+
+    return "kg"
+
+
 def _extract_package_weight(row: dict) -> tuple[float | None, str | None]:
     amount = _parse_number(row.get("Netto Gewicht"))
     if amount is None:
@@ -553,8 +607,11 @@ def _extract_package_weight(row: dict) -> tuple[float | None, str | None]:
         return None, None
 
     unit = _extract_explicit_weight_unit(row)
+    inferred_total_weight_unit = _infer_sales_factor_subpackage_total_weight_unit(row, amount)
     text_amount, text_unit = _extract_amount_and_unit_from_text(row.get("Omschrijving inhoud artikel"))
-    if (
+    if inferred_total_weight_unit is not None:
+        unit = inferred_total_weight_unit
+    elif (
         unit is None
         and text_amount is not None
         and text_unit in {"kg", "gram"}
@@ -710,6 +767,10 @@ def _extract_net_content(row: dict) -> tuple[float | None, str | None]:
     # extra unit-hint wanneer de teksthoeveelheid overeenkomt met de kolomhoeveelheid.
     if amount_source in {"netto_inhoud", "netto_gewicht"}:
         unit = explicit_unit
+        if amount_source == "netto_gewicht":
+            inferred_total_weight_unit = _infer_sales_factor_subpackage_total_weight_unit(row, amount)
+            if inferred_total_weight_unit is not None:
+                unit = inferred_total_weight_unit
         if (
             unit is None
             and text_unit is not None
