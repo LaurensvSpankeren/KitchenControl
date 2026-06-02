@@ -9,6 +9,7 @@ from app.api.auth import get_current_user, require_supervisor
 from app.db.session import get_db
 from app.models.dish import Dish
 from app.models.ingredient import Ingredient
+from app.models.ingredient_import_issue import IngredientImportIssue
 from app.models.recipe_line import RecipeLine
 from app.models.semi_finished_product import SemiFinishedProduct
 from app.models.user import has_permission
@@ -424,6 +425,96 @@ def _serialize_import_signal(ingredient: Ingredient, usage: dict) -> dict:
     }
 
 
+def _list_current_import_signal_ingredients(db: Session) -> list[Ingredient]:
+    latest_status_imported_at = (
+        db.query(func.max(Ingredient.supplier_status_last_imported_at))
+        .filter(
+            Ingredient.source_type == "import",
+            Ingredient.supplier_status_last_imported_at.is_not(None),
+        )
+        .scalar()
+    )
+    if latest_status_imported_at is None:
+        return []
+
+    latest_window_start = latest_status_imported_at - IMPORT_SIGNAL_LATEST_WINDOW
+    candidates = (
+        db.query(Ingredient)
+        .filter(
+            Ingredient.source_type == "import",
+            Ingredient.is_archived.is_(False),
+            Ingredient.supplier_status_last_imported_at >= latest_window_start,
+            Ingredient.supplier_status_last_imported_at <= latest_status_imported_at,
+            or_(
+                Ingredient.supplier_signal_acknowledged_at.is_(None),
+                Ingredient.supplier_signal_acknowledged_at < Ingredient.supplier_status_last_imported_at,
+            ),
+            or_(
+                Ingredient.supplier_is_orderable.is_(False),
+                Ingredient.supplier_order_status_description.is_not(None),
+            ),
+        )
+        .order_by(Ingredient.supplier_product_name.asc())
+        .all()
+    )
+    return [ingredient for ingredient in candidates if _build_import_signals(ingredient)]
+
+
+def _count_manual_import_matches(db: Session) -> int:
+    ingredients = (
+        db.query(Ingredient)
+        .filter(
+            Ingredient.source_type == "manual",
+            Ingredient.is_archived.is_(False),
+            Ingredient.awaiting_import_match.is_(True),
+        )
+        .all()
+    )
+    return sum(
+        1
+        for ingredient in ingredients
+        if detect_import_match_for_manual_ingredient(db, ingredient).get("match_status")
+        in {"possible", "strong"}
+    )
+
+
+def _count_manual_review_ingredients(db: Session) -> int:
+    threshold = datetime.now(timezone.utc) - timedelta(days=45)
+    return (
+        db.query(Ingredient)
+        .filter(
+            Ingredient.source_type == "manual",
+            Ingredient.is_archived.is_(False),
+            Ingredient.awaiting_import_match.is_(True),
+            or_(
+                (Ingredient.last_manual_review_at.is_not(None) & (Ingredient.last_manual_review_at <= threshold)),
+                (
+                    Ingredient.last_manual_review_at.is_(None)
+                    & Ingredient.manual_created_at.is_not(None)
+                    & (Ingredient.manual_created_at <= threshold)
+                ),
+            ),
+        )
+        .count()
+    )
+
+
+def _count_stale_import_ingredients(db: Session) -> int:
+    threshold = datetime.now(timezone.utc) - timedelta(days=45)
+    return (
+        db.query(Ingredient)
+        .filter(
+            Ingredient.source_type == "import",
+            Ingredient.is_archived.is_(False),
+            or_(
+                Ingredient.supplier_last_imported_at.is_(None),
+                Ingredient.supplier_last_imported_at <= threshold,
+            ),
+        )
+        .count()
+    )
+
+
 def _soft_delete_ingredient(ingredient: Ingredient) -> None:
     ingredient.is_archived = True
     ingredient.archived_at = datetime.now(timezone.utc)
@@ -745,6 +836,38 @@ def list_stale_import_ingredients(
     return [_serialize_ingredient(ingredient) for ingredient in ingredients]
 
 
+@router.get("/api/import-alerts/count", tags=["ingredients"])
+def get_import_alert_count(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+) -> dict:
+    if not has_permission(current_user, "importbeheer.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
+    manual_matches = _count_manual_import_matches(db)
+    manual_review = _count_manual_review_ingredients(db)
+    stale_import = _count_stale_import_ingredients(db)
+    duplicate_issues = (
+        db.query(IngredientImportIssue)
+        .filter(
+            IngredientImportIssue.status == "open",
+            IngredientImportIssue.issue_type == "duplicate_conflict_in_file",
+        )
+        .count()
+    )
+    import_signals = len(_list_current_import_signal_ingredients(db))
+    count = manual_matches + manual_review + stale_import + duplicate_issues + import_signals
+
+    return {
+        "count": count,
+        "manual_matches": manual_matches,
+        "manual_review": manual_review,
+        "stale_import": stale_import,
+        "duplicate_issues": duplicate_issues,
+        "import_signals": import_signals,
+    }
+
+
 @router.get("/api/import-signals", tags=["ingredients"])
 def list_import_signals(
     db: Session = Depends(get_db),
@@ -753,40 +876,7 @@ def list_import_signals(
     if not has_permission(current_user, "importbeheer.bekijken", db):
         raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
 
-    latest_status_imported_at = (
-        db.query(func.max(Ingredient.supplier_status_last_imported_at))
-        .filter(
-            Ingredient.source_type == "import",
-            Ingredient.supplier_status_last_imported_at.is_not(None),
-        )
-        .scalar()
-    )
-    if latest_status_imported_at is None:
-        return []
-
-    latest_window_start = latest_status_imported_at - IMPORT_SIGNAL_LATEST_WINDOW
-    candidates = (
-        db.query(Ingredient)
-        .filter(
-            Ingredient.source_type == "import",
-            Ingredient.is_archived.is_(False),
-            Ingredient.supplier_status_last_imported_at >= latest_window_start,
-            Ingredient.supplier_status_last_imported_at <= latest_status_imported_at,
-            or_(
-                Ingredient.supplier_signal_acknowledged_at.is_(None),
-                Ingredient.supplier_signal_acknowledged_at < Ingredient.supplier_status_last_imported_at,
-            ),
-            or_(
-                Ingredient.supplier_is_orderable.is_(False),
-                Ingredient.supplier_order_status_description.is_not(None),
-            ),
-        )
-        .order_by(Ingredient.supplier_product_name.asc())
-        .all()
-    )
-    ingredients = [
-        ingredient for ingredient in candidates if _build_import_signals(ingredient)
-    ]
+    ingredients = _list_current_import_signal_ingredients(db)
     usage_by_id = _build_ingredient_usage_map(db, [ingredient.id for ingredient in ingredients])
     return [
         _serialize_import_signal(ingredient, usage_by_id[ingredient.id])

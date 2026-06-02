@@ -342,6 +342,13 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getImportAlertCount() {
+    const response = await apiFetch(`${API_BASE_URL}/api/import-alerts/count`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch import alert count: ${response.status}`)
+    }
+    return response.json()
+  },
   async getImportSignals() {
     const response = await apiFetch(`${API_BASE_URL}/api/import-signals`)
     if (!response.ok) {

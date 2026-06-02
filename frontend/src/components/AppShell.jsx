@@ -22,26 +22,10 @@ export default function AppShell({ onLogout }) {
 
     async function loadImportAlerts() {
       try {
-        const [manualMatches, manualReview, staleImport, issues, importSignals] = await Promise.all([
-          apiClient.getManualIngredientsWithMatches(),
-          apiClient.getManualIngredientsForReview(),
-          apiClient.getStaleImportIngredients(),
-          apiClient.getImportIssues({ status: 'open' }),
-          apiClient.getImportSignals()
-        ])
-
-        const duplicateIssues = Array.isArray(issues)
-          ? issues.filter((issue) => issue.issue_type === 'duplicate_conflict_in_file')
-          : []
+        const data = await apiClient.getImportAlertCount()
 
         if (!isCancelled) {
-          setImportAlerts(
-            (Array.isArray(manualMatches) ? manualMatches.length : 0) +
-              (Array.isArray(manualReview) ? manualReview.length : 0) +
-              (Array.isArray(staleImport) ? staleImport.length : 0) +
-              duplicateIssues.length +
-              (Array.isArray(importSignals) ? importSignals.length : 0)
-          )
+          setImportAlerts(data?.count || 0)
         }
       } catch (error) {
         console.error('Importbeheer badge laden mislukt.', error)
