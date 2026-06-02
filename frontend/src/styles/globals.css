@@ -271,27 +271,42 @@ body {
 
 .dish-search-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
-  padding: 1rem;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.09);
+  padding: 1.25rem;
 }
 
 .dish-view-toggle {
+  display: inline-flex;
+  margin-left: auto;
+  margin-bottom: 1.1rem;
+  padding: 0.2rem;
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+  background: #f8fafc;
   justify-content: flex-end;
+}
+
+.dish-view-toggle .table-action-btn {
+  min-width: 108px;
+  min-height: 38px;
+  border-radius: 10px;
+  border-color: transparent;
+  background: transparent;
 }
 
 .dish-search-grid {
   display: grid;
   grid-template-columns: minmax(240px, 2fr) minmax(180px, 1fr) minmax(180px, 1fr);
-  gap: 0.75rem;
+  gap: 0.85rem;
   align-items: end;
 }
 
 .dish-search-field {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.45rem;
   color: #111827;
   font-size: 0.9rem;
 }
@@ -303,44 +318,55 @@ body {
 .dish-search-field input,
 .dish-search-field select {
   width: 100%;
+  min-height: 46px;
   margin: 0;
-  padding: 0.65rem 0.75rem;
+  padding: 0.7rem 0.8rem;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border-radius: 10px;
   font: inherit;
   background: #fff;
 }
 
+.dish-search-field input:focus,
+.dish-search-field select:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.25);
+  outline: none;
+}
+
 .dish-search-divider {
   height: 1px;
-  margin: 1rem 0;
-  background: #e5e7eb;
+  margin: 1.25rem 0;
+  background: #e2e8f0;
 }
 
 .dish-search-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .dish-search-help {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.85rem;
   color: #111827;
+  min-width: 0;
 }
 
 .dish-search-help p {
-  margin: 0.25rem 0 0;
+  margin: 0.2rem 0 0;
   color: #4b5563;
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .dish-search-help-icon,
 .dish-empty-state-icon {
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
@@ -348,16 +374,26 @@ body {
   background: #eef4ff;
   color: #1d4ed8;
   font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.08);
 }
 
 .dish-search-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.6rem;
+  gap: 0.7rem;
+}
+
+.dish-search-actions .table-action-btn {
+  min-width: 118px;
+  min-height: 42px;
+  border-radius: 10px;
+  font-size: 0.9rem;
 }
 
 .dish-secondary-btn {
   background: #ffffff;
+  border-color: #cbd5e1;
+  color: #334155;
 }
 
 .dish-primary-btn,
@@ -365,30 +401,35 @@ body {
   background: #1d4ed8;
   border-color: #1d4ed8;
   color: #ffffff;
+  box-shadow: 0 8px 16px rgba(29, 78, 216, 0.18);
 }
 
 .dish-create-action-row {
   display: flex;
   justify-content: flex-end;
-  margin: 0.8rem 0 1rem;
+  margin: 1.05rem 0 1.25rem;
 }
 
 .dish-create-btn {
   width: auto;
-  min-width: 170px;
+  min-width: 210px;
+  min-height: 44px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .dish-empty-state {
-  min-height: 210px;
+  min-height: 230px;
   border: 1px solid #dbe7f7;
-  border-radius: 10px;
+  border-radius: 14px;
   background: #fbfdff;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 2rem 1rem;
+  padding: 2.25rem 1rem;
 }
 
 .dish-empty-state h3 {
