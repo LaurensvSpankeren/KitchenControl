@@ -997,6 +997,25 @@ export const apiClient = {
     }
     return response.json()
   },
+  async searchDishesWithDetails(params = {}) {
+    const query = new URLSearchParams()
+    if (params.search) {
+      query.set('search', params.search)
+    }
+    if (params.category_id !== undefined && params.category_id !== null && params.category_id !== '') {
+      query.set('category_id', String(params.category_id))
+    }
+    if (params.subcategory_id !== undefined && params.subcategory_id !== null && params.subcategory_id !== '') {
+      query.set('subcategory_id', String(params.subcategory_id))
+    }
+    query.set('archived', params.archived ? 'true' : 'false')
+
+    const response = await apiFetch(`${API_BASE_URL}/api/dishes/search-with-details?${query.toString()}`)
+    if (!response.ok) {
+      throw new Error(`Failed to search dishes with details: ${response.status}`)
+    }
+    return response.json()
+  },
   async getDishDetail(id) {
     const response = await apiFetch(`${API_BASE_URL}/api/dishes/${id}`)
     if (!response.ok) {

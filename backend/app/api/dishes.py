@@ -403,6 +403,35 @@ def list_archived_dishes(
     return [_serialize_dish(item) for item in items]
 
 
+@router.get("/api/dishes/search-with-details", tags=["dishes"])
+def search_dishes_with_details(
+    search: str | None = None,
+    category_id: int | None = None,
+    subcategory_id: int | None = None,
+    archived: bool = False,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+) -> list[dict]:
+    if not has_permission(current_user, "gerechten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
+    search_term = (search or "").strip()
+    if not search_term and category_id is None and subcategory_id is None:
+        return []
+
+    query = db.query(Dish).filter(Dish.is_archived.is_(archived))
+    if search_term:
+        pattern = f"%{search_term}%"
+        query = query.filter(Dish.name.ilike(pattern))
+    if category_id is not None:
+        query = query.filter(Dish.category_id == category_id)
+    if subcategory_id is not None:
+        query = query.filter(Dish.subcategory_id == subcategory_id)
+
+    items = query.order_by(Dish.name.asc()).all()
+    return [_build_dish_detail(db, item) for item in items]
+
+
 @router.post("/api/dishes", tags=["dishes"])
 def create_dish(
     payload: dict,

@@ -370,6 +370,9 @@ export default function Gerechten() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [subcategoryFilter, setSubcategoryFilter] = useState('')
   const [viewMode, setViewMode] = useState('active')
+  const [hasSearched, setHasSearched] = useState(false)
+  const [isLoadingDishes, setIsLoadingDishes] = useState(false)
+  const [lastDishQuery, setLastDishQuery] = useState(null)
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedDishId, setSelectedDishId] = useState(null)
@@ -514,37 +517,83 @@ export default function Gerechten() {
     modalActionsRight: { display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }
   }
 
-  async function enrichDishesWithDetail(items) {
-    const source = Array.isArray(items) ? items : []
-    const detailedItems = await Promise.all(
-      source.map(async (item) => {
-        try {
-          const loadedDetail = await apiClient.getDishDetail(item.id)
-          return { ...item, ...loadedDetail }
-        } catch {
-          return item
-        }
-      })
-    )
-    return detailedItems
+  function getCategoryIdByName(categoryName) {
+    if (!categoryName) {
+      return null
+    }
+    const category = dishCategories.find((item) => item.name === categoryName)
+    return category?.id ?? null
   }
 
-  async function loadDishes() {
-    try {
-      const data = await apiClient.getDishes()
-      setDishes(await enrichDishesWithDetail(data))
-    } catch {
-      setDishes([])
+  function getSubcategoryIdByName(categoryName, subcategoryName) {
+    if (!categoryName || !subcategoryName) {
+      return null
+    }
+    const category = dishCategories.find((item) => item.name === categoryName)
+    const subcategory = (category?.subcategories || []).find((item) => item.name === subcategoryName)
+    return subcategory?.id ?? null
+  }
+
+  function buildDishSearchQuery(overrides = {}) {
+    const nextSearch = overrides.search !== undefined ? overrides.search : searchTerm
+    const nextCategory = overrides.category !== undefined ? overrides.category : categoryFilter
+    const nextSubcategory =
+      overrides.subcategory !== undefined ? overrides.subcategory : subcategoryFilter
+    const nextArchived = overrides.archived !== undefined ? overrides.archived : viewMode === 'archived'
+
+    return {
+      search: String(nextSearch || '').trim(),
+      category_id: getCategoryIdByName(nextCategory),
+      subcategory_id: getSubcategoryIdByName(nextCategory, nextSubcategory),
+      archived: Boolean(nextArchived)
     }
   }
 
-  async function loadArchivedDishes() {
-    try {
-      const data = await apiClient.getArchivedDishes()
-      setArchivedDishes(await enrichDishesWithDetail(data))
-    } catch {
-      setArchivedDishes([])
+  function hasDishSearchFilter(query) {
+    return Boolean(query?.search || query?.category_id || query?.subcategory_id)
+  }
+
+  function setDishResultsForQuery(query, items) {
+    if (query.archived) {
+      setArchivedDishes(items)
+    } else {
+      setDishes(items)
     }
+  }
+
+  async function loadDishResults(query) {
+    if (!hasDishSearchFilter(query)) {
+      setDishResultsForQuery(query, [])
+      setLastDishQuery(null)
+      setHasSearched(false)
+      return
+    }
+
+    setIsLoadingDishes(true)
+    setErrorMessage('')
+    try {
+      const data = await apiClient.searchDishesWithDetails(query)
+      setDishResultsForQuery(query, Array.isArray(data) ? data : [])
+      setLastDishQuery(query)
+      setHasSearched(true)
+    } catch {
+      setDishResultsForQuery(query, [])
+      setHasSearched(true)
+      setErrorMessage('Gerechten laden mislukt.')
+    } finally {
+      setIsLoadingDishes(false)
+    }
+  }
+
+  async function executeDishSearch(overrides = {}) {
+    await loadDishResults(buildDishSearchQuery(overrides))
+  }
+
+  async function refreshDishResults() {
+    if (!lastDishQuery || !hasDishSearchFilter(lastDishQuery)) {
+      return
+    }
+    await loadDishResults(lastDishQuery)
   }
 
   async function loadIngredients() {
@@ -649,8 +698,6 @@ export default function Gerechten() {
   }, [])
 
   useEffect(() => {
-    loadDishes()
-    loadArchivedDishes()
     loadIngredients()
     loadSemiFinishedProducts()
     loadDishCategories()
@@ -815,33 +862,8 @@ export default function Gerechten() {
 
   const visibleDishes = useMemo(() => {
     const source = viewMode === 'active' ? dishes : archivedDishes
-    const term = searchTerm.trim().toLowerCase()
-
-    return source
-      .filter((item) => {
-        const categoryName = getCategoryNameById(item.category_id)
-        const subcategoryName = getSubcategoryNameById(item.subcategory_id)
-
-        if (categoryFilter && categoryName !== categoryFilter) {
-          return false
-        }
-        if (subcategoryFilter && subcategoryName !== subcategoryFilter) {
-          return false
-        }
-        if (!term) {
-          return true
-        }
-        const haystacks = [
-          String(item.name || ''),
-          String(item.menu_name || ''),
-          String(item.menu_description || ''),
-          categoryName,
-          subcategoryName
-        ]
-        return haystacks.some((value) => value.toLowerCase().includes(term))
-      })
-      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'nl'))
-  }, [viewMode, dishes, archivedDishes, searchTerm, categoryFilter, subcategoryFilter, dishCategories])
+    return [...source].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'nl'))
+  }, [viewMode, dishes, archivedDishes])
 
   const filteredIngredients = useMemo(() => {
     const term = ingredientSearch.trim().toLowerCase()
@@ -873,6 +895,15 @@ export default function Gerechten() {
       .filter((item) => String(item.name || '').toLowerCase().includes(term))
       .slice(0, 25)
   }, [semiFinishedSearch, semiFinishedProducts])
+
+  function handleDishSearchSubmit() {
+    executeDishSearch({ search: searchTerm })
+  }
+
+  function handleViewModeChange(nextViewMode) {
+    setViewMode(nextViewMode)
+    executeDishSearch({ archived: nextViewMode === 'archived' })
+  }
 
   function openNewModal() {
     setSelectedDishId(null)
@@ -1066,8 +1097,7 @@ export default function Gerechten() {
       const updatedDish = await apiClient.uploadDishPhoto(selectedDishId, file)
       setFormData((prev) => ({ ...prev, photo_path: updatedDish.photo_path || '' }))
       setPhotoCacheBuster(Date.now())
-      await loadDishes()
-      await loadArchivedDishes()
+      await refreshDishResults()
       await loadDetail(selectedDishId)
       setModalMessage('Foto geüpload.')
     } catch {
@@ -1126,8 +1156,7 @@ export default function Gerechten() {
         unit: editingLineUnit.trim(),
         sort_order: line.sort_order
       })
-      await loadDishes()
-      await loadArchivedDishes()
+      await refreshDishResults()
       await loadDetail(selectedDishId)
       setModalMessage('Receptregel bijgewerkt.')
       cancelEditLine()
@@ -1150,8 +1179,7 @@ export default function Gerechten() {
     setErrorMessage('')
     try {
       await apiClient.deleteDishRecipeLine(selectedDishId, line.id)
-      await loadDishes()
-      await loadArchivedDishes()
+      await refreshDishResults()
       await loadDetail(selectedDishId)
       setModalMessage('Receptregel verwijderd.')
       if (editingLineId === line.id) {
@@ -1196,8 +1224,7 @@ export default function Gerechten() {
         .filter((step) => step.instruction)
 
       await apiClient.saveDishRecipeSteps(dishId, { steps: cleanedSteps })
-      await loadDishes()
-      await loadArchivedDishes()
+      await refreshDishResults()
       await loadDetail(dishId)
       setModalMessage('Gerecht opgeslagen.')
       setPageMessage('Gerecht opgeslagen.')
@@ -1257,8 +1284,7 @@ export default function Gerechten() {
         quantity,
         unit: selectedUnit
       })
-      await loadDishes()
-      await loadArchivedDishes()
+      await refreshDishResults()
       await loadDetail(dishId)
       setIngredientSearch('')
       setSelectedIngredient(null)
@@ -1302,8 +1328,7 @@ export default function Gerechten() {
         quantity,
         unit: semiFinishedRecipeUnit.trim()
       })
-      await loadDishes()
-      await loadArchivedDishes()
+      await refreshDishResults()
       await loadDetail(dishId)
       setSemiFinishedSearch('')
       setSelectedSemiFinishedRecipe(null)
@@ -1338,8 +1363,7 @@ export default function Gerechten() {
 
     try {
       await apiClient.archiveDish(dishId)
-      await loadDishes()
-      await loadArchivedDishes()
+      await refreshDishResults()
       setOpenActionsMenuId(null)
       if (options.closeModalAfter) {
         setIsModalOpen(false)
@@ -1366,8 +1390,7 @@ export default function Gerechten() {
 
     try {
       await apiClient.restoreDish(dishId)
-      await loadDishes()
-      await loadArchivedDishes()
+      await refreshDishResults()
       setOpenActionsMenuId(null)
       setPageMessage('Gerecht hersteld uit archief.')
     } catch {
@@ -1382,8 +1405,7 @@ export default function Gerechten() {
 
     try {
       await apiClient.restoreDish(selectedDishId)
-      await loadDishes()
-      await loadArchivedDishes()
+      await refreshDishResults()
       setIsModalOpen(false)
       setViewMode('active')
       setPageMessage('Gerecht hersteld uit archief.')
@@ -1408,7 +1430,7 @@ export default function Gerechten() {
 
     try {
       await apiClient.deleteDish(dishId)
-      await loadArchivedDishes()
+      await refreshDishResults()
       setOpenActionsMenuId(null)
       setPageMessage('Gerecht verwijderd.')
     } catch {
@@ -1432,7 +1454,7 @@ export default function Gerechten() {
 
     try {
       await apiClient.deleteDish(selectedDishId)
-      await loadArchivedDishes()
+      await refreshDishResults()
       setIsModalOpen(false)
       setPageMessage('Gerecht verwijderd.')
     } catch {
@@ -1447,8 +1469,7 @@ export default function Gerechten() {
     }
     try {
       const duplicate = await apiClient.duplicateDish(item.id)
-      await loadDishes()
-      await loadArchivedDishes()
+      await refreshDishResults()
       setOpenActionsMenuId(null)
       setViewMode('active')
       setPageMessage('Gerecht gedupliceerd.')
@@ -1660,7 +1681,7 @@ export default function Gerechten() {
             type="button"
             className="table-action-btn"
             style={viewMode === 'active' ? { background: '#e5eefc', borderColor: '#93c5fd' } : undefined}
-            onClick={() => setViewMode('active')}
+            onClick={() => handleViewModeChange('active')}
           >
             Actief
           </button>
@@ -1668,7 +1689,7 @@ export default function Gerechten() {
             type="button"
             className="table-action-btn"
             style={viewMode === 'archived' ? { background: '#e5eefc', borderColor: '#93c5fd' } : undefined}
-            onClick={() => setViewMode('archived')}
+            onClick={() => handleViewModeChange('archived')}
           >
             Archief
           </button>
@@ -1677,15 +1698,31 @@ export default function Gerechten() {
         <div className="sfp-toolbar">
           <input
             type="text"
-            placeholder="Zoek op naam of menukaartnaam"
+            placeholder="Zoek op gerechtnaam"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                executeDishSearch({ search: event.currentTarget.value })
+              }
+            }}
           />
+          <button
+            type="button"
+            className="table-action-btn"
+            onClick={handleDishSearchSubmit}
+            disabled={isLoadingDishes}
+          >
+            Zoeken
+          </button>
           <select
             value={categoryFilter}
             onChange={(event) => {
-              setCategoryFilter(event.target.value)
+              const nextCategory = event.target.value
+              setCategoryFilter(nextCategory)
               setSubcategoryFilter('')
+              executeDishSearch({ category: nextCategory, subcategory: '' })
             }}
           >
             <option value="">Alle categorieën</option>
@@ -1697,7 +1734,11 @@ export default function Gerechten() {
           </select>
           <select
             value={subcategoryFilter}
-            onChange={(event) => setSubcategoryFilter(event.target.value)}
+            onChange={(event) => {
+              const nextSubcategory = event.target.value
+              setSubcategoryFilter(nextSubcategory)
+              executeDishSearch({ subcategory: nextSubcategory })
+            }}
             disabled={!categoryFilter}
           >
             <option value="">Alle subcategorieën</option>
@@ -1717,8 +1758,12 @@ export default function Gerechten() {
         {pageMessage ? <p className="form-info inline-message">{pageMessage}</p> : null}
         {errorMessage ? <div style={{ color: 'red' }}>{errorMessage}</div> : null}
 
-        {visibleDishes.length === 0 ? (
-          <p>Nog geen gerechten gevonden.</p>
+        {isLoadingDishes ? (
+          <p>Gerechten laden...</p>
+        ) : !hasSearched ? (
+          <p>Zoek op naam, categorie of subcategorie om gerechten te tonen.</p>
+        ) : visibleDishes.length === 0 ? (
+          <p>Geen gerechten gevonden voor deze zoekopdracht.</p>
         ) : (
           <div className="table-scroll">
             <table className="ingredients-table">
