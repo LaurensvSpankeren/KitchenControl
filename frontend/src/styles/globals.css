@@ -269,6 +269,142 @@ body {
   min-width: 180px;
 }
 
+.dish-search-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+  padding: 1rem;
+}
+
+.dish-view-toggle {
+  justify-content: flex-end;
+}
+
+.dish-search-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.dish-search-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: #111827;
+  font-size: 0.9rem;
+}
+
+.dish-search-field span {
+  font-weight: 600;
+}
+
+.dish-search-field input,
+.dish-search-field select {
+  width: 100%;
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  background: #fff;
+}
+
+.dish-search-divider {
+  height: 1px;
+  margin: 1rem 0;
+  background: #e5e7eb;
+}
+
+.dish-search-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.dish-search-help {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #111827;
+}
+
+.dish-search-help p {
+  margin: 0.25rem 0 0;
+  color: #4b5563;
+}
+
+.dish-search-help-icon,
+.dish-empty-state-icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef4ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.dish-search-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.dish-secondary-btn {
+  background: #ffffff;
+}
+
+.dish-primary-btn,
+.dish-create-btn {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff;
+}
+
+.dish-create-action-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0.8rem 0 1rem;
+}
+
+.dish-create-btn {
+  width: auto;
+  min-width: 170px;
+}
+
+.dish-empty-state {
+  min-height: 210px;
+  border: 1px solid #dbe7f7;
+  border-radius: 10px;
+  background: #fbfdff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.dish-empty-state h3 {
+  margin: 0.75rem 0 0;
+  font-size: 1.1rem;
+}
+
+.dish-empty-state p {
+  margin: 0.4rem 0 0;
+  color: #4b5563;
+}
+
+.dish-empty-state-compact {
+  min-height: 92px;
+}
+
 .sfp-modal .modal-body {
   padding-top: 0.75rem;
 }
@@ -578,8 +714,21 @@ body {
   .quick-nav-grid,
   .recipe-line-inline,
   .modal-grid.two-col,
+  .dish-search-grid,
   .sfp-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .dish-search-footer,
+  .dish-search-actions,
+  .dish-create-action-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dish-search-actions button,
+  .dish-create-btn {
+    width: 100%;
   }
 
   .ingredient-header-row {

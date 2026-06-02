@@ -900,6 +900,17 @@ export default function Gerechten() {
     executeDishSearch({ search: searchTerm })
   }
 
+  function handleClearDishSearch() {
+    setSearchTerm('')
+    setCategoryFilter('')
+    setSubcategoryFilter('')
+    setDishes([])
+    setArchivedDishes([])
+    setLastDishQuery(null)
+    setHasSearched(false)
+    setErrorMessage('')
+  }
+
   function handleViewModeChange(nextViewMode) {
     setViewMode(nextViewMode)
     executeDishSearch({ archived: nextViewMode === 'archived' })
@@ -1675,8 +1686,8 @@ export default function Gerechten() {
         <p>Beheer eindgerechten bovenop halffabricaten, met receptregels en basisgegevens.</p>
       </header>
 
-      <section className="card">
-        <div style={uiStyles.viewModeSwitch}>
+      <section className="dish-search-card">
+        <div className="dish-view-toggle" style={uiStyles.viewModeSwitch}>
           <button
             type="button"
             className="table-action-btn"
@@ -1695,76 +1706,115 @@ export default function Gerechten() {
           </button>
         </div>
 
-        <div className="sfp-toolbar">
-          <input
-            type="text"
-            placeholder="Zoek op gerechtnaam"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                executeDishSearch({ search: event.currentTarget.value })
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="table-action-btn"
-            onClick={handleDishSearchSubmit}
-            disabled={isLoadingDishes}
-          >
-            Zoeken
-          </button>
-          <select
-            value={categoryFilter}
-            onChange={(event) => {
-              const nextCategory = event.target.value
-              setCategoryFilter(nextCategory)
-              setSubcategoryFilter('')
-              executeDishSearch({ category: nextCategory, subcategory: '' })
-            }}
-          >
-            <option value="">Alle categorieën</option>
-            {categoryOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <select
-            value={subcategoryFilter}
-            onChange={(event) => {
-              const nextSubcategory = event.target.value
-              setSubcategoryFilter(nextSubcategory)
-              executeDishSearch({ subcategory: nextSubcategory })
-            }}
-            disabled={!categoryFilter}
-          >
-            <option value="">Alle subcategorieën</option>
-            {filterSubcategoryOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          {canCreateDishes ? (
-            <button type="button" className="sfp-new-btn" onClick={openNewModal}>
-              Nieuw gerecht
-            </button>
-          ) : null}
+        <div className="dish-search-grid">
+          <label className="dish-search-field dish-search-field-wide">
+            <span>Zoek op naam</span>
+            <input
+              type="text"
+              placeholder="Typ een gerechtnaam..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  executeDishSearch({ search: event.currentTarget.value })
+                }
+              }}
+            />
+          </label>
+          <label className="dish-search-field">
+            <span>Categorie</span>
+            <select
+              value={categoryFilter}
+              onChange={(event) => {
+                const nextCategory = event.target.value
+                setCategoryFilter(nextCategory)
+                setSubcategoryFilter('')
+                executeDishSearch({ category: nextCategory, subcategory: '' })
+              }}
+            >
+              <option value="">Alle categorieën</option>
+              {categoryOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="dish-search-field">
+            <span>Subcategorie</span>
+            <select
+              value={subcategoryFilter}
+              onChange={(event) => {
+                const nextSubcategory = event.target.value
+                setSubcategoryFilter(nextSubcategory)
+                executeDishSearch({ subcategory: nextSubcategory })
+              }}
+              disabled={!categoryFilter}
+            >
+              <option value="">Alle subcategorieën</option>
+              {filterSubcategoryOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
-        {pageMessage ? <p className="form-info inline-message">{pageMessage}</p> : null}
-        {errorMessage ? <div style={{ color: 'red' }}>{errorMessage}</div> : null}
+        <div className="dish-search-divider" />
 
-        {isLoadingDishes ? (
-          <p>Gerechten laden...</p>
-        ) : !hasSearched ? (
-          <p>Zoek op naam, categorie of subcategorie om gerechten te tonen.</p>
-        ) : visibleDishes.length === 0 ? (
+        <div className="dish-search-footer">
+          <div className="dish-search-help">
+            <span className="dish-search-help-icon" aria-hidden="true">i</span>
+            <div>
+              <strong>Zoek op naam, categorie of subcategorie om gerechten te tonen.</strong>
+              <p>Gebruik een of meerdere filters en klik op Zoeken.</p>
+            </div>
+          </div>
+          <div className="dish-search-actions">
+            <button type="button" className="table-action-btn dish-secondary-btn" onClick={handleClearDishSearch}>
+              Wissen
+            </button>
+            <button
+              type="button"
+              className="table-action-btn dish-primary-btn"
+              onClick={handleDishSearchSubmit}
+              disabled={isLoadingDishes}
+            >
+              Zoeken
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div className="dish-create-action-row">
+        {canCreateDishes ? (
+          <button type="button" className="sfp-new-btn dish-create-btn" onClick={openNewModal}>
+            + Nieuw gerecht
+          </button>
+        ) : null}
+      </div>
+
+      {pageMessage ? <p className="form-info inline-message">{pageMessage}</p> : null}
+      {errorMessage ? <div style={{ color: 'red' }}>{errorMessage}</div> : null}
+
+      {isLoadingDishes ? (
+        <section className="dish-empty-state">
+          <h3>Gerechten laden...</h3>
+        </section>
+      ) : !hasSearched ? (
+        <section className="dish-empty-state">
+          <div className="dish-empty-state-icon" aria-hidden="true">i</div>
+          <h3>Nog geen zoekopdracht uitgevoerd</h3>
+          <p>Gebruik de zoekfilters hierboven om gerechten te vinden.</p>
+        </section>
+      ) : visibleDishes.length === 0 ? (
+        <section className="dish-empty-state dish-empty-state-compact">
           <p>Geen gerechten gevonden voor deze zoekopdracht.</p>
-        ) : (
+        </section>
+      ) : (
+        <section className="card">
           <div className="table-scroll">
             <table className="ingredients-table">
               <thead>
@@ -1883,8 +1933,8 @@ export default function Gerechten() {
               </tbody>
             </table>
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {isModalOpen ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
