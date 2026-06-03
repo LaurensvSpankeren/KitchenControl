@@ -1660,8 +1660,15 @@ export default function Menukaarten() {
           <meta charset="utf-8" />
           <title>${escapeHtml(selectedMenukaart.name)}</title>
           <style>
+            @font-face {
+              font-family: "Source Sans Pro";
+              src: url("/fonts/SourceSansPro-Regular.woff2") format("woff2");
+              font-weight: 400;
+              font-style: normal;
+            }
             body {
-              font-family: Georgia, "Times New Roman", serif;
+              font-family: "Source Sans Pro", "Segoe UI", Arial, sans-serif;
+              font-weight: 400;
               color: #111;
               background: #fff;
               margin: 32px;
@@ -1729,7 +1736,7 @@ export default function Menukaarten() {
       </html>
     `
 
-    void printHtml(html, { windowFeatures: 'width=900,height=700' }).then((didStartPrint) => {
+    void printHtml(html, { windowFeatures: 'width=900,height=700', waitForFonts: true }).then((didStartPrint) => {
       if (!didStartPrint) {
         setError('Printweergave openen mislukt.')
       }
@@ -1801,8 +1808,15 @@ export default function Menukaarten() {
             <meta charset="utf-8" />
             <title>${escapeHtml(selectedMenukaart.name)} - Allergenenkaart</title>
             <style>
+              @font-face {
+                font-family: "Source Sans Pro";
+                src: url("/fonts/SourceSansPro-Regular.woff2") format("woff2");
+                font-weight: 400;
+                font-style: normal;
+              }
               body {
-                font-family: Arial, sans-serif;
+                font-family: "Source Sans Pro", "Segoe UI", Arial, sans-serif;
+                font-weight: 400;
                 color: #1f2937;
                 background: #fff;
                 margin: 24px;
@@ -1885,7 +1899,8 @@ export default function Menukaarten() {
 
       const didStartPrint = await printHtml(html, {
         windowFeatures: 'width=1100,height=800',
-        waitForImages: true
+        waitForImages: true,
+        waitForFonts: true
       })
       if (!didStartPrint) {
         setError('Printweergave openen mislukt.')

@@ -59,11 +59,35 @@ function waitForImagesInWindow(printWindow, timeoutMs = 2000) {
   })
 }
 
+function waitForFontsInWindow(printWindow, timeoutMs = 2000) {
+  const fontsReady = printWindow.document?.fonts?.ready
+  if (!fontsReady || typeof fontsReady.then !== 'function') {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve) => {
+    let resolved = false
+
+    const finish = () => {
+      if (resolved) {
+        return
+      }
+      resolved = true
+      printWindow.clearTimeout(timer)
+      resolve()
+    }
+
+    const timer = printWindow.setTimeout(finish, timeoutMs)
+    fontsReady.then(finish, finish)
+  })
+}
+
 export async function printHtml(
   html,
   {
     windowFeatures = 'width=900,height=700',
-    waitForImages = false
+    waitForImages = false,
+    waitForFonts = false
   } = {}
 ) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -98,6 +122,10 @@ export async function printHtml(
     document.body.style.margin = '0'
     document.body.style.background = 'white'
     document.body.appendChild(host)
+
+    if (waitForFonts) {
+      await waitForFontsInWindow(window)
+    }
 
     return await new Promise((resolve) => {
       let printed = false
@@ -174,6 +202,10 @@ export async function printHtml(
 
   printWindow.document.write(html)
   printWindow.document.close()
+
+  if (waitForFonts) {
+    await waitForFontsInWindow(printWindow)
+  }
 
   if (waitForImages) {
     await waitForImagesInWindow(printWindow)
