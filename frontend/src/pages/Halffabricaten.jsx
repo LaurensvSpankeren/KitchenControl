@@ -1738,8 +1738,8 @@ export default function Halffabricaten() {
         <p>Beheer eigen recepturen zoals soepen, sauzen, dressings en toppings.</p>
       </header>
 
-      <section className="card">
-        <div style={uiStyles.viewModeSwitch}>
+      <section className="dish-search-card">
+        <div className="dish-view-toggle" style={uiStyles.viewModeSwitch}>
           <button
             type="button"
             className="table-action-btn"
@@ -1757,58 +1757,73 @@ export default function Halffabricaten() {
             Archief
           </button>
         </div>
-        <div className="sfp-toolbar">
-          <input
-            type="text"
-            placeholder="Zoek op naam"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
-          <select
-            value={categoryFilter}
-            onChange={(event) => {
-              setCategoryFilter(event.target.value)
-              setSubcategoryFilter('')
-            }}
-          >
-            <option value="">Alle categorieën</option>
-            {categoryOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <select
-            value={subcategoryFilter}
-            onChange={(event) => setSubcategoryFilter(event.target.value)}
-            disabled={!categoryFilter}
-          >
-            <option value="">Alle subcategorieën</option>
-            {filterSubcategoryOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          {viewMode === 'active' && canCreateProducts ? (
-            <button type="button" className="sfp-new-btn" onClick={openNewModal}>
-              Nieuw halffabricaat
-            </button>
-          ) : (
-            <div />
-          )}
+
+        <div className="dish-search-grid">
+          <label className="dish-search-field dish-search-field-wide">
+            <span>Zoek op naam</span>
+            <input
+              type="text"
+              placeholder="Typ een halffabricaatnaam..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
+          <label className="dish-search-field">
+            <span>Categorie</span>
+            <select
+              value={categoryFilter}
+              onChange={(event) => {
+                setCategoryFilter(event.target.value)
+                setSubcategoryFilter('')
+              }}
+            >
+              <option value="">Alle categorieën</option>
+              {categoryOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="dish-search-field">
+            <span>Subcategorie</span>
+            <select
+              value={subcategoryFilter}
+              onChange={(event) => setSubcategoryFilter(event.target.value)}
+              disabled={!categoryFilter}
+            >
+              <option value="">Alle subcategorieën</option>
+              {filterSubcategoryOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
+      </section>
 
-        {pageMessage ? <p className="form-info inline-message">{pageMessage}</p> : null}
-        {errorMessage ? <div style={{ color: 'red' }}>{errorMessage}</div> : null}
+      <div className="dish-create-action-row">
+        {viewMode === 'active' && canCreateProducts ? (
+          <button type="button" className="sfp-new-btn dish-create-btn" onClick={openNewModal}>
+            + Nieuw halffabricaat
+          </button>
+        ) : null}
+      </div>
 
-        {visibleProducts.length === 0 ? (
+      {pageMessage ? <p className="form-info inline-message">{pageMessage}</p> : null}
+      {errorMessage ? <div style={{ color: 'red' }}>{errorMessage}</div> : null}
+
+      {visibleProducts.length === 0 ? (
+        <section className="dish-empty-state dish-empty-state-compact">
           <p>
             {viewMode === 'archived'
               ? 'Nog geen gearchiveerde halffabricaten gevonden.'
               : 'Nog geen halffabricaten gevonden.'}
           </p>
-        ) : (
+        </section>
+      ) : (
+        <section className="card">
           <div className="table-scroll">
             <table className="ingredients-table">
               <thead>
@@ -1914,8 +1929,8 @@ export default function Halffabricaten() {
               </tbody>
             </table>
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {isModalOpen ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
