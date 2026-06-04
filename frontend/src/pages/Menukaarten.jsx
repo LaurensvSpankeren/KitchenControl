@@ -2120,8 +2120,8 @@ export default function Menukaarten() {
         <p>Beheer hier menukaarten in ontwikkeling, actieve kaarten en archief.</p>
       </header>
 
-      <section className="card">
-        <div style={menukaartToolbarStyles.viewModeSwitch}>
+      <section className="dish-search-card">
+        <div className="dish-view-toggle" style={menukaartToolbarStyles.viewModeSwitch}>
           <button
             type="button"
             className="table-action-btn"
@@ -2139,41 +2139,42 @@ export default function Menukaarten() {
             Archief
           </button>
         </div>
-        <div className="sfp-toolbar" style={menukaartToolbarStyles.toolbar}>
-          <input
-            type="text"
-            placeholder="Zoek op naam"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            style={menukaartToolbarStyles.control}
-          />
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            disabled={activeTab === 'archived'}
-            style={menukaartToolbarStyles.control}
-          >
-            <option value="all">Alle</option>
-            <option value="active">Actief</option>
-            <option value="concept">In ontwikkeling</option>
-          </select>
-          <div />
-          {activeTab === 'active' && canCreateMenukaarten ? (
-            <button
-              type="button"
-              className="sfp-new-btn"
-              onClick={openNewMenukaartModal}
-              style={menukaartToolbarStyles.newButton}
+
+        <div className="dish-search-grid">
+          <label className="dish-search-field dish-search-field-wide">
+            <span>Zoek op naam</span>
+            <input
+              type="text"
+              placeholder="Typ een menukaartnaam..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </label>
+          <label className="dish-search-field">
+            <span>Status</span>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              disabled={activeTab === 'archived'}
             >
-              Nieuwe menukaart
-            </button>
-          ) : (
-            <div />
-          )}
+              <option value="all">Alle</option>
+              <option value="active">Actief</option>
+              <option value="concept">In ontwikkeling</option>
+            </select>
+          </label>
         </div>
-        {message ? <p className="form-info inline-message">{message}</p> : null}
-        {error ? <p>{error}</p> : null}
       </section>
+
+      <div className="dish-create-action-row">
+        {activeTab === 'active' && canCreateMenukaarten ? (
+          <button type="button" className="sfp-new-btn dish-create-btn" onClick={openNewMenukaartModal}>
+            + Nieuwe menukaart
+          </button>
+        ) : null}
+      </div>
+
+      {message ? <p className="form-info inline-message">{message}</p> : null}
+      {error ? <p>{error}</p> : null}
 
       {isModalOpen ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
