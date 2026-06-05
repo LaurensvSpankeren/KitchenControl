@@ -945,6 +945,7 @@ export default function Gerechten() {
   }
 
   async function openEditModal(dish, sourceView = 'active') {
+    setDetail(null)
     setSelectedDishId(dish.id)
     setIsSelectedArchived(sourceView === 'archived' || !!dish.is_archived)
     setFormData(mapDishToForm(dish))
@@ -984,6 +985,7 @@ export default function Gerechten() {
       }
     }
     setIsModalOpen(false)
+    setDetail(null)
   }
 
   function handleFormChange(field, value) {
