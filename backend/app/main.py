@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -18,12 +16,13 @@ from app.api.permissions import router as permissions_router
 from app.api.semi_finished_categories import router as semi_finished_categories_router
 from app.api.semi_finished_products import router as semi_finished_products_router
 from app.api.users import router as users_router
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.services.user_bootstrap import bootstrap_supervisor_if_needed
 
 app = FastAPI(title="KitchenControl API")
-UPLOADS_DIR = Path("uploads")
+UPLOADS_DIR = settings.uploads_dir
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 app.add_middleware(

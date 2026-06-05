@@ -1,5 +1,4 @@
 from io import BytesIO
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -8,6 +7,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.dish import Dish
 from app.models.ingredient import Ingredient
@@ -25,7 +25,7 @@ from app.api.semi_finished_products import (
 )
 
 router = APIRouter()
-UPLOADS_DIR = Path("uploads")
+UPLOADS_DIR = settings.uploads_dir
 UPLOADS_DISHES_DIR = UPLOADS_DIR / "dishes"
 ACTIVE_MENU_STATUSES = {"active", "concept"}
 
