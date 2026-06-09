@@ -728,87 +728,116 @@ export default function Importbeheer() {
         <p>Beheer hier CSV-imports, handmatige ingrediënten en importcontroles.</p>
       </header>
 
-      <section className="card">
-        <h3>Handmatig CSV uploaden</h3>
-        <p style={{ marginTop: '0.65rem' }}>Upload hier CSV-bestanden om inkoopproducten te synchroniseren.</p>
-        {canImportCsv ? (
-          <>
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
-            />
-            <button type="button" onClick={handleImport} disabled={!selectedFile || isImporting}>
-              {isImporting ? 'Bezig met importeren...' : 'CSV uploaden'}
-            </button>
-          </>
-        ) : null}
-        {importMessage ? <p>{importMessage}</p> : null}
-      </section>
-
-      <section className="card" style={{ marginTop: '1.75rem' }}>
-        <h3>Google Drive</h3>
-        <p style={{ marginTop: '0.65rem' }}>
-          Bekijk welk CSV-bestand klaarstaat in Google Drive en importeer het indien gewenst.
-        </p>
-        {canImportCsv ? (
-          <button
-            type="button"
-            onClick={handleCheckGoogleDrive}
-            disabled={isCheckingGoogleDrive || isImportingGoogleDrive}
-          >
-            {isCheckingGoogleDrive ? 'Google Drive controleren...' : 'Controleer Google Drive'}
-          </button>
-        ) : null}
-        {googleDriveImportMessage ? <p>{googleDriveImportMessage}</p> : null}
-        {googleDriveError ? <p>{googleDriveError}</p> : null}
-        {latestGoogleDriveCsv ? (
-          <>
-            <div className="table-scroll" style={{ marginTop: '1rem' }}>
-              <table className="ingredients-table">
-                <thead>
-                  <tr>
-                    <th>Nieuwste bestand</th>
-                    <th>Gewijzigd op</th>
-                    <th>Grootte</th>
-                    <th>Checksum</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>{latestGoogleDriveCsv.name || '-'}</td>
-                    <td>{formatDateTime(latestGoogleDriveCsv.modified_time)}</td>
-                    <td>{formatFileSize(latestGoogleDriveCsv.size)}</td>
-                    <td>{latestGoogleDriveCsv.checksum || '-'}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            {canImportCsv ? (
+      <div className="import-source-grid">
+        <section className="import-source-card">
+          <div className="import-section-header">
+            <h3>Handmatig CSV uploaden</h3>
+            <p>Upload hier CSV-bestanden om inkoopproducten te synchroniseren.</p>
+          </div>
+          {canImportCsv ? (
+            <div className="import-source-actions">
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+              />
               <button
                 type="button"
-                onClick={handleImportGoogleDriveCsv}
-                disabled={isImportingGoogleDrive}
+                className="primary-btn"
+                onClick={handleImport}
+                disabled={!selectedFile || isImporting}
               >
-                {isImportingGoogleDrive ? 'Bezig met importeren...' : 'Importeer dit bestand'}
+                {isImporting ? 'Bezig met importeren...' : 'CSV uploaden'}
               </button>
-            ) : null}
-          </>
-        ) : null}
-      </section>
+            </div>
+          ) : null}
+          {importMessage ? (
+            <p
+              className={
+                importMessage.startsWith('Import geslaagd')
+                  ? 'form-info inline-message'
+                  : 'form-error inline-message'
+              }
+            >
+              {importMessage}
+            </p>
+          ) : null}
+        </section>
 
-      <section className="card" style={{ marginTop: '1.75rem' }}>
-        <h3>Importsignalen</h3>
-        <p style={{ marginTop: '0.65rem' }}>
-          Controleer deze importsignalen zorgvuldig. Vervang artikelen indien nodig in de Bidfood
-          bestellijst/favorieten en werk recepten en halffabricaten bij voordat een ingrediënt wordt verwijderd.
-        </p>
+        <section className="import-source-card">
+          <div className="import-section-header">
+            <h3>Google Drive</h3>
+            <p>Bekijk welk CSV-bestand klaarstaat in Google Drive en importeer het indien gewenst.</p>
+          </div>
+          {canImportCsv ? (
+            <div className="import-source-actions">
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={handleCheckGoogleDrive}
+                disabled={isCheckingGoogleDrive || isImportingGoogleDrive}
+              >
+                {isCheckingGoogleDrive ? 'Google Drive controleren...' : 'Controleer Google Drive'}
+              </button>
+            </div>
+          ) : null}
+          {googleDriveImportMessage ? (
+            <p className="form-info inline-message">{googleDriveImportMessage}</p>
+          ) : null}
+          {googleDriveError ? <p className="form-error inline-message">{googleDriveError}</p> : null}
+          {latestGoogleDriveCsv ? (
+            <>
+              <div className="table-scroll import-source-metadata">
+                <table className="ingredients-table">
+                  <thead>
+                    <tr>
+                      <th>Nieuwste bestand</th>
+                      <th>Gewijzigd op</th>
+                      <th>Grootte</th>
+                      <th>Checksum</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>{latestGoogleDriveCsv.name || '-'}</td>
+                      <td>{formatDateTime(latestGoogleDriveCsv.modified_time)}</td>
+                      <td>{formatFileSize(latestGoogleDriveCsv.size)}</td>
+                      <td>{latestGoogleDriveCsv.checksum || '-'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {canImportCsv ? (
+                <div className="import-source-actions">
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={handleImportGoogleDriveCsv}
+                    disabled={isImportingGoogleDrive}
+                  >
+                    {isImportingGoogleDrive ? 'Bezig met importeren...' : 'Importeer dit bestand'}
+                  </button>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </section>
+      </div>
+
+      <section className="import-review-card">
+        <div className="import-section-header">
+          <h3>Importsignalen</h3>
+          <p>
+            Controleer deze importsignalen zorgvuldig. Vervang artikelen indien nodig in de Bidfood
+            bestellijst/favorieten en werk recepten en halffabricaten bij voordat een ingrediënt wordt verwijderd.
+          </p>
+        </div>
         {importSignalMessage ? <p className="form-info inline-message">{importSignalMessage}</p> : null}
-        {importSignalError ? <p>{importSignalError}</p> : null}
+        {importSignalError ? <p className="form-error inline-message">{importSignalError}</p> : null}
         {isLoadingImportSignals ? (
-          <p>Importsignalen laden...</p>
+          <p className="import-empty-state">Importsignalen laden...</p>
         ) : importSignals.length === 0 ? (
-          <p>Geen actuele importsignalen gevonden.</p>
+          <p className="import-empty-state">Geen actuele importsignalen gevonden.</p>
         ) : (
           <div className="table-scroll" style={{ marginTop: '1rem' }}>
             <table className="ingredients-table">
@@ -862,6 +891,7 @@ export default function Importbeheer() {
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                           <button
                             type="button"
+                            className="table-action-btn"
                             onClick={() => setUsageDialog(signal)}
                             disabled={isBusy}
                           >
@@ -870,7 +900,7 @@ export default function Importbeheer() {
                           {canViewImportbeheer ? (
                             <button
                               type="button"
-                              className="secondary-btn"
+                              className="table-action-btn secondary-btn"
                               onClick={() => handleAcknowledgeImportSignal(signal)}
                               disabled={isBusy}
                             >
@@ -880,7 +910,7 @@ export default function Importbeheer() {
                           {canCleanupImport ? (
                             <button
                               type="button"
-                              className="secondary-btn"
+                              className="table-action-btn secondary-btn"
                               onClick={() => handleOpenDeleteIngredient(signal, 'import', 'signal')}
                               disabled={isBusy}
                             >
@@ -898,20 +928,18 @@ export default function Importbeheer() {
         )}
       </section>
 
-      <section className="card" style={{ marginTop: '1.75rem' }}>
-        <h3>Handmatige ingrediënten controleren</h3>
-        <p style={{ marginTop: '0.65rem' }}>Controleer hier handmatig ingevoerde ingrediënten.</p>
-
-        <div style={{ marginTop: '2rem' }}>
-          <h4>Import match controleren</h4>
-          <p style={{ marginTop: '0.65rem' }}>Beoordeel of een handmatig ingrediënt gekoppeld kan worden aan een importproduct.</p>
-          {manualMatchMessage ? <p className="form-info inline-message">{manualMatchMessage}</p> : null}
-          {manualMatchError ? <p>{manualMatchError}</p> : null}
-          {isLoadingManualMatchIngredients ? (
-            <p>Handmatige ingrediënten met importmatch laden...</p>
-          ) : manualMatchIngredients.length === 0 ? (
-            <p>Geen handmatige ingrediënten met importmatch gevonden.</p>
-          ) : (
+      <section className="import-review-card">
+        <div className="import-section-header">
+          <h3>Import match controleren</h3>
+          <p>Beoordeel of een handmatig ingrediënt gekoppeld kan worden aan een importproduct.</p>
+        </div>
+        {manualMatchMessage ? <p className="form-info inline-message">{manualMatchMessage}</p> : null}
+        {manualMatchError ? <p className="form-error inline-message">{manualMatchError}</p> : null}
+        {isLoadingManualMatchIngredients ? (
+          <p className="import-empty-state">Handmatige ingrediënten met importmatch laden...</p>
+        ) : manualMatchIngredients.length === 0 ? (
+          <p className="import-empty-state">Geen handmatige ingrediënten met importmatch gevonden.</p>
+        ) : (
             <div className="table-scroll" style={{ marginTop: '1rem' }}>
               <table className="ingredients-table">
                 <thead>
@@ -948,6 +976,7 @@ export default function Importbeheer() {
                               <>
                                 <button
                                   type="button"
+                                  className="table-action-btn"
                                   onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
                                   disabled={isBusy}
                                 >
@@ -956,6 +985,7 @@ export default function Importbeheer() {
                                 {ingredient.match_status === 'strong' ? (
                                   <button
                                     type="button"
+                                    className="table-action-btn"
                                     onClick={() => handleOpenMatchPreview(ingredient)}
                                     disabled={isBusy || isLoadingMatchPreview}
                                   >
@@ -967,7 +997,7 @@ export default function Importbeheer() {
                             {canCleanupImport ? (
                               <button
                                 type="button"
-                                className="secondary-btn"
+                                className="table-action-btn secondary-btn"
                                 onClick={() => handleOpenDeleteIngredient(ingredient, 'manual')}
                                 disabled={isBusy}
                               >
@@ -982,19 +1012,21 @@ export default function Importbeheer() {
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+        )}
+      </section>
 
-        <div style={{ marginTop: '2.75rem', paddingTop: '2rem', borderTop: '1px solid #e5e7eb' }}>
-          <h4>Inactieve handmatige ingrediënten</h4>
-          <p style={{ marginTop: '0.65rem' }}>Deze ingrediënten zijn 45 dagen of langer niet bijgewerkt. Controleer ze en werk ze bij indien nodig.</p>
-          {manualReviewMessage ? <p className="form-info inline-message">{manualReviewMessage}</p> : null}
-          {manualReviewError ? <p>{manualReviewError}</p> : null}
-          {isLoadingManualIngredients ? (
-            <p>Handmatige ingrediënten laden...</p>
-          ) : manualIngredients.length === 0 ? (
-            <p>Geen handmatige ingrediënten ter controle gevonden.</p>
-          ) : (
+      <section className="import-review-card">
+        <div className="import-section-header">
+          <h3>Inactieve handmatige ingrediënten</h3>
+          <p>Deze ingrediënten zijn 45 dagen of langer niet bijgewerkt. Controleer ze en werk ze bij indien nodig.</p>
+        </div>
+        {manualReviewMessage ? <p className="form-info inline-message">{manualReviewMessage}</p> : null}
+        {manualReviewError ? <p className="form-error inline-message">{manualReviewError}</p> : null}
+        {isLoadingManualIngredients ? (
+          <p className="import-empty-state">Handmatige ingrediënten laden...</p>
+        ) : manualIngredients.length === 0 ? (
+          <p className="import-empty-state">Geen handmatige ingrediënten ter controle gevonden.</p>
+        ) : (
             <div className="table-scroll" style={{ marginTop: '1rem' }}>
               <table className="ingredients-table">
                 <thead>
@@ -1037,6 +1069,7 @@ export default function Importbeheer() {
                               <>
                                 <button
                                   type="button"
+                                  className="table-action-btn"
                                   onClick={() => handleManualIngredientAction(ingredient.id, 'review')}
                                   disabled={isBusy}
                                 >
@@ -1045,6 +1078,7 @@ export default function Importbeheer() {
                                 {ingredient.match_status === 'strong' ? (
                                   <button
                                     type="button"
+                                    className="table-action-btn"
                                     onClick={() =>
                                       handleManualIngredientAction(ingredient.id, 'link-import')
                                     }
@@ -1058,7 +1092,7 @@ export default function Importbeheer() {
                             {canCleanupImport ? (
                               <button
                                 type="button"
-                                className="secondary-btn"
+                                className="table-action-btn secondary-btn"
                                 onClick={() => handleOpenDeleteIngredient(ingredient, 'manual')}
                                 disabled={isBusy}
                               >
@@ -1073,24 +1107,21 @@ export default function Importbeheer() {
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+        )}
       </section>
 
-      <section className="card" style={{ marginTop: '1.75rem' }}>
-        <h3>Import ingrediënten controleren</h3>
-        <p style={{ marginTop: '0.65rem' }}>Controleer hier geïmporteerde ingrediënten.</p>
-
-        <div style={{ marginTop: '2rem' }}>
-          <h4>Inactieve import ingrediënten</h4>
-          <p style={{ marginTop: '0.65rem' }}>Deze ingrediënten zijn 45 dagen of langer niet vernieuwd via import. Controleer ze en werk ze bij indien nodig.</p>
-          {staleImportMessage ? <p className="form-info inline-message">{staleImportMessage}</p> : null}
-          {staleImportError ? <p>{staleImportError}</p> : null}
-          {isLoadingStaleImportIngredients ? (
-            <p>Importingrediënten laden...</p>
-          ) : staleImportIngredients.length === 0 ? (
-            <p>Geen importingrediënten ter controle gevonden.</p>
-          ) : (
+      <section className="import-review-card">
+        <div className="import-section-header">
+          <h3>Inactieve import ingrediënten</h3>
+          <p>Deze ingrediënten zijn 45 dagen of langer niet vernieuwd via import. Controleer ze en werk ze bij indien nodig.</p>
+        </div>
+        {staleImportMessage ? <p className="form-info inline-message">{staleImportMessage}</p> : null}
+        {staleImportError ? <p className="form-error inline-message">{staleImportError}</p> : null}
+        {isLoadingStaleImportIngredients ? (
+          <p className="import-empty-state">Importingrediënten laden...</p>
+        ) : staleImportIngredients.length === 0 ? (
+          <p className="import-empty-state">Geen importingrediënten ter controle gevonden.</p>
+        ) : (
             <div className="table-scroll" style={{ marginTop: '1rem' }}>
               <table className="ingredients-table">
                 <thead>
@@ -1124,7 +1155,7 @@ export default function Importbeheer() {
                             {canCleanupImport ? (
                               <button
                                 type="button"
-                                className="secondary-btn"
+                                className="table-action-btn secondary-btn"
                                 onClick={() => handleOpenDeleteIngredient(ingredient, 'import')}
                                 disabled={isBusy}
                               >
@@ -1139,19 +1170,21 @@ export default function Importbeheer() {
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+        )}
+      </section>
 
-        <div style={{ marginTop: '2.75rem', paddingTop: '2rem', borderTop: '1px solid #e5e7eb' }}>
-          <h4>Duplicaten in import</h4>
-          <p style={{ marginTop: '0.65rem' }}>Mogelijke dubbele importproducten gevonden. Controleer en voeg samen.</p>
-          {issuesMessage ? <p className="form-info inline-message">{issuesMessage}</p> : null}
-          {issueError ? <p>{issueError}</p> : null}
-          {isLoadingIssues ? (
-            <p>Issues laden...</p>
-          ) : duplicateIssues.length === 0 ? (
-            <p>Geen open duplicate issues gevonden.</p>
-          ) : (
+      <section className="import-review-card">
+        <div className="import-section-header">
+          <h3>Duplicaten in import</h3>
+          <p>Mogelijke dubbele importproducten gevonden. Controleer en voeg samen.</p>
+        </div>
+        {issuesMessage ? <p className="form-info inline-message">{issuesMessage}</p> : null}
+        {issueError ? <p className="form-error inline-message">{issueError}</p> : null}
+        {isLoadingIssues ? (
+          <p className="import-empty-state">Issues laden...</p>
+        ) : duplicateIssues.length === 0 ? (
+          <p className="import-empty-state">Geen open duplicate issues gevonden.</p>
+        ) : (
             <div className="table-scroll" style={{ marginTop: '1rem' }}>
               <table className="ingredients-table">
                 <thead>
@@ -1170,7 +1203,11 @@ export default function Importbeheer() {
                       <td>{formatDateTime(issue.created_at)}</td>
                       <td>
                         {canMergeImport ? (
-                          <button type="button" onClick={() => handleOpenIssue(issue.id)}>
+                          <button
+                            type="button"
+                            className="table-action-btn"
+                            onClick={() => handleOpenIssue(issue.id)}
+                          >
                             Open
                           </button>
                         ) : null}
@@ -1180,8 +1217,7 @@ export default function Importbeheer() {
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+        )}
       </section>
 
       {deleteDialog ? (
@@ -1512,7 +1548,7 @@ export default function Importbeheer() {
       ) : null}
 
       {selectedIssue ? (
-        <section className="card">
+        <section className="card import-review-card">
           <h3>Issue detail</h3>
           <div className="modal-grid two-col calm-grid">
             <label>

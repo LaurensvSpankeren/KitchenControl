@@ -229,6 +229,126 @@ body {
   font-size: 0.85rem;
 }
 
+.import-source-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.import-source-card,
+.import-review-card {
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.07);
+  padding: 1.2rem;
+}
+
+.import-source-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 190px;
+}
+
+.import-review-card {
+  margin-top: 1.25rem;
+}
+
+.import-section-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.import-section-header p {
+  margin: 0.45rem 0 0;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.import-source-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 1rem;
+}
+
+.import-source-actions input[type='file'] {
+  flex: 1 1 240px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  font: inherit;
+}
+
+.import-source-card button,
+.import-review-card button {
+  min-height: 40px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.import-source-card button:disabled,
+.import-review-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.import-source-card .primary-btn {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff;
+}
+
+.import-source-card .secondary-btn,
+.import-review-card .secondary-btn {
+  background: #ffffff;
+}
+
+.import-source-metadata {
+  margin-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 0.75rem;
+}
+
+.import-review-card .table-scroll {
+  margin-top: 1rem;
+}
+
+.import-review-card .table-action-btn {
+  min-height: 34px;
+  margin: 0;
+  padding: 0.38rem 0.6rem;
+}
+
+.import-empty-state {
+  margin: 1rem 0 0;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  text-align: center;
+}
+
+.import-source-card .inline-message,
+.import-review-card .inline-message {
+  margin: 0.9rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
 .line-actions {
   display: flex;
   gap: 0.35rem;
@@ -756,6 +876,7 @@ body {
   .recipe-line-inline,
   .modal-grid.two-col,
   .dish-search-grid,
+  .import-source-grid,
   .sfp-toolbar {
     grid-template-columns: 1fr;
   }
@@ -770,6 +891,20 @@ body {
   .dish-search-actions button,
   .dish-create-btn {
     width: 100%;
+  }
+
+  .import-source-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .import-source-actions input[type='file'],
+  .import-source-actions button {
+    width: 100%;
+  }
+
+  .import-source-actions input[type='file'] {
+    flex: 0 0 auto;
   }
 
   .ingredient-header-row {
