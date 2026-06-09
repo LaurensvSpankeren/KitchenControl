@@ -749,8 +749,7 @@ export default function Importbeheer() {
       <section className="card" style={{ marginTop: '1.75rem' }}>
         <h3>Google Drive</h3>
         <p style={{ marginTop: '0.65rem' }}>
-          Controleer welk CSV-bestand klaarstaat in de gekoppelde Google Drive-map en importeer het daarna
-          bewust.
+          Bekijk welk CSV-bestand klaarstaat in Google Drive en importeer het indien gewenst.
         </p>
         {canImportCsv ? (
           <button
