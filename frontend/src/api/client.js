@@ -284,6 +284,14 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getLatestGoogleDriveCsv() {
+    const response = await apiFetch(`${API_BASE_URL}/api/imports/google-drive/latest`)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to check Google Drive: ${response.status}`)
+    }
+    return response.json()
+  },
   async getImportIssues(params = {}) {
     const searchParams = new URLSearchParams()
     if (params.status) {

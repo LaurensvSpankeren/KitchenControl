@@ -102,6 +102,22 @@ function formatNumber(value) {
   return amount.toLocaleString('nl-NL', { maximumFractionDigits: 4 })
 }
 
+function formatFileSize(value) {
+  const bytes = Number(value)
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return '-'
+  }
+  if (bytes < 1024) {
+    return `${bytes.toLocaleString('nl-NL')} B`
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toLocaleString('nl-NL', { maximumFractionDigits: 1 })} KB`
+  }
+  return `${(bytes / (1024 * 1024)).toLocaleString('nl-NL', {
+    maximumFractionDigits: 1
+  })} MB`
+}
+
 function formatImportMatch(ingredient) {
   const matchStatus = ingredient?.match_status || 'none'
   const matchedImportIngredientId = ingredient?.matched_import_ingredient_id
@@ -150,6 +166,9 @@ export default function Importbeheer() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [importMessage, setImportMessage] = useState('')
   const [isImporting, setIsImporting] = useState(false)
+  const [latestGoogleDriveCsv, setLatestGoogleDriveCsv] = useState(null)
+  const [googleDriveError, setGoogleDriveError] = useState('')
+  const [isCheckingGoogleDrive, setIsCheckingGoogleDrive] = useState(false)
   const [issues, setIssues] = useState([])
   const [selectedIssueId, setSelectedIssueId] = useState(null)
   const [selectedIssue, setSelectedIssue] = useState(null)
@@ -315,6 +334,25 @@ export default function Importbeheer() {
       setImportMessage('Import mislukt')
     } finally {
       setIsImporting(false)
+    }
+  }
+
+  async function handleCheckGoogleDrive() {
+    if (isCheckingGoogleDrive) {
+      return
+    }
+
+    setIsCheckingGoogleDrive(true)
+    setGoogleDriveError('')
+    setLatestGoogleDriveCsv(null)
+
+    try {
+      const data = await apiClient.getLatestGoogleDriveCsv()
+      setLatestGoogleDriveCsv(data)
+    } catch (error) {
+      setGoogleDriveError(error?.message || 'Google Drive controleren mislukt.')
+    } finally {
+      setIsCheckingGoogleDrive(false)
     }
   }
 
@@ -678,6 +716,42 @@ export default function Importbeheer() {
           </>
         ) : null}
         {importMessage ? <p>{importMessage}</p> : null}
+      </section>
+
+      <section className="card" style={{ marginTop: '1.75rem' }}>
+        <h3>Google Drive</h3>
+        <p style={{ marginTop: '0.65rem' }}>
+          Controleer welk CSV-bestand klaarstaat in de gekoppelde Google Drive-map. Importeren volgt in een
+          volgende stap.
+        </p>
+        {canImportCsv ? (
+          <button type="button" onClick={handleCheckGoogleDrive} disabled={isCheckingGoogleDrive}>
+            {isCheckingGoogleDrive ? 'Google Drive controleren...' : 'Controleer Google Drive'}
+          </button>
+        ) : null}
+        {googleDriveError ? <p>{googleDriveError}</p> : null}
+        {latestGoogleDriveCsv ? (
+          <div className="table-scroll" style={{ marginTop: '1rem' }}>
+            <table className="ingredients-table">
+              <thead>
+                <tr>
+                  <th>Nieuwste bestand</th>
+                  <th>Gewijzigd op</th>
+                  <th>Grootte</th>
+                  <th>Checksum</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>{latestGoogleDriveCsv.name || '-'}</td>
+                  <td>{formatDateTime(latestGoogleDriveCsv.modified_time)}</td>
+                  <td>{formatFileSize(latestGoogleDriveCsv.size)}</td>
+                  <td>{latestGoogleDriveCsv.checksum || '-'}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </section>
 
       <section className="card" style={{ marginTop: '1.75rem' }}>
