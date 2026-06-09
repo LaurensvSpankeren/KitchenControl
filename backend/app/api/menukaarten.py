@@ -249,23 +249,30 @@ def _get_menukaart_dish_snapshot(db: Session, gerecht: Dish, context: dict) -> d
 
 
 def _build_menukaart_margin_payload(db: Session, item: Menukaart, context: dict) -> dict:
-    margin_values: list[float] = []
+    margin_values: list[tuple[float, Dish]] = []
     for link in item.gerecht_links:
         dish_snapshot = _get_menukaart_dish_snapshot(db, link.gerecht, context)
         gross_margin_percent = dish_snapshot.get("gross_margin_percent")
         if gross_margin_percent is not None:
-            margin_values.append(float(gross_margin_percent))
+            margin_values.append((float(gross_margin_percent), link.gerecht))
 
     if not margin_values:
         return {
             "average_margin_percent": None,
+            "lowest_margin_percent": None,
+            "lowest_margin_dish_id": None,
+            "lowest_margin_dish_name": None,
             "margin_status": None,
         }
 
-    average_margin_percent = sum(margin_values) / len(margin_values)
+    average_margin_percent = sum(value for value, _ in margin_values) / len(margin_values)
+    lowest_margin_percent, lowest_margin_dish = min(margin_values, key=lambda entry: entry[0])
     return {
         "average_margin_percent": round(average_margin_percent, 1),
-        "margin_status": _get_margin_status(average_margin_percent),
+        "lowest_margin_percent": round(lowest_margin_percent, 1),
+        "lowest_margin_dish_id": lowest_margin_dish.id,
+        "lowest_margin_dish_name": lowest_margin_dish.name,
+        "margin_status": _get_margin_status(lowest_margin_percent),
     }
 
 

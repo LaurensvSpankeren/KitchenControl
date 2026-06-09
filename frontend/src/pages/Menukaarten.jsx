@@ -1925,7 +1925,7 @@ export default function Menukaarten() {
                   <th>Status</th>
                   <th style={{ minWidth: '260px' }}>Inhoud</th>
                   <th style={{ width: '140px' }}>Aantal gerechten</th>
-                  <th style={{ width: '90px', textAlign: 'center' }}>Marge</th>
+                  <th style={{ width: '130px', textAlign: 'center' }}>Laagste marge</th>
                   <th style={{ width: '160px' }}>Datum</th>
                   <th style={{ width: '120px' }}>Acties</th>
                 </tr>
@@ -1957,9 +1957,18 @@ export default function Menukaarten() {
                       )}
                     </td>
                     <td>{item.dish_count ?? 0}</td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td
+                      style={{ textAlign: 'center' }}
+                      title={
+                        item.lowest_margin_percent != null
+                          ? `Laagste marge: ${formatPercent(item.lowest_margin_percent)}${
+                              item.lowest_margin_dish_name ? ` — ${item.lowest_margin_dish_name}` : ''
+                            }`
+                          : undefined
+                      }
+                    >
                       {item.margin_status ? (
-                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.45rem' }}>
                           <span
                             style={{
                               display: 'inline-block',
@@ -1969,6 +1978,9 @@ export default function Menukaarten() {
                               background: getMarginDotColor(item.margin_status)
                             }}
                           />
+                          <span>
+                            {formatPercent(item.lowest_margin_percent ?? item.average_margin_percent)}
+                          </span>
                         </div>
                       ) : (
                         '-'
@@ -2336,8 +2348,20 @@ export default function Menukaarten() {
                             <div>{selectedMenukaart.dish_count ?? 0}</div>
                           </div>
                           <div style={generalInfoStyles.infoRow}>
-                            <div style={generalInfoStyles.infoLabel}>Gem. marge</div>
-                            <div>{formatPercent(selectedMenukaart.average_margin_percent)}</div>
+                            <div style={generalInfoStyles.infoLabel}>Laagste marge</div>
+                            <div>
+                              <div>
+                                {formatPercent(
+                                  selectedMenukaart.lowest_margin_percent ??
+                                    selectedMenukaart.average_margin_percent
+                                )}
+                              </div>
+                              {selectedMenukaart.lowest_margin_dish_name ? (
+                                <div style={generalInfoStyles.hint}>
+                                  {selectedMenukaart.lowest_margin_dish_name}
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                           <div style={generalInfoStyles.infoRow}>
                             <div style={generalInfoStyles.infoLabel}>Margestatus</div>
@@ -2353,7 +2377,12 @@ export default function Menukaarten() {
                                       background: getMarginDotColor(selectedMenukaart.margin_status)
                                     }}
                                   />
-                                  <span>{formatPercent(selectedMenukaart.average_margin_percent)}</span>
+                                  <span>
+                                    {formatPercent(
+                                      selectedMenukaart.lowest_margin_percent ??
+                                        selectedMenukaart.average_margin_percent
+                                    )}
+                                  </span>
                                 </>
                               ) : (
                                 <span>-</span>
