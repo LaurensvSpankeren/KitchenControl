@@ -167,8 +167,10 @@ export default function Importbeheer() {
   const [importMessage, setImportMessage] = useState('')
   const [isImporting, setIsImporting] = useState(false)
   const [latestGoogleDriveCsv, setLatestGoogleDriveCsv] = useState(null)
+  const [googleDriveImportMessage, setGoogleDriveImportMessage] = useState('')
   const [googleDriveError, setGoogleDriveError] = useState('')
   const [isCheckingGoogleDrive, setIsCheckingGoogleDrive] = useState(false)
+  const [isImportingGoogleDrive, setIsImportingGoogleDrive] = useState(false)
   const [issues, setIssues] = useState([])
   const [selectedIssueId, setSelectedIssueId] = useState(null)
   const [selectedIssue, setSelectedIssue] = useState(null)
@@ -338,11 +340,12 @@ export default function Importbeheer() {
   }
 
   async function handleCheckGoogleDrive() {
-    if (isCheckingGoogleDrive) {
+    if (isCheckingGoogleDrive || isImportingGoogleDrive) {
       return
     }
 
     setIsCheckingGoogleDrive(true)
+    setGoogleDriveImportMessage('')
     setGoogleDriveError('')
     setLatestGoogleDriveCsv(null)
 
@@ -353,6 +356,31 @@ export default function Importbeheer() {
       setGoogleDriveError(error?.message || 'Google Drive controleren mislukt.')
     } finally {
       setIsCheckingGoogleDrive(false)
+    }
+  }
+
+  async function handleImportGoogleDriveCsv() {
+    if (!latestGoogleDriveCsv?.file_id || isImportingGoogleDrive) {
+      return
+    }
+
+    setIsImportingGoogleDrive(true)
+    setGoogleDriveImportMessage('')
+    setGoogleDriveError('')
+
+    try {
+      const result = await apiClient.importGoogleDriveCsv({
+        file_id: latestGoogleDriveCsv.file_id,
+        checksum: latestGoogleDriveCsv.checksum || null
+      })
+      setGoogleDriveImportMessage(
+        `Import geslaagd: ${result.created} aangemaakt, ${result.updated} bijgewerkt`
+      )
+      await loadImportSignals()
+    } catch (error) {
+      setGoogleDriveError(error?.message || 'Google Drive-bestand importeren mislukt.')
+    } finally {
+      setIsImportingGoogleDrive(false)
     }
   }
 
@@ -721,36 +749,52 @@ export default function Importbeheer() {
       <section className="card" style={{ marginTop: '1.75rem' }}>
         <h3>Google Drive</h3>
         <p style={{ marginTop: '0.65rem' }}>
-          Controleer welk CSV-bestand klaarstaat in de gekoppelde Google Drive-map. Importeren volgt in een
-          volgende stap.
+          Controleer welk CSV-bestand klaarstaat in de gekoppelde Google Drive-map en importeer het daarna
+          bewust.
         </p>
         {canImportCsv ? (
-          <button type="button" onClick={handleCheckGoogleDrive} disabled={isCheckingGoogleDrive}>
+          <button
+            type="button"
+            onClick={handleCheckGoogleDrive}
+            disabled={isCheckingGoogleDrive || isImportingGoogleDrive}
+          >
             {isCheckingGoogleDrive ? 'Google Drive controleren...' : 'Controleer Google Drive'}
           </button>
         ) : null}
+        {googleDriveImportMessage ? <p>{googleDriveImportMessage}</p> : null}
         {googleDriveError ? <p>{googleDriveError}</p> : null}
         {latestGoogleDriveCsv ? (
-          <div className="table-scroll" style={{ marginTop: '1rem' }}>
-            <table className="ingredients-table">
-              <thead>
-                <tr>
-                  <th>Nieuwste bestand</th>
-                  <th>Gewijzigd op</th>
-                  <th>Grootte</th>
-                  <th>Checksum</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>{latestGoogleDriveCsv.name || '-'}</td>
-                  <td>{formatDateTime(latestGoogleDriveCsv.modified_time)}</td>
-                  <td>{formatFileSize(latestGoogleDriveCsv.size)}</td>
-                  <td>{latestGoogleDriveCsv.checksum || '-'}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="table-scroll" style={{ marginTop: '1rem' }}>
+              <table className="ingredients-table">
+                <thead>
+                  <tr>
+                    <th>Nieuwste bestand</th>
+                    <th>Gewijzigd op</th>
+                    <th>Grootte</th>
+                    <th>Checksum</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>{latestGoogleDriveCsv.name || '-'}</td>
+                    <td>{formatDateTime(latestGoogleDriveCsv.modified_time)}</td>
+                    <td>{formatFileSize(latestGoogleDriveCsv.size)}</td>
+                    <td>{latestGoogleDriveCsv.checksum || '-'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            {canImportCsv ? (
+              <button
+                type="button"
+                onClick={handleImportGoogleDriveCsv}
+                disabled={isImportingGoogleDrive}
+              >
+                {isImportingGoogleDrive ? 'Bezig met importeren...' : 'Importeer dit bestand'}
+              </button>
+            ) : null}
+          </>
         ) : null}
       </section>
 

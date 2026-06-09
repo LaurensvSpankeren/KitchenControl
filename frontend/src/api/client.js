@@ -292,6 +292,20 @@ export const apiClient = {
     }
     return response.json()
   },
+  async importGoogleDriveCsv(payload) {
+    const response = await apiFetch(`${API_BASE_URL}/api/imports/google-drive/import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to import Google Drive CSV: ${response.status}`)
+    }
+    return response.json()
+  },
   async getImportIssues(params = {}) {
     const searchParams = new URLSearchParams()
     if (params.status) {
