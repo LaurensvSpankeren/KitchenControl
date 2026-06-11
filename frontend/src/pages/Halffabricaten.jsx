@@ -204,14 +204,23 @@ function formatYield(value, unit) {
   return `${value} ${unit || ''}`.trim()
 }
 
-function formatPrintNumber(value) {
+function formatPrintNumber(value, unit) {
   const number = Number(value)
   if (!Number.isFinite(number)) {
     return '-'
   }
+  const normalizedUnit = normalizeUnit(unit)
+  const fractionDigitsByUnit = {
+    gram: 0,
+    ml: 0,
+    stuk: 0,
+    kg: 2,
+    liter: 2
+  }
+  const maximumFractionDigits = fractionDigitsByUnit[normalizedUnit] ?? 2
   return number.toLocaleString('nl-NL', {
     useGrouping: false,
-    maximumFractionDigits: 4
+    maximumFractionDigits
   })
 }
 
@@ -1818,7 +1827,7 @@ export default function Halffabricaten() {
             `<tr>
               <td>${escapeHtml(line.name || '-')}</td>
               <td>${escapeHtml(
-                `${formatPrintNumber(line.quantity)} ${line.unit || ''}`.trim()
+                `${formatPrintNumber(line.quantity, line.unit)} ${line.unit || ''}`.trim()
               )}</td>
             </tr>`
         )
@@ -1832,13 +1841,13 @@ export default function Halffabricaten() {
         .map((block) => {
           const rowsHtml = (block.rows || [])
             .map((row) => {
-              const required = `${formatPrintNumber(row.required_quantity)} ${
+              const required = `${formatPrintNumber(row.required_quantity, row.required_unit)} ${
                 row.required_unit || ''
               }`.trim()
               const order =
                 row.order_quantity === null || row.order_quantity === undefined
                   ? row.order_unit_label || 'Niet berekenbaar'
-                  : `${formatPrintNumber(row.order_quantity)} ${
+                  : `${formatPrintNumber(row.order_quantity, 'stuk')} ${
                       row.order_unit_label || ''
                     }`.trim()
               return `<tr>
