@@ -1183,6 +1183,20 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getDishPurchaseListPrintData(dishId, preparations) {
+    const response = await apiFetch(`${API_BASE_URL}/api/dishes/${dishId}/print-purchase-list`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ preparations })
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Inkooplijst genereren mislukt: ${response.status}`)
+    }
+    return response.json()
+  },
   getStatus() {
     return {
       message: 'API placeholder: requests worden later toegevoegd.',
