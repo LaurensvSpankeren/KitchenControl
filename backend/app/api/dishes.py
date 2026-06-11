@@ -17,6 +17,10 @@ from app.models.recipe_line import RecipeLine
 from app.models.recipe_step import RecipeStep
 from app.models.semi_finished_product import SemiFinishedProduct
 from app.models.user import has_permission
+from app.services.recipe_purchase_list import (
+    RecipePurchaseListError,
+    build_dish_purchase_list,
+)
 from app.api.semi_finished_products import (
     _build_semi_finished_detail,
     _convert_quantity_to_unit,
@@ -912,3 +916,31 @@ def get_dish_print_payload(
         "gross_margin_percent": detail["gross_margin_percent"],
         "food_cost_percent": detail["food_cost_percent"],
     }
+
+
+@router.post("/api/dishes/{dish_id}/print-purchase-list", tags=["dishes"])
+def get_dish_purchase_list_payload(
+    dish_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+) -> dict:
+    if not has_permission(current_user, "gerechten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
+    item = db.query(Dish).filter(Dish.id == dish_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Dish not found")
+
+    try:
+        preparations = Decimal(str(payload.get("preparations")))
+    except (ArithmeticError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Aantal bereidingen moet een geldig getal zijn.",
+        ) from exc
+
+    try:
+        return build_dish_purchase_list(db, item, preparations)
+    except RecipePurchaseListError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

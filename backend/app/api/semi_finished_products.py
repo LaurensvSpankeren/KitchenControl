@@ -12,6 +12,10 @@ from app.models.recipe_line import RecipeLine
 from app.models.recipe_step import RecipeStep
 from app.models.semi_finished_product import SemiFinishedProduct
 from app.models.user import has_permission
+from app.services.recipe_purchase_list import (
+    RecipePurchaseListError,
+    build_semi_finished_purchase_list,
+)
 
 router = APIRouter()
 
@@ -1037,6 +1041,44 @@ def get_semi_finished_product_print_payload(
         "storage_notes": detail["storage_notes"],
         "shelf_life_after_preparation_days": detail["shelf_life_after_preparation_days"],
     }
+
+
+@router.post(
+    "/api/semi-finished-products/{semi_finished_product_id}/print-purchase-list",
+    tags=["semi-finished-products"],
+)
+def get_semi_finished_product_purchase_list_payload(
+    semi_finished_product_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+) -> dict:
+    if not has_permission(current_user, "halffabricaten.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
+    item = db.query(SemiFinishedProduct).filter(
+        SemiFinishedProduct.id == semi_finished_product_id
+    ).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Semi finished product not found")
+
+    try:
+        target_quantity = Decimal(str(payload.get("target_quantity")))
+    except (ArithmeticError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Gewenst eindgewicht moet een geldig getal zijn.",
+        ) from exc
+
+    try:
+        return build_semi_finished_purchase_list(
+            db,
+            item,
+            target_quantity,
+            str(payload.get("unit") or ""),
+        )
+    except RecipePurchaseListError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/api/semi-finished-products/{semi_finished_product_id}/label", tags=["semi-finished-products"])
