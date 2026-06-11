@@ -824,6 +824,26 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getSemiFinishedProductPurchaseListPrintData(id, targetQuantity, unit) {
+    const response = await apiFetch(
+      `${API_BASE_URL}/api/semi-finished-products/${id}/print-purchase-list`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          target_quantity: targetQuantity,
+          unit
+        })
+      }
+    )
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Inkooplijst genereren mislukt: ${response.status}`)
+    }
+    return response.json()
+  },
   async getSemiFinishedProductLabel(id) {
     const response = await apiFetch(`${API_BASE_URL}/api/semi-finished-products/${id}/label`)
     if (!response.ok) {

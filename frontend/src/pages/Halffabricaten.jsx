@@ -204,6 +204,17 @@ function formatYield(value, unit) {
   return `${value} ${unit || ''}`.trim()
 }
 
+function formatPrintNumber(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) {
+    return '-'
+  }
+  return number.toLocaleString('nl-NL', {
+    useGrouping: false,
+    maximumFractionDigits: 4
+  })
+}
+
 function formatDateForInput(date) {
   const year = date.getFullYear()
   const month = `${date.getMonth() + 1}`.padStart(2, '0')
@@ -445,6 +456,11 @@ export default function Halffabricaten() {
   const [modalMessage, setModalMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false)
+  const [isPurchaseListPrintModalOpen, setIsPurchaseListPrintModalOpen] = useState(false)
+  const [purchaseListTargetQuantity, setPurchaseListTargetQuantity] = useState('')
+  const [purchaseListTargetUnit, setPurchaseListTargetUnit] = useState('')
+  const [purchaseListPrintError, setPurchaseListPrintError] = useState('')
+  const [isGeneratingPurchaseListPrint, setIsGeneratingPurchaseListPrint] = useState(false)
   const [labelProductionDate, setLabelProductionDate] = useState(formatDateForInput(new Date()))
   const [labelUseFridge, setLabelUseFridge] = useState(true)
   const [labelUseFreezer, setLabelUseFreezer] = useState(false)
@@ -1728,6 +1744,216 @@ export default function Halffabricaten() {
     }
   }
 
+  function openPurchaseListPrintModal() {
+    if (!selectedProductId) {
+      setErrorMessage('Sla eerst het halffabricaat op.')
+      return
+    }
+
+    const hasCurrentDetail = detail?.id === selectedProductId
+    const finalYieldAmount = hasCurrentDetail
+      ? detail.final_yield_amount
+      : formData.final_yield_amount
+    const parsedFinalYieldAmount = Number(finalYieldAmount)
+    if (
+      finalYieldAmount === null ||
+      finalYieldAmount === undefined ||
+      finalYieldAmount === '' ||
+      !Number.isFinite(parsedFinalYieldAmount) ||
+      parsedFinalYieldAmount <= 0
+    ) {
+      setErrorMessage('Vul eerst een eindgewicht in bij dit halffabricaat.')
+      return
+    }
+
+    setPurchaseListTargetQuantity(String(finalYieldAmount))
+    setPurchaseListTargetUnit(
+      (hasCurrentDetail ? detail.final_yield_unit : formData.final_yield_unit) || ''
+    )
+    setPurchaseListPrintError('')
+    setErrorMessage('')
+    setIsPurchaseListPrintModalOpen(true)
+  }
+
+  function closePurchaseListPrintModal() {
+    if (isGeneratingPurchaseListPrint) {
+      return
+    }
+    setIsPurchaseListPrintModalOpen(false)
+    setPurchaseListPrintError('')
+  }
+
+  async function handlePrintRecipeWithPurchaseList(event) {
+    event.preventDefault()
+
+    const rawTargetQuantity = String(purchaseListTargetQuantity).trim()
+    if (!rawTargetQuantity) {
+      setPurchaseListPrintError('Vul een gewenst eindgewicht in.')
+      return
+    }
+
+    const targetQuantity = Number(rawTargetQuantity)
+    if (!Number.isFinite(targetQuantity) || targetQuantity <= 0) {
+      setPurchaseListPrintError('Gewenst eindgewicht moet groter zijn dan 0.')
+      return
+    }
+    if (!selectedProductId) {
+      setPurchaseListPrintError('Sla eerst het halffabricaat op.')
+      return
+    }
+
+    setPurchaseListPrintError('')
+    setIsGeneratingPurchaseListPrint(true)
+    try {
+      const payload = await apiClient.getSemiFinishedProductPurchaseListPrintData(
+        selectedProductId,
+        targetQuantity,
+        purchaseListTargetUnit
+      )
+      const printDateTime = new Date().toLocaleString('nl-NL')
+
+      const recipeLinesHtml = (payload.scaled_recipe_lines || [])
+        .map(
+          (line) =>
+            `<tr>
+              <td>${escapeHtml(line.name || '-')}</td>
+              <td>${escapeHtml(
+                `${formatPrintNumber(line.quantity)} ${line.unit || ''}`.trim()
+              )}</td>
+            </tr>`
+        )
+        .join('')
+
+      const recipeStepsHtml = (payload.recipe_steps || [])
+        .map((step) => `<li>${escapeHtml(step.instruction || '')}</li>`)
+        .join('')
+
+      const purchaseBlocksHtml = (payload.purchase_blocks || [])
+        .map((block) => {
+          const rowsHtml = (block.rows || [])
+            .map((row) => {
+              const required = `${formatPrintNumber(row.required_quantity)} ${
+                row.required_unit || ''
+              }`.trim()
+              const order =
+                row.order_quantity === null || row.order_quantity === undefined
+                  ? row.order_unit_label || 'Niet berekenbaar'
+                  : `${formatPrintNumber(row.order_quantity)} ${
+                      row.order_unit_label || ''
+                    }`.trim()
+              return `<tr>
+                <td>${escapeHtml(row.name || '-')}</td>
+                <td>${escapeHtml(required)}</td>
+                <td>${escapeHtml(row.package_label || '-')}</td>
+                <td>${escapeHtml(order)}</td>
+              </tr>`
+            })
+            .join('')
+
+          return `<section class="purchase-block">
+            <h2>${escapeHtml(block.title || 'Inkoop')}</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Artikel</th>
+                  <th>Benodigd</th>
+                  <th>Verpakking</th>
+                  <th>Bestellen</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml || '<tr><td colspan="4">Geen inkoopregels</td></tr>'}</tbody>
+            </table>
+          </section>`
+        })
+        .join('')
+
+      const warningsHtml = (payload.warnings || [])
+        .map((warning) => `<li>${escapeHtml(warning)}</li>`)
+        .join('')
+
+      const printMarkup = `
+        <html>
+          <head>
+            <title>Recept met inkooplijst - ${escapeHtml(payload.title || '')}</title>
+            <style>
+              @page { size: A4; margin: 14mm; }
+              body { font-family: Arial, sans-serif; color: #111; margin: 0; font-size: 12px; }
+              .sheet { width: 100%; }
+              .header { margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #bdbdbd; }
+              h1 { margin: 0 0 6px; font-size: 26px; line-height: 1.15; }
+              h2 { margin: 18px 0 7px; font-size: 16px; }
+              .meta { color: #444; line-height: 1.5; }
+              table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 11px; }
+              th, td { border: 1px solid #cfcfcf; padding: 6px; text-align: left; vertical-align: top; }
+              th { background: #f2f2f2; font-weight: 700; }
+              ol, ul { margin: 7px 0 0 20px; padding: 0; }
+              li { margin-bottom: 4px; line-height: 1.4; }
+              .purchase-block { break-inside: avoid; page-break-inside: avoid; }
+              .warnings {
+                margin-top: 18px;
+                padding: 9px 11px;
+                border: 1px solid #999;
+                background: #fafafa;
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
+              .warnings h2 { margin-top: 0; }
+            </style>
+          </head>
+          <body>
+            <div class="sheet">
+              <div class="header">
+                <h1>${escapeHtml(payload.title || '')}</h1>
+                <div class="meta">
+                  <div><strong>Schaal:</strong> ${escapeHtml(payload.scale_label || '-')}</div>
+                  <div><strong>Printdatum:</strong> ${escapeHtml(printDateTime)}</div>
+                </div>
+              </div>
+              <h2>Recept</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Regel</th>
+                    <th>Hoeveelheid</th>
+                  </tr>
+                </thead>
+                <tbody>${recipeLinesHtml || '<tr><td colspan="2">Geen receptregels</td></tr>'}</tbody>
+              </table>
+              ${
+                recipeStepsHtml
+                  ? `<section>
+                      <h2>Bereidingswijze</h2>
+                      <ol>${recipeStepsHtml}</ol>
+                    </section>`
+                  : ''
+              }
+              ${purchaseBlocksHtml}
+              ${
+                warningsHtml
+                  ? `<section class="warnings">
+                      <h2>Waarschuwingen</h2>
+                      <ul>${warningsHtml}</ul>
+                    </section>`
+                  : ''
+              }
+            </div>
+          </body>
+        </html>
+      `
+
+      const didStartPrint = await printHtml(printMarkup, { windowFeatures: 'width=900,height=700' })
+      if (!didStartPrint) {
+        setPurchaseListPrintError('Printvenster kon niet worden geopend.')
+        return
+      }
+      setIsPurchaseListPrintModalOpen(false)
+    } catch (error) {
+      setPurchaseListPrintError(error?.message || 'Inkooplijst genereren mislukt.')
+    } finally {
+      setIsGeneratingPurchaseListPrint(false)
+    }
+  }
+
   const allergensText = detail?.allergens_total || 'Geen brondata allergenen beschikbaar'
   const visibleProducts = viewMode === 'archived' ? filteredArchivedProducts : filteredProducts
 
@@ -2452,6 +2678,11 @@ export default function Halffabricaten() {
             <div className="modal-actions sfp-actions">
               <div style={uiStyles.modalActionsLeft}>
                 <button type="button" className="table-action-btn" onClick={handlePrintRecipe}>Print keukenrecept</button>
+                {selectedProductId ? (
+                  <button type="button" className="table-action-btn" onClick={openPurchaseListPrintModal}>
+                    Print recept met inkooplijst
+                  </button>
+                ) : null}
                 <button type="button" className="table-action-btn" onClick={openLabelModal}>Print dagetiket</button>
               </div>
               <div style={uiStyles.modalActionsRight}>
@@ -2488,6 +2719,56 @@ export default function Halffabricaten() {
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
+      {isPurchaseListPrintModalOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" style={{ zIndex: 60 }}>
+          <form
+            className="modal-card"
+            style={{ width: 'min(460px, 100%)' }}
+            onSubmit={handlePrintRecipeWithPurchaseList}
+          >
+            <div className="modal-header">
+              <h3>Print recept met inkooplijst</h3>
+            </div>
+            <div className="modal-body">
+              {purchaseListPrintError ? (
+                <div className="modal-validation-banner">{purchaseListPrintError}</div>
+              ) : null}
+              <div className="modal-grid one-col calm-grid">
+                <label>
+                  Gewenst eindgewicht
+                  <input
+                    type="number"
+                    step="any"
+                    value={purchaseListTargetQuantity}
+                    disabled={isGeneratingPurchaseListPrint}
+                    autoFocus
+                    onChange={(event) => {
+                      setPurchaseListTargetQuantity(event.target.value)
+                      setPurchaseListPrintError('')
+                    }}
+                  />
+                </label>
+                <p className="form-info inline-message">
+                  Eenheid: {purchaseListTargetUnit || '-'}
+                </p>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-btn"
+                disabled={isGeneratingPurchaseListPrint}
+                onClick={closePurchaseListPrintModal}
+              >
+                Annuleren
+              </button>
+              <button type="submit" className="primary-btn" disabled={isGeneratingPurchaseListPrint}>
+                {isGeneratingPurchaseListPrint ? 'Genereren...' : 'Genereren'}
+              </button>
+            </div>
+          </form>
         </div>
       ) : null}
       {isLabelModalOpen ? (
