@@ -123,6 +123,60 @@ def _convert_ingredient_quantity(
     )
 
 
+def _calculate_weight_fallback_packages(
+    required_quantity: Decimal,
+    required_unit: str | None,
+    ingredient: Ingredient,
+) -> tuple[int, Decimal] | None:
+    if (
+        _normalize_unit(required_unit) not in WEIGHT_UNITS
+        or _normalize_unit(ingredient.calculation_unit) not in VOLUME_UNITS
+        or ingredient.package_weight_amount is None
+        or _normalize_unit(ingredient.package_weight_unit) not in WEIGHT_UNITS
+    ):
+        return None
+
+    required_grams = _convert_basic_quantity(required_quantity, required_unit, "gram")
+    package_weight_grams = _convert_basic_quantity(
+        Decimal(ingredient.package_weight_amount),
+        ingredient.package_weight_unit,
+        "gram",
+    )
+    if (
+        required_grams is None
+        or package_weight_grams is None
+        or package_weight_grams <= 0
+    ):
+        return None
+
+    packages = (required_grams / package_weight_grams).to_integral_value(
+        rounding=ROUND_CEILING
+    )
+    return int(packages), package_weight_grams
+
+
+def _format_package_volume(ingredient: Ingredient) -> str | None:
+    package_quantity = ingredient.calculation_quantity_per_package
+    calculation_unit = _normalize_unit(ingredient.calculation_unit)
+    if (
+        package_quantity is None
+        or Decimal(package_quantity) <= 0
+        or calculation_unit not in VOLUME_UNITS
+    ):
+        return None
+
+    package_ml = _convert_basic_quantity(
+        Decimal(package_quantity),
+        calculation_unit,
+        "ml",
+    )
+    if package_ml is None:
+        return None
+    if package_ml >= Decimal("1000"):
+        return f"{_format_decimal(package_ml / Decimal('1000'))} liter"
+    return f"{_format_decimal(package_ml)} ml"
+
+
 class _PurchaseListBuilder:
     def __init__(self, db: Session):
         self.db = db
@@ -383,23 +437,38 @@ class _PurchaseListBuilder:
         row["required_quantity"] = _to_json_number(required_quantity)
         package_quantity = ingredient.calculation_quantity_per_package
         if (
-            not conversion_ok
-            or package_quantity is None
-            or Decimal(package_quantity) <= 0
+            conversion_ok
+            and package_quantity is not None
+            and Decimal(package_quantity) > 0
         ):
-            row["order_quantity"] = None
-            row["order_unit_label"] = "Niet berekenbaar"
-            self.warn(
-                f'Bestelhoeveelheid voor "{ingredient.supplier_product_name}" '
-                "is niet berekenbaar door ontbrekende of incompatibele verpakkingsdata."
+            packages = (required_quantity / Decimal(package_quantity)).to_integral_value(
+                rounding=ROUND_CEILING
+            )
+            row["order_quantity"] = int(packages)
+            row["order_unit_label"] = self._get_order_unit_label(ingredient)
+            return
+
+        weight_fallback = _calculate_weight_fallback_packages(
+            required_quantity,
+            row.get("required_unit"),
+            ingredient,
+        )
+        if weight_fallback is not None:
+            packages, package_weight_grams = weight_fallback
+            row["order_quantity"] = packages
+            row["order_unit_label"] = self._get_order_unit_label(ingredient)
+            row["package_label"] = self._build_weight_fallback_package_label(
+                ingredient,
+                package_weight_grams,
             )
             return
 
-        packages = (required_quantity / Decimal(package_quantity)).to_integral_value(
-            rounding=ROUND_CEILING
+        row["order_quantity"] = None
+        row["order_unit_label"] = "Niet berekenbaar"
+        self.warn(
+            f'Bestelhoeveelheid voor "{ingredient.supplier_product_name}" '
+            "is niet berekenbaar door ontbrekende of incompatibele verpakkingsdata."
         )
-        row["order_quantity"] = int(packages)
-        row["order_unit_label"] = self._get_order_unit_label(ingredient)
 
     def _build_package_label(self, ingredient: Ingredient) -> str:
         package_name = (
@@ -422,6 +491,23 @@ class _PurchaseListBuilder:
         if ingredient.supplier_pack_description:
             return f"{package_name} · {ingredient.supplier_pack_description}"
         return package_name
+
+    def _build_weight_fallback_package_label(
+        self,
+        ingredient: Ingredient,
+        package_weight_grams: Decimal,
+    ) -> str:
+        package_name = (
+            ingredient.packaging_type
+            or ingredient.supplier_sales_unit_name
+            or ingredient.supplier_unit
+            or "Verpakking"
+        )
+        weight_label = f"{_format_decimal(package_weight_grams)} gram"
+        volume_label = _format_package_volume(ingredient)
+        if volume_label:
+            return f"{package_name} · {weight_label} / {volume_label}"
+        return f"{package_name} · {weight_label}"
 
     def _get_order_unit_label(self, ingredient: Ingredient) -> str:
         value = (
