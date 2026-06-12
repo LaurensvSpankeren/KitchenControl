@@ -135,6 +135,29 @@ function formatImportSignalLabel(signal) {
   return importSignalLabels[signal] || signal
 }
 
+function formatMatchDebugReason(reason) {
+  const reasons = {
+    multiple_strong_candidates:
+      'Er zijn meerdere sterke kandidaten gevonden. Daarom kiest KitchenControl niet automatisch één artikel.',
+    possible_candidates_only:
+      'Er zijn wel mogelijke kandidaten, maar geen unieke sterke match.',
+    no_matching_candidates: 'Er zijn geen passende importkandidaten gevonden.',
+    missing_supplier: 'Er kan niet gematcht worden omdat leverancier ontbreekt.',
+    single_strong_candidate: 'Er is één sterke kandidaat gevonden.'
+  }
+  return reasons[reason] || 'De match kon niet eenduidig worden vastgesteld.'
+}
+
+function formatMatchDebugCandidateResult(candidate) {
+  if (candidate?.would_be_strong) {
+    return 'Strong mogelijk'
+  }
+  if (candidate?.would_be_possible) {
+    return 'Mogelijk'
+  }
+  return 'Geen match'
+}
+
 function getImportSignalUsageCount(signal) {
   return Number(signal?.dish_count || 0) + Number(signal?.semi_finished_product_count || 0)
 }
@@ -201,6 +224,8 @@ export default function Importbeheer() {
   const [selectedManualMatchIngredient, setSelectedManualMatchIngredient] = useState(null)
   const [selectedImportMatchIngredient, setSelectedImportMatchIngredient] = useState(null)
   const [isLoadingMatchPreview, setIsLoadingMatchPreview] = useState(false)
+  const [matchDebugDialog, setMatchDebugDialog] = useState(null)
+  const [activeMatchDebugIngredientId, setActiveMatchDebugIngredientId] = useState(null)
   const [deleteDialog, setDeleteDialog] = useState(null)
   const [isDeletingIngredient, setIsDeletingIngredient] = useState(false)
   const currentUser = getCurrentUser()
@@ -483,6 +508,30 @@ export default function Importbeheer() {
     }
     setSelectedManualMatchIngredient(null)
     setSelectedImportMatchIngredient(null)
+  }
+
+  async function handleOpenMatchDebug(ingredient) {
+    if (!ingredient?.id || activeMatchDebugIngredientId) {
+      return
+    }
+
+    setActiveMatchDebugIngredientId(ingredient.id)
+    setManualMatchError('')
+    try {
+      const debugData = await apiClient.getManualIngredientMatchDebug(ingredient.id)
+      setMatchDebugDialog(debugData)
+    } catch (error) {
+      setManualMatchError(error?.message || 'Matchdetails laden mislukt.')
+    } finally {
+      setActiveMatchDebugIngredientId(null)
+    }
+  }
+
+  function closeMatchDebug() {
+    if (activeMatchDebugIngredientId) {
+      return
+    }
+    setMatchDebugDialog(null)
   }
 
   async function handleAcknowledgeImportSignal(signal) {
@@ -990,6 +1039,18 @@ export default function Importbeheer() {
                                     disabled={isBusy || isLoadingMatchPreview}
                                   >
                                     Bekijk match
+                                  </button>
+                                ) : null}
+                                {ingredient.match_status === 'possible' ? (
+                                  <button
+                                    type="button"
+                                    className="table-action-btn secondary-btn"
+                                    onClick={() => handleOpenMatchDebug(ingredient)}
+                                    disabled={isBusy || activeMatchDebugIngredientId === ingredient.id}
+                                  >
+                                    {activeMatchDebugIngredientId === ingredient.id
+                                      ? 'Laden...'
+                                      : 'Waarom?'}
                                   </button>
                                 ) : null}
                               </>
@@ -1542,6 +1603,129 @@ export default function Importbeheer() {
                   Koppelen
                 </button>
               ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {matchDebugDialog ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-card modal-wide">
+            <div className="modal-header">
+              <h3>Matchdetails</h3>
+            </div>
+
+            <div className="modal-body">
+              <p>
+                <strong>Eindstatus:</strong>{' '}
+                {matchDebugDialog.current_match_result?.match_status === 'strong'
+                  ? 'Sterke match'
+                  : matchDebugDialog.current_match_result?.match_status === 'possible'
+                    ? 'Mogelijke match'
+                    : 'Geen match'}
+              </p>
+              <p>{formatMatchDebugReason(matchDebugDialog.result_reason)}</p>
+
+              <div className="modal-grid two-col calm-grid" style={{ marginTop: '1rem' }}>
+                <label>
+                  Handmatig ingrediënt
+                  <input
+                    type="text"
+                    value={matchDebugDialog.manual_ingredient?.supplier_product_name || ''}
+                    readOnly
+                  />
+                </label>
+                <label>
+                  Artikelnummer
+                  <input
+                    type="text"
+                    value={matchDebugDialog.manual_ingredient?.supplier_product_code || ''}
+                    readOnly
+                  />
+                </label>
+                <label>
+                  Sterke kandidaten
+                  <input
+                    type="text"
+                    value={matchDebugDialog.strong_candidate_count ?? 0}
+                    readOnly
+                  />
+                </label>
+                <label>
+                  Mogelijke kandidaten
+                  <input
+                    type="text"
+                    value={matchDebugDialog.possible_candidate_count ?? 0}
+                    readOnly
+                  />
+                </label>
+              </div>
+
+              <h4 style={{ marginBottom: '0.5rem' }}>Kandidaten</h4>
+              {Array.isArray(matchDebugDialog.candidates) &&
+              matchDebugDialog.candidates.length > 0 ? (
+                <div className="table-scroll">
+                  <table className="ingredients-table">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>Artikelnummer</th>
+                        <th>Leverancier</th>
+                        <th>Verpakking / eenheid</th>
+                        <th>Rekeneenheid</th>
+                        <th>Code gelijk</th>
+                        <th>Naam vergelijkbaar</th>
+                        <th>Sterke eenheidsmatch</th>
+                        <th>Sterke rekeneenheidmatch</th>
+                        <th>Resultaat</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...matchDebugDialog.candidates]
+                        .sort(
+                          (left, right) =>
+                            Number(Boolean(right.would_be_strong)) -
+                              Number(Boolean(left.would_be_strong)) ||
+                            Number(Boolean(right.would_be_possible)) -
+                              Number(Boolean(left.would_be_possible)) ||
+                            Number(left.id || 0) - Number(right.id || 0)
+                        )
+                        .map((candidate) => (
+                          <tr key={`match-debug-${candidate.id}`}>
+                            <td>{candidate.supplier_product_name || '-'}</td>
+                            <td>{candidate.supplier_product_code || '-'}</td>
+                            <td>{candidate.supplier_name || '-'}</td>
+                            <td>
+                              {candidate.packaging_type ||
+                                candidate.supplier_sales_unit_name ||
+                                candidate.supplier_unit ||
+                                '-'}
+                            </td>
+                            <td>
+                              {candidate.calculation_quantity_per_package ||
+                              candidate.calculation_unit
+                                ? `${formatNumber(candidate.calculation_quantity_per_package)} ${candidate.calculation_unit || ''}`.trim()
+                                : '-'}
+                            </td>
+                            <td>{candidate.has_code_match ? 'Ja' : 'Nee'}</td>
+                            <td>{candidate.has_name_match ? 'Ja' : 'Nee'}</td>
+                            <td>{candidate.strong_unit_match ? 'Ja' : 'Nee'}</td>
+                            <td>{candidate.strong_calculation_match ? 'Ja' : 'Nee'}</td>
+                            <td>{formatMatchDebugCandidateResult(candidate)}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p>Geen kandidaten gevonden.</p>
+              )}
+            </div>
+
+            <div className="modal-actions">
+              <button type="button" className="secondary-btn" onClick={closeMatchDebug}>
+                Sluiten
+              </button>
             </div>
           </div>
         </div>

@@ -357,6 +357,14 @@ export const apiClient = {
     }
     return response.json()
   },
+  async getManualIngredientMatchDebug(id) {
+    const response = await apiFetch(`${API_BASE_URL}/api/manual-ingredients/${id}/match-debug`)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to fetch manual ingredient match debug: ${response.status}`)
+    }
+    return response.json()
+  },
   async getStaleImportIngredients() {
     const response = await apiFetch(`${API_BASE_URL}/api/import-ingredients/stale`)
     if (!response.ok) {

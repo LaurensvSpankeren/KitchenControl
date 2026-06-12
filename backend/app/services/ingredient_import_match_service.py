@@ -260,11 +260,13 @@ def build_import_match_debug_for_manual_ingredient(db: Session, manual_ingredien
         candidate_debug.append(
             {
                 "id": ingredient.id,
+                "supplier_name": ingredient.supplier_name,
                 "supplier_product_code": ingredient.supplier_product_code,
                 "supplier_product_name": ingredient.supplier_product_name,
                 "supplier_unit": ingredient.supplier_unit,
                 "supplier_sales_unit_code": ingredient.supplier_sales_unit_code,
                 "supplier_sales_unit_name": ingredient.supplier_sales_unit_name,
+                "packaging_type": ingredient.packaging_type,
                 "calculation_unit": ingredient.calculation_unit,
                 "calculation_quantity_per_package": float(ingredient.calculation_quantity_per_package)
                 if ingredient.calculation_quantity_per_package is not None
@@ -279,6 +281,26 @@ def build_import_match_debug_for_manual_ingredient(db: Session, manual_ingredien
                 "would_be_possible": would_be_possible,
             }
         )
+
+    strong_candidate_count = sum(
+        1 for candidate in candidate_debug if candidate["would_be_strong"]
+    )
+    possible_candidate_count = sum(
+        1
+        for candidate in candidate_debug
+        if candidate["would_be_possible"] and not candidate["would_be_strong"]
+    )
+
+    if normalized_supplier_name is None:
+        result_reason = "missing_supplier"
+    elif strong_candidate_count == 1:
+        result_reason = "single_strong_candidate"
+    elif strong_candidate_count > 1:
+        result_reason = "multiple_strong_candidates"
+    elif possible_candidate_count > 0:
+        result_reason = "possible_candidates_only"
+    else:
+        result_reason = "no_matching_candidates"
 
     return {
         "manual_ingredient": {
@@ -295,6 +317,9 @@ def build_import_match_debug_for_manual_ingredient(db: Session, manual_ingredien
             else None,
         },
         "current_match_result": detect_import_match_for_manual_ingredient(db, manual_ingredient),
+        "result_reason": result_reason,
+        "strong_candidate_count": strong_candidate_count,
+        "possible_candidate_count": possible_candidate_count,
         "candidate_count": len(candidate_debug),
         "candidates": candidate_debug,
     }

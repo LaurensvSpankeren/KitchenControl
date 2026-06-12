@@ -618,8 +618,13 @@ def get_ingredient(
 def get_manual_ingredient_match_debug(
     ingredient_id: int,
     db: Session = Depends(get_db),
-    _current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ) -> dict:
+    if not has_permission(current_user, "importbeheer.bekijken", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+    if not has_permission(current_user, "importbeheer.matchen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
     ingredient = db.query(Ingredient).filter(Ingredient.id == ingredient_id).first()
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
