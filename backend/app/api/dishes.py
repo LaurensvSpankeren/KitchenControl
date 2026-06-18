@@ -1,3 +1,4 @@
+import logging
 from io import BytesIO
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -7,6 +8,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.dish import Dish
 from app.models.ingredient import Ingredient
@@ -23,6 +25,7 @@ from app.services.recipe_purchase_list import (
 from app.services.storage import (
     StorageConfigurationError,
     StorageUploadError,
+    delete_r2_object_for_public_url,
     save_dish_photo,
 )
 from app.api.semi_finished_products import (
@@ -34,6 +37,7 @@ from app.api.semi_finished_products import (
 
 router = APIRouter()
 ACTIVE_MENU_STATUSES = {"active", "concept"}
+logger = logging.getLogger(__name__)
 
 
 def _parse_optional_float(payload: dict, field_name: str) -> float | None:
@@ -146,6 +150,26 @@ def _build_duplicate_name(db: Session, original_name: str) -> str:
         if exists is None:
             return candidate
         index += 1
+
+
+def _cleanup_deleted_dish_photo(
+    db: Session, dish_id: int, photo_path: str | None
+) -> None:
+    if not photo_path or not settings.r2_public_base_url:
+        return
+
+    expected_photo_path = f"{settings.r2_public_base_url}/dishes/dish_{dish_id}.jpg"
+    if str(photo_path).strip() != expected_photo_path:
+        return
+
+    shared_photo = db.query(Dish.id).filter(Dish.photo_path == photo_path).first()
+    if shared_photo is not None:
+        return
+
+    try:
+        delete_r2_object_for_public_url(photo_path)
+    except Exception:
+        logger.warning("R2-foto opruimen mislukt voor gerecht %s.", dish_id, exc_info=True)
 
 
 def _format_blocking_names(names: list[str], max_items: int = 3) -> str:
@@ -857,6 +881,7 @@ def delete_dish(
     item = db.query(Dish).filter(Dish.id == dish_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Dish not found")
+    photo_path = item.photo_path
 
     (
         db.query(RecipeLine)
@@ -871,6 +896,7 @@ def delete_dish(
 
     db.delete(item)
     db.commit()
+    _cleanup_deleted_dish_photo(db, dish_id, photo_path)
     return {"status": "deleted", "dish_id": dish_id}
 
 

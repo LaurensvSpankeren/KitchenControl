@@ -1,3 +1,5 @@
+from urllib.parse import unquote
+
 from app.core.config import settings
 
 
@@ -6,6 +8,10 @@ class StorageConfigurationError(RuntimeError):
 
 
 class StorageUploadError(RuntimeError):
+    pass
+
+
+class StorageDeleteError(RuntimeError):
     pass
 
 
@@ -98,6 +104,34 @@ def _save_semi_finished_product_photo_r2(
         raise StorageUploadError("Foto uploaden naar Cloudflare R2 mislukt.") from exc
 
     return f"{settings.r2_public_base_url}/{key}"
+
+
+def _r2_object_key_from_public_url(public_url: str | None) -> str | None:
+    if not public_url or not settings.r2_public_base_url:
+        return None
+
+    value = str(public_url).strip()
+    base_url = settings.r2_public_base_url.rstrip("/")
+    if not value.startswith(f"{base_url}/"):
+        return None
+
+    key = value[len(base_url) + 1 :].split("?", 1)[0].split("#", 1)[0].lstrip("/")
+    if not key:
+        return None
+    return unquote(key)
+
+
+def delete_r2_object_for_public_url(public_url: str | None) -> bool:
+    key = _r2_object_key_from_public_url(public_url)
+    if key is None:
+        return False
+
+    client = _get_r2_client()
+    try:
+        client.delete_object(Bucket=settings.r2_bucket_name, Key=key)
+    except Exception as exc:
+        raise StorageDeleteError("Foto verwijderen uit Cloudflare R2 mislukt.") from exc
+    return True
 
 
 def save_dish_photo(dish_id: int, image_bytes: bytes) -> str:

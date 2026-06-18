@@ -1,3 +1,4 @@
+import logging
 from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
@@ -7,6 +8,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.dish import Dish
 from app.models.ingredient import Ingredient
@@ -21,10 +23,12 @@ from app.services.recipe_purchase_list import (
 from app.services.storage import (
     StorageConfigurationError,
     StorageUploadError,
+    delete_r2_object_for_public_url,
     save_semi_finished_product_photo,
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 ALLERGEN_PLACEHOLDERS = {"-", "--", "nvt", "n.v.t.", "geen", "none", "null"}
 KNOWN_ALLERGENS = {
@@ -301,6 +305,37 @@ def _build_duplicate_name(db: Session, original_name: str) -> str:
         if exists is None:
             return candidate
         index += 1
+
+
+def _cleanup_deleted_semi_finished_product_photo(
+    db: Session, semi_finished_product_id: int, photo_url: str | None
+) -> None:
+    if not photo_url or not settings.r2_public_base_url:
+        return
+
+    expected_photo_url = (
+        f"{settings.r2_public_base_url}/semi_finished_products/"
+        f"semi_finished_product_{semi_finished_product_id}.jpg"
+    )
+    if str(photo_url).strip() != expected_photo_url:
+        return
+
+    shared_photo = (
+        db.query(SemiFinishedProduct.id)
+        .filter(SemiFinishedProduct.photo_url == photo_url)
+        .first()
+    )
+    if shared_photo is not None:
+        return
+
+    try:
+        delete_r2_object_for_public_url(photo_url)
+    except Exception:
+        logger.warning(
+            "R2-foto opruimen mislukt voor halffabricaat %s.",
+            semi_finished_product_id,
+            exc_info=True,
+        )
 
 
 def _to_calculation_quantity(line: RecipeLine, ingredient: Ingredient) -> Decimal:
@@ -1028,6 +1063,7 @@ def delete_semi_finished_product(
     item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
     if item is None:
         raise HTTPException(status_code=404, detail="Semi finished product not found")
+    photo_url = item.photo_url
 
     (
         db.query(RecipeLine)
@@ -1048,6 +1084,7 @@ def delete_semi_finished_product(
 
     db.delete(item)
     db.commit()
+    _cleanup_deleted_semi_finished_product_photo(db, semi_finished_product_id, photo_url)
     return {"status": "deleted", "semi_finished_product_id": semi_finished_product_id}
 
 
