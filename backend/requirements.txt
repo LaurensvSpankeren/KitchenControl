@@ -7,3 +7,4 @@ google-auth
 psycopg2-binary
 python-multipart
 Pillow
+boto3

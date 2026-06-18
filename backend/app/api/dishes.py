@@ -7,7 +7,6 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
-from app.core.config import settings
 from app.db.session import get_db
 from app.models.dish import Dish
 from app.models.ingredient import Ingredient
@@ -21,6 +20,11 @@ from app.services.recipe_purchase_list import (
     RecipePurchaseListError,
     build_dish_purchase_list,
 )
+from app.services.storage import (
+    StorageConfigurationError,
+    StorageUploadError,
+    save_dish_photo,
+)
 from app.api.semi_finished_products import (
     _build_semi_finished_detail,
     _convert_quantity_to_unit,
@@ -29,8 +33,6 @@ from app.api.semi_finished_products import (
 )
 
 router = APIRouter()
-UPLOADS_DIR = settings.uploads_dir
-UPLOADS_DISHES_DIR = UPLOADS_DIR / "dishes"
 ACTIVE_MENU_STATUSES = {"active", "concept"}
 
 
@@ -190,10 +192,14 @@ def _save_dish_photo(dish_id: int, uploaded_file: UploadFile) -> str:
     image = image.convert("RGB")
     image.thumbnail((1200, 1200))
 
-    UPLOADS_DISHES_DIR.mkdir(parents=True, exist_ok=True)
-    target_path = UPLOADS_DISHES_DIR / f"dish_{dish_id}.jpg"
-    image.save(target_path, format="JPEG", quality=82, optimize=True)
-    return f"/uploads/dishes/{target_path.name}"
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG", quality=82, optimize=True)
+    try:
+        return save_dish_photo(dish_id, buffer.getvalue())
+    except StorageConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except StorageUploadError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 def _build_dish_detail(db: Session, item: Dish) -> dict:

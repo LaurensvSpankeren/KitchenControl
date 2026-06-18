@@ -28,6 +28,13 @@ class Settings:
         os.getenv("DATABASE_URL", "sqlite:///./kitchencontrol.db")
     )
     uploads_dir: Path = Path(os.getenv("UPLOADS_DIR", "uploads"))
+    storage_backend: str = os.getenv("STORAGE_BACKEND", "local").strip().lower() or "local"
+    r2_account_id: str = os.getenv("R2_ACCOUNT_ID", "").strip()
+    r2_access_key_id: str = os.getenv("R2_ACCESS_KEY_ID", "").strip()
+    r2_secret_access_key: str = os.getenv("R2_SECRET_ACCESS_KEY", "")
+    r2_bucket_name: str = os.getenv("R2_BUCKET_NAME", "").strip()
+    r2_public_base_url: str = os.getenv("R2_PUBLIC_BASE_URL", "").strip().rstrip("/")
+    r2_endpoint_url: str = os.getenv("R2_ENDPOINT_URL", "").strip()
     google_drive_import_enabled: bool = _env_flag("GOOGLE_DRIVE_IMPORT_ENABLED")
     google_drive_folder_id: str = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "").strip()
     google_service_account_file: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "").strip()
