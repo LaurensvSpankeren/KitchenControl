@@ -474,6 +474,7 @@ export default function Halffabricaten() {
   const [editingLineQuantity, setEditingLineQuantity] = useState('')
   const [editingLineUnit, setEditingLineUnit] = useState('')
   const [photoSourceMode, setPhotoSourceMode] = useState('upload')
+  const [lastUploadedSemiFinishedPhotoUrl, setLastUploadedSemiFinishedPhotoUrl] = useState('')
   const [isEditingPhotoUrl, setIsEditingPhotoUrl] = useState(true)
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const [isSelectedArchived, setIsSelectedArchived] = useState(false)
@@ -915,6 +916,7 @@ export default function Halffabricaten() {
     setEditingLineQuantity('')
     setEditingLineUnit('')
     setPhotoSourceMode('upload')
+    setLastUploadedSemiFinishedPhotoUrl('')
     setIsEditingPhotoUrl(true)
     setIsSelectedArchived(false)
     setShowNewCategoryInput(false)
@@ -942,6 +944,7 @@ export default function Halffabricaten() {
     setEditingLineQuantity('')
     setEditingLineUnit('')
     setPhotoSourceMode(isUploadedSemiFinishedPhotoUrl(product.photo_url) ? 'upload' : 'url')
+    setLastUploadedSemiFinishedPhotoUrl('')
     setIsEditingPhotoUrl(!String(product.photo_url || '').trim())
     setIsSelectedArchived(sourceView === 'archived' || !!product.is_archived)
     setShowNewCategoryInput(false)
@@ -1114,6 +1117,7 @@ export default function Halffabricaten() {
         return
       }
     }
+    setLastUploadedSemiFinishedPhotoUrl('')
     setIsModalOpen(false)
   }
 
@@ -1132,6 +1136,10 @@ export default function Halffabricaten() {
     setPhotoSourceMode(value)
     if (value === 'url') {
       setIsEditingPhotoUrl(true)
+    }
+    if (value === 'upload' && lastUploadedSemiFinishedPhotoUrl) {
+      setFormData((prev) => ({ ...prev, photo_url: lastUploadedSemiFinishedPhotoUrl }))
+      setIsEditingPhotoUrl(false)
     }
   }
 
@@ -1156,8 +1164,10 @@ export default function Halffabricaten() {
     setModalMessage('')
     try {
       const updatedProduct = await apiClient.uploadSemiFinishedProductPhoto(selectedProductId, file)
-      setFormData((prev) => ({ ...prev, photo_url: updatedProduct.photo_url || '' }))
-      setDetail((prev) => (prev ? { ...prev, photo_url: updatedProduct.photo_url || '' } : prev))
+      const uploadedPhotoUrl = updatedProduct.photo_url || ''
+      setLastUploadedSemiFinishedPhotoUrl(uploadedPhotoUrl)
+      setFormData((prev) => ({ ...prev, photo_url: uploadedPhotoUrl }))
+      setDetail((prev) => (prev ? { ...prev, photo_url: uploadedPhotoUrl } : prev))
       setIsEditingPhotoUrl(false)
       await loadProducts()
       await loadDetail(selectedProductId)
