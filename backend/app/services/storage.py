@@ -17,6 +17,16 @@ def _save_dish_photo_local(dish_id: int, image_bytes: bytes) -> str:
     return f"/uploads/dishes/{target_path.name}"
 
 
+def _save_semi_finished_product_photo_local(
+    semi_finished_product_id: int, image_bytes: bytes
+) -> str:
+    uploads_dir = settings.uploads_dir / "semi_finished_products"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    target_path = uploads_dir / f"semi_finished_product_{semi_finished_product_id}.jpg"
+    target_path.write_bytes(image_bytes)
+    return f"/uploads/semi_finished_products/{target_path.name}"
+
+
 def _get_r2_client():
     try:
         import boto3
@@ -71,11 +81,46 @@ def _save_dish_photo_r2(dish_id: int, image_bytes: bytes) -> str:
     return f"{settings.r2_public_base_url}/{key}"
 
 
+def _save_semi_finished_product_photo_r2(
+    semi_finished_product_id: int, image_bytes: bytes
+) -> str:
+    key = f"semi_finished_products/semi_finished_product_{semi_finished_product_id}.jpg"
+    client = _get_r2_client()
+
+    try:
+        client.put_object(
+            Bucket=settings.r2_bucket_name,
+            Key=key,
+            Body=image_bytes,
+            ContentType="image/jpeg",
+        )
+    except Exception as exc:
+        raise StorageUploadError("Foto uploaden naar Cloudflare R2 mislukt.") from exc
+
+    return f"{settings.r2_public_base_url}/{key}"
+
+
 def save_dish_photo(dish_id: int, image_bytes: bytes) -> str:
     backend = settings.storage_backend
     if backend == "local":
         return _save_dish_photo_local(dish_id, image_bytes)
     if backend == "r2":
         return _save_dish_photo_r2(dish_id, image_bytes)
+
+    raise StorageConfigurationError(f"Onbekende storage backend: {backend}.")
+
+
+def save_semi_finished_product_photo(
+    semi_finished_product_id: int, image_bytes: bytes
+) -> str:
+    backend = settings.storage_backend
+    if backend == "local":
+        return _save_semi_finished_product_photo_local(
+            semi_finished_product_id, image_bytes
+        )
+    if backend == "r2":
+        return _save_semi_finished_product_photo_r2(
+            semi_finished_product_id, image_bytes
+        )
 
     raise StorageConfigurationError(f"Onbekende storage backend: {backend}.")

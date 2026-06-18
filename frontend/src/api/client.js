@@ -805,6 +805,20 @@ export const apiClient = {
     }
     return response.json()
   },
+  async uploadSemiFinishedProductPhoto(id, file) {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await apiFetch(`${API_BASE_URL}/api/semi-finished-products/${id}/photo`, {
+      method: 'POST',
+      body: formData
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.detail || `Failed to upload semi-finished product photo: ${response.status}`)
+    }
+    return response.json()
+  },
   async getSemiFinishedProductDetail(id) {
     const response = await apiFetch(`${API_BASE_URL}/api/semi-finished-products/${id}`)
     if (!response.ok) {

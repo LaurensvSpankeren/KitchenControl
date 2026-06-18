@@ -424,6 +424,25 @@ function mapFormToPayload(form) {
   }
 }
 
+function isUploadedSemiFinishedPhotoUrl(value) {
+  const photoUrl = String(value || '')
+  return (
+    photoUrl.includes('/uploads/semi_finished_products/') ||
+    photoUrl.includes('/semi_finished_products/semi_finished_product_')
+  )
+}
+
+function resolveSemiFinishedPhotoUrl(value) {
+  const photoUrl = String(value || '').trim()
+  if (!photoUrl) {
+    return ''
+  }
+  if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
+    return photoUrl
+  }
+  return `${API_BASE_URL}${photoUrl.startsWith('/') ? photoUrl : `/${photoUrl}`}`
+}
+
 export default function Halffabricaten() {
   const [permissions, setPermissions] = useState(defaultPermissions)
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false)
@@ -454,7 +473,9 @@ export default function Halffabricaten() {
   const [editingLineId, setEditingLineId] = useState(null)
   const [editingLineQuantity, setEditingLineQuantity] = useState('')
   const [editingLineUnit, setEditingLineUnit] = useState('')
+  const [photoSourceMode, setPhotoSourceMode] = useState('upload')
   const [isEditingPhotoUrl, setIsEditingPhotoUrl] = useState(true)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const [isSelectedArchived, setIsSelectedArchived] = useState(false)
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -893,6 +914,7 @@ export default function Halffabricaten() {
     setEditingLineId(null)
     setEditingLineQuantity('')
     setEditingLineUnit('')
+    setPhotoSourceMode('upload')
     setIsEditingPhotoUrl(true)
     setIsSelectedArchived(false)
     setShowNewCategoryInput(false)
@@ -919,6 +941,7 @@ export default function Halffabricaten() {
     setEditingLineId(null)
     setEditingLineQuantity('')
     setEditingLineUnit('')
+    setPhotoSourceMode(isUploadedSemiFinishedPhotoUrl(product.photo_url) ? 'upload' : 'url')
     setIsEditingPhotoUrl(!String(product.photo_url || '').trim())
     setIsSelectedArchived(sourceView === 'archived' || !!product.is_archived)
     setShowNewCategoryInput(false)
@@ -1100,6 +1123,50 @@ export default function Halffabricaten() {
     }
     setFormData((prev) => ({ ...prev, [field]: value }))
     setIsModalDirty(true)
+  }
+
+  function handlePhotoSourceModeChange(value) {
+    if (isReadOnlyModal) {
+      return
+    }
+    setPhotoSourceMode(value)
+    if (value === 'url') {
+      setIsEditingPhotoUrl(true)
+    }
+  }
+
+  async function handleSemiFinishedPhotoUpload(event) {
+    if (isReadOnlyModal) {
+      return
+    }
+
+    const file = event.target.files?.[0] || null
+    event.target.value = ''
+    if (!file) {
+      return
+    }
+
+    if (!selectedProductId) {
+      setErrorMessage('Sla het halffabricaat eerst op voordat je een eigen foto uploadt.')
+      return
+    }
+
+    setIsUploadingPhoto(true)
+    setErrorMessage('')
+    setModalMessage('')
+    try {
+      const updatedProduct = await apiClient.uploadSemiFinishedProductPhoto(selectedProductId, file)
+      setFormData((prev) => ({ ...prev, photo_url: updatedProduct.photo_url || '' }))
+      setDetail((prev) => (prev ? { ...prev, photo_url: updatedProduct.photo_url || '' } : prev))
+      setIsEditingPhotoUrl(false)
+      await loadProducts()
+      await loadDetail(selectedProductId)
+      setModalMessage('Foto geüpload.')
+    } catch (error) {
+      setErrorMessage(error?.message || 'Foto uploaden mislukt.')
+    } finally {
+      setIsUploadingPhoto(false)
+    }
   }
 
   function handleCategoryChange(value) {
@@ -1964,6 +2031,7 @@ export default function Halffabricaten() {
   }
 
   const allergensText = detail?.allergens_total || 'Geen brondata allergenen beschikbaar'
+  const resolvedPhotoUrl = resolveSemiFinishedPhotoUrl(formData.photo_url)
   const visibleProducts = viewMode === 'archived' ? filteredArchivedProducts : filteredProducts
 
   return (
@@ -2181,20 +2249,69 @@ export default function Halffabricaten() {
               <section className="modal-section">
                 <h4>Basis</h4>
                 <div className="modal-grid two-col calm-grid">
-                  <label>
-                    Foto URL
-                    {!formData.photo_url.trim() || isEditingPhotoUrl ? (
-                      <input
-                        type="text"
-                        placeholder="https://..."
-                        value={formData.photo_url}
-                        readOnly={isReadOnlyModal}
-                        onChange={(event) => handleFormChange('photo_url', event.target.value)}
-                      />
+                  <div>
+                    <span style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>
+                      Afbeelding
+                    </span>
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <input
+                          type="radio"
+                          name="semi-finished-photo-source"
+                          checked={photoSourceMode === 'upload'}
+                          disabled={isReadOnlyModal}
+                          onChange={() => handlePhotoSourceModeChange('upload')}
+                        />
+                        Eigen foto uploaden
+                      </label>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <input
+                          type="radio"
+                          name="semi-finished-photo-source"
+                          checked={photoSourceMode === 'url'}
+                          disabled={isReadOnlyModal}
+                          onChange={() => handlePhotoSourceModeChange('url')}
+                        />
+                        Webafbeelding gebruiken
+                      </label>
+                    </div>
+
+                    {photoSourceMode === 'upload' ? (
+                      <div style={{ marginTop: '0.6rem' }}>
+                        {!selectedProductId ? (
+                          <p className="form-info inline-message">
+                            Sla het halffabricaat eerst op voordat je een eigen foto uploadt.
+                          </p>
+                        ) : (
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={isReadOnlyModal || isUploadingPhoto}
+                            onChange={handleSemiFinishedPhotoUpload}
+                          />
+                        )}
+                        {isUploadingPhoto ? (
+                          <p className="form-info inline-message">Foto uploaden...</p>
+                        ) : null}
+                      </div>
                     ) : (
+                      <div style={{ marginTop: '0.6rem' }}>
+                        {!formData.photo_url.trim() || isEditingPhotoUrl ? (
+                          <input
+                            type="text"
+                            placeholder="https://..."
+                            value={formData.photo_url}
+                            readOnly={isReadOnlyModal}
+                            onChange={(event) => handleFormChange('photo_url', event.target.value)}
+                          />
+                        ) : null}
+                      </div>
+                    )}
+
+                    {formData.photo_url.trim() ? (
                       <div style={uiStyles.photoPreviewWrap}>
                         <a
-                          href={formData.photo_url}
+                          href={resolvedPhotoUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={uiStyles.photoLink}
@@ -2202,11 +2319,11 @@ export default function Halffabricaten() {
                           {formData.photo_url}
                         </a>
                         <img
-                          src={formData.photo_url}
+                          src={resolvedPhotoUrl}
                           alt="Foto preview"
                           style={uiStyles.photoPreview}
                         />
-                        {canEditProducts ? (
+                        {canEditProducts && photoSourceMode === 'url' && !isEditingPhotoUrl ? (
                           <button
                             type="button"
                             className="table-action-btn"
@@ -2217,8 +2334,8 @@ export default function Halffabricaten() {
                           </button>
                         ) : null}
                       </div>
-                    )}
-                  </label>
+                    ) : null}
+                  </div>
                   <label>
                     Naam
                     <input

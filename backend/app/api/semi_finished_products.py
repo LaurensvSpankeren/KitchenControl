@@ -1,7 +1,9 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from io import BytesIO
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
@@ -15,6 +17,11 @@ from app.models.user import has_permission
 from app.services.recipe_purchase_list import (
     RecipePurchaseListError,
     build_semi_finished_purchase_list,
+)
+from app.services.storage import (
+    StorageConfigurationError,
+    StorageUploadError,
+    save_semi_finished_product_photo,
 )
 
 router = APIRouter()
@@ -240,6 +247,31 @@ def _apply_semi_finished_payload(item: SemiFinishedProduct, payload: dict) -> No
     )
     item.storage_fridge_days = _parse_optional_int(payload, "storage_fridge_days")
     item.storage_freezer_days = _parse_optional_int(payload, "storage_freezer_days")
+
+
+def _save_semi_finished_product_photo(
+    semi_finished_product_id: int, uploaded_file: UploadFile
+) -> str:
+    try:
+        raw_bytes = uploaded_file.file.read()
+        image = Image.open(BytesIO(raw_bytes))
+        image = ImageOps.exif_transpose(image)
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Ongeldig afbeeldingsbestand.") from exc
+
+    image = image.convert("RGB")
+    image.thumbnail((1200, 1200))
+
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG", quality=82, optimize=True)
+    try:
+        return save_semi_finished_product_photo(
+            semi_finished_product_id, buffer.getvalue()
+        )
+    except StorageConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except StorageUploadError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 def _serialize_recipe_steps(steps: list[RecipeStep]) -> list[dict]:
@@ -586,6 +618,30 @@ def update_semi_finished_product(
         raise HTTPException(status_code=404, detail="Semi finished product not found")
 
     _apply_semi_finished_payload(item, payload)
+    db.commit()
+    db.refresh(item)
+    return _serialize_semi_finished_product(item)
+
+
+@router.post("/api/semi-finished-products/{semi_finished_product_id}/photo", tags=["semi-finished-products"])
+def upload_semi_finished_product_photo(
+    semi_finished_product_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+) -> dict:
+    if not has_permission(current_user, "halffabricaten.wijzigen", db):
+        raise HTTPException(status_code=403, detail="Je hebt geen rechten om deze actie uit te voeren")
+
+    item = db.query(SemiFinishedProduct).filter(SemiFinishedProduct.id == semi_finished_product_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Semi finished product not found")
+
+    content_type = (file.content_type or "").lower()
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Bestand moet een afbeelding zijn.")
+
+    item.photo_url = _save_semi_finished_product_photo(semi_finished_product_id, file)
     db.commit()
     db.refresh(item)
     return _serialize_semi_finished_product(item)
