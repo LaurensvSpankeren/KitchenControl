@@ -5,6 +5,7 @@ httpx
 google-api-python-client
 google-auth
 psycopg2-binary
+psycopg[binary]
 python-multipart
 Pillow
 boto3
